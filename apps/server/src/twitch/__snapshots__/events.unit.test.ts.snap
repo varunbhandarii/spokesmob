@@ -1,0 +1,198 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`all Hype Train stages retain shared state and optional progress 1`] = `
+[
+  {
+    "at": "2026-01-01T00:00:00Z",
+    "expiresAt": "2026-01-01T00:05:00Z",
+    "goal": 1000,
+    "kind": "hype",
+    "level": 2,
+    "progress": 200,
+    "shared": true,
+    "stage": "begin",
+    "total": 1200,
+    "trainType": "regular",
+  },
+  {
+    "at": "2026-01-01T00:00:00Z",
+    "expiresAt": "2026-01-01T00:05:00Z",
+    "goal": 1000,
+    "kind": "hype",
+    "level": 2,
+    "progress": 200,
+    "shared": true,
+    "stage": "progress",
+    "total": 1200,
+    "trainType": "regular",
+  },
+  {
+    "at": "2026-01-01T00:00:00Z",
+    "kind": "hype",
+    "level": 2,
+    "shared": true,
+    "stage": "end",
+    "total": 1200,
+    "trainType": "regular",
+  },
+]
+`;
+
+exports[`captured event structures with synthetic identities and text map to stable events 1`] = `
+[
+  {
+    "at": "2026-01-01T00:00:00.000Z",
+    "author": {
+      "broadcaster": true,
+      "color": null,
+      "id": "900000001",
+      "login": "viewer01",
+      "moderator": false,
+      "name": "Viewer 01",
+      "subMonths": 1,
+      "subscriber": true,
+      "vip": false,
+    },
+    "channelId": "900000001",
+    "fragments": [
+      {
+        "text": "Hello room",
+        "type": "text",
+      },
+    ],
+    "id": "fixture-4",
+    "kind": "chat",
+    "messageType": "text",
+    "self": true,
+    "text": "Hello room",
+  },
+  {
+    "at": "2026-01-01T00:00:00.000Z",
+    "author": {
+      "broadcaster": true,
+      "color": null,
+      "id": "900000001",
+      "login": "viewer01",
+      "moderator": false,
+      "name": "Viewer 01",
+      "subMonths": 1,
+      "subscriber": true,
+      "vip": false,
+    },
+    "channelId": "900000001",
+    "fragments": [
+      {
+        "text": "Hello room",
+        "type": "text",
+      },
+      {
+        "emoteId": "fixture-9",
+        "text": "Kappa",
+        "type": "emote",
+      },
+      {
+        "text": "Hello room",
+        "type": "text",
+      },
+    ],
+    "id": "fixture-8",
+    "kind": "chat",
+    "messageType": "text",
+    "self": true,
+    "text": "Hello room Kappa Hello room",
+  },
+  {
+    "at": "2026-01-01T00:00:00.000Z",
+    "author": {
+      "broadcaster": true,
+      "color": null,
+      "id": "900000001",
+      "login": "viewer01",
+      "moderator": false,
+      "name": "Viewer 01",
+      "subMonths": 1,
+      "subscriber": true,
+      "vip": false,
+    },
+    "channelId": "900000001",
+    "fragments": [
+      {
+        "text": "@viewer02",
+        "type": "mention",
+        "userId": "900000001",
+        "userLogin": "viewer01",
+      },
+      {
+        "text": "Hello room",
+        "type": "text",
+      },
+    ],
+    "id": "fixture-11",
+    "kind": "chat",
+    "messageType": "text",
+    "self": true,
+    "text": "@viewer02 Hello room",
+  },
+  {
+    "at": "2026-01-01T00:00:00.000Z",
+    "fromId": "900000003",
+    "fromLogin": "viewer03",
+    "fromName": "Viewer 03",
+    "kind": "raid",
+    "viewers": 18769,
+  },
+  {
+    "at": "2026-01-01T00:00:00.000Z",
+    "id": "fixture-17",
+    "input": "Synthetic text",
+    "kind": "redemption",
+    "rewardId": "fixture-18",
+    "rewardTitle": "Synthetic text",
+    "status": "unfulfilled",
+    "userId": "900000003",
+    "userLogin": "viewer03",
+    "userName": "Viewer 03",
+  },
+  {
+    "at": "2026-01-01T00:00:00.000Z",
+    "choices": [
+      {
+        "id": "fixture-21",
+        "title": "Synthetic text",
+        "votes": 15,
+      },
+      {
+        "id": "fixture-22",
+        "title": "Synthetic text",
+        "votes": 17,
+      },
+      {
+        "id": "fixture-23",
+        "title": "Synthetic text",
+        "votes": 18,
+      },
+      {
+        "id": "fixture-24",
+        "title": "Synthetic text",
+        "votes": 20,
+      },
+    ],
+    "kind": "pollEnd",
+    "pollId": "fixture-25",
+    "status": "completed",
+    "title": "Synthetic text",
+  },
+  {
+    "at": "2026-01-01T00:00:00.000Z",
+    "kind": "stream",
+    "online": true,
+    "startedAt": "2026-01-01T00:00:00.000Z",
+  },
+  {
+    "at": "2026-01-01T00:00:00.000Z",
+    "kind": "stream",
+    "online": true,
+    "startedAt": "2026-01-01T00:00:00.000Z",
+  },
+]
+`;
