@@ -23,6 +23,10 @@ Tokens are saved atomically outside the repository: `%LOCALAPPDATA%\Spokesmob\to
 
 After setup, `npm start` listens to Twitch events. One server instance holds a lock beside the token file. It requests chat, chat notices, incoming raids, Hype Train, stream status and reward redemptions. Reconnects preserve subscriptions when Twitch supplies a handover URL; dropped connections create a fresh session and subscriptions. The overlay, control page and speaking loop are still under development.
 
+Check authorization with `npm run twitch:check -- --status`, or capture typed events with `npm run twitch:check -- --listen 120`. Wait for "Capture active" before sending plain text, an emote, an @mention and a reply from another account. Output includes subscription timing, fragment types, `self` and `replyToId`.
+
+`npm run twitch:check -- --write` posts one check message, immediately proves local duplicate suppression, pins the confirmed message with a 60-second duration, reads it back, waits about a minute, explicitly unpins it and sends a purple announcement. Keep chat visible while it runs. A failed or uncertain send is never pinned or retried.
+
 Twitch writes use a shared rate limiter. Chat messages and announcements never retry automatically, and identical chat messages are suppressed locally for 30 seconds. Pinning is a separate request after a confirmed send with no drop reason. An empty send result is treated as not sent and is never pinned or retried.
 
 ## Local Twitch mock
@@ -56,7 +60,7 @@ Copy `.env.example` to `.env` and fill in your credentials locally. Keep credent
 | `SPEND_CAP_USD` | Per-stream spend cap; defaults to `5` USD |
 | `LOG_LEVEL` | Structured log verbosity; defaults to `info` |
 
-Setup, startup, and OBS connection instructions will be added as the application becomes available.
+OBS connection instructions will be added as the application becomes available.
 
 ## Local recordings
 

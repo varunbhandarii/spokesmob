@@ -4,7 +4,7 @@ import { type Config, loadConfig } from "../config.js";
 import { createLogger } from "../log.js";
 import { TokenProvider } from "../twitch/auth.js";
 import { type Activation, AuthError, deviceFlow, type Fetch } from "../twitch/device-flow.js";
-import { HelixClient } from "../twitch/helix.js";
+import { HelixClient, HelixError } from "../twitch/helix.js";
 import { createTokenStore, type TokenStore } from "../twitch/token-store.js";
 
 export async function setup(
@@ -77,6 +77,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   setup().catch((error: unknown) => {
     console.error(
       error instanceof AuthError ||
+        error instanceof HelixError ||
         (error instanceof Error && error.message.startsWith("Invalid or missing configuration:"))
         ? error.message
         : "Twitch setup failed. Check configuration and authorization, then retry.",

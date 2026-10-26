@@ -23,6 +23,7 @@
     "setup": "node --env-file-if-exists=.env --import tsx apps/server/src/cli/setup.ts",
     "mock": "node --import tsx tools/mock-eventsub/src/cli.ts",
     "record": "node --env-file-if-exists=.env --import tsx tools/recorder/src/cli.ts",
+    "twitch:check": "node --env-file-if-exists=.env --import tsx apps/server/src/cli/twitch-check.ts",
     "sim": "node --import tsx tools/crowd-sim/src/cli.ts",
     "eval": "node -e \"console.log('not implemented')\""
   },
