@@ -21,7 +21,9 @@ Run `npm run setup` to sign in to Twitch. Open the activation URL printed by the
 
 Tokens are saved atomically outside the repository: `%LOCALAPPDATA%\Spokesmob\tokens.json` on Windows, or `~/.config/spokesmob/tokens.json` elsewhere. To sign out, stop the application and delete that file (or the file selected by `TOKEN_FILE`). Keep the file private.
 
-After setup, `npm start` listens to Twitch events. One server instance holds a lock beside the token file. It requests chat, chat notices, incoming raids, Hype Train, stream status and reward redemptions. Reconnects preserve subscriptions when Twitch supplies a handover URL; dropped connections create a fresh session and subscriptions. The overlay, control page and speaking loop are still under development.
+After setup, `npm start` listens to Twitch events. One server instance holds a lock beside the token file. It requests chat, chat notices, incoming raids, Hype Train, stream status, poll results and reward redemptions. Reconnects preserve subscriptions when Twitch supplies a handover URL; dropped connections create a fresh session and subscriptions. The overlay, control page and speaking loop are still under development.
+
+Completed polls arrive as `pollEnd` events with the poll title, status and each choice's vote total. They use the existing poll permission requested during setup.
 
 Check authorization with `npm run twitch:check -- --status`, or capture typed events with `npm run twitch:check -- --listen 120`. Wait for "Capture active" before sending plain text, an emote, an @mention and a reply from another account. Output includes subscription timing, fragment types, `self` and `replyToId`.
 

@@ -1,5 +1,41 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
+exports[`completed polls subscribe once and deliver vote totals alongside reward events 1`] = `
+[
+  {
+    "at": "2026-10-26T12:00:00.000Z",
+    "choices": [
+      {
+        "id": "choice-gary",
+        "title": "Gary",
+        "votes": 24,
+      },
+      {
+        "id": "choice-pickles",
+        "title": "Pickles",
+        "votes": 16,
+      },
+    ],
+    "kind": "pollEnd",
+    "pollId": "4c63d9a3ab064127db170bc7",
+    "status": "completed",
+    "title": "Name the cat",
+  },
+  {
+    "at": "2026-10-26T12:00:00.005Z",
+    "id": "426d195800a2543a05079086",
+    "input": "Hello room",
+    "kind": "redemption",
+    "rewardId": "fb614e1cf94004e9921e4fbe",
+    "rewardTitle": "Grab the mic",
+    "status": "unfulfilled",
+    "userId": "792656454896",
+    "userLogin": "viewer01",
+    "userName": "Viewer 01",
+  },
+]
+`;
+
 exports[`hype-train replays ordered typed events at twenty times speed 1`] = `
 [
   {

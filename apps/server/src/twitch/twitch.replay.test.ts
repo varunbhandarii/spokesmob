@@ -186,6 +186,42 @@ test("offline sign-in reuses authorization, receives chat and performs the guard
   expect(globalThis.fetch).not.toHaveBeenCalled();
 });
 
+test("completed polls subscribe once and deliver vote totals alongside reward events", async () => {
+  const f = await fixture(scenario("poll-and-redemption"));
+  f.runtime.client.start();
+  await flushUntil(() => f.runtime.client.state === "ready");
+
+  const requests = f.server.services.calls.filter(
+    (call) =>
+      call.method === "POST" &&
+      call.path === "/helix/eventsub/subscriptions" &&
+      call.body.type === "channel.poll.end",
+  );
+  expect(requests).toHaveLength(1);
+  expect(requests[0]?.body).toMatchObject({
+    type: "channel.poll.end",
+    version: "1",
+    condition: { broadcaster_user_id: f.runtime.channel.id },
+    transport: { method: "websocket", session_id: f.runtime.client.sessionId },
+  });
+
+  f.server.play();
+  await advance(50);
+  await flushUntil(() => f.collected.events.length === 2);
+  expect(f.collected.events.map((event) => event.kind)).toEqual(["pollEnd", "redemption"]);
+  expect(f.collected.events[0]).toMatchObject({
+    kind: "pollEnd",
+    title: "Name the cat",
+    status: "completed",
+    choices: [
+      { id: "choice-gary", title: "Gary", votes: 24 },
+      { id: "choice-pickles", title: "Pickles", votes: 16 },
+    ],
+  });
+  expect(f.collected.events).toMatchSnapshot();
+  expect(globalThis.fetch).not.toHaveBeenCalled();
+});
+
 test("generated crowd conversations replay through the WebSocket client", async () => {
   const input = generateScenario({ authors: 12, rate: 6, seconds: 2, seed: 3 });
   const f = await fixture(input);

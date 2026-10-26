@@ -13,6 +13,7 @@ export function subscriptionSpecs(channelId: string, userId: string): Subscripti
     })),
     { type: "stream.online", version: "1", condition: channel },
     { type: "stream.offline", version: "1", condition: channel },
+    { type: "channel.poll.end", version: "1", condition: channel },
     {
       type: "channel.channel_points_custom_reward_redemption.add",
       version: "1",
