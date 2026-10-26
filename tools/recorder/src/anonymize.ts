@@ -44,12 +44,16 @@ export function anonymizeRecording(
     }
     return person;
   };
-  function visit(value: unknown, callback: (item: ObjectValue) => void): void {
+  function visit(
+    value: unknown,
+    callback: (item: ObjectValue, parent: string) => void,
+    parent = "",
+  ): void {
     if (Array.isArray(value)) {
-      for (const child of value) visit(child, callback);
+      for (const child of value) visit(child, callback, parent);
     } else if (object(value)) {
-      callback(value);
-      for (const child of Object.values(value)) visit(child, callback);
+      callback(value, parent);
+      for (const [name, child] of Object.entries(value)) visit(child, callback, name);
     }
   }
   // Resolve identity groups before replacing free text, including nested shared-chat and notice data.
@@ -70,8 +74,9 @@ export function anonymizeRecording(
       }
     });
   for (const value of records)
-    visit(value, (item) => {
+    visit(value, (item, parent) => {
       for (const [key, raw] of Object.entries(item)) {
+        if (publicFragmentField(parent, key)) continue;
         if (Array.isArray(raw) && /_ids$/.test(key)) {
           for (const value of raw) {
             if (typeof value !== "string" || !value) continue;
@@ -110,14 +115,14 @@ export function anonymizeRecording(
             replacements.get(match) ?? foldedReplacements.get(match.toLowerCase()) ?? match,
         )
       : value;
-  function clean(value: unknown, key = ""): unknown {
-    if (Array.isArray(value)) return value.map((child) => clean(child, key));
+  function clean(value: unknown, key = "", parent = ""): unknown {
+    if (Array.isArray(value)) return value.map((child) => clean(child, key, parent));
     if (object(value)) {
       const output: ObjectValue = {};
       for (const [name, child] of Object.entries(value)) {
         if (name === "parent_message_body" || name === "thread_message_body" || name === "owner_id")
           continue;
-        output[name] = name === "color" ? "" : clean(child, name);
+        output[name] = name === "color" ? "" : clean(child, name, key);
       }
       if (
         options.replaceText &&
@@ -138,6 +143,7 @@ export function anonymizeRecording(
       return output;
     }
     if (typeof value !== "string") return value;
+    if (publicFragmentField(parent, key)) return value;
     if (options.replaceText && prose.test(key)) return "Synthetic chat";
     // Preserve timestamps even when an unusually short numeric identity appears in a date.
     if (/(?:_at|timestamp)$/.test(key)) return value;
@@ -149,4 +155,12 @@ export function anonymizeRecording(
     return replacements.get(value) ?? replace(value);
   }
   return `${records.map((value) => JSON.stringify(clean(value))).join("\n")}\n`;
+}
+
+function publicFragmentField(parent: string, key: string): boolean {
+  return (
+    ((parent === "badges" || parent === "source_badges") &&
+      ["set_id", "id", "info"].includes(key)) ||
+    (parent === "emote" && ["id", "emote_set_id"].includes(key))
+  );
 }

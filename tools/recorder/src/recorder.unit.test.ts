@@ -124,6 +124,20 @@ test("identical logins and display names keep distinct pseudonym roles and redac
   expect(output.toLowerCase()).not.toContain("same_viewer");
 });
 
+test("public badge and emote identifiers retain their meaning while owner IDs are removed", () => {
+  const input = JSON.parse(raw);
+  input.frame.payload.event.badges = [{ set_id: "broadcaster", id: "1", info: "" }];
+  input.frame.payload.event.source_badges = [{ set_id: "subscriber", id: "12", info: "12" }];
+  input.frame.payload.event.message.fragments[2].emote.emote_set_id = "public-emote-set";
+  const event = JSON.parse(anonymizeRecording(JSON.stringify(input))).frame.payload.event;
+  expect(event.badges).toEqual(input.frame.payload.event.badges);
+  expect(event.source_badges).toEqual(input.frame.payload.event.source_badges);
+  expect(event.message.fragments[2].emote).toEqual({
+    id: "emote-sample",
+    emote_set_id: "public-emote-set",
+  });
+});
+
 test("recording folders default beside the token file and accept an explicit override", () => {
   const environment = {
     TWITCH_CLIENT_ID: "demo",
