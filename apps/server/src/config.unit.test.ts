@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { loadConfig } from "./config.js";
+import { loadConfig, loadOpenAIConfig, requireOpenAIKey } from "./config.js";
 
 const environment = {
   TWITCH_CLIENT_ID: "demo-client",
@@ -26,4 +26,31 @@ test("service URLs accept local overrides and reject unrelated protocols", () =>
   expect(config.authUrl).toBe("http://localhost:8080/oauth2");
   expect(config.tokenFile).toBe("test-results/tokens.json");
   expect(() => loadConfig({ ...environment, HELIX_URL: "file:///private" })).toThrow("HELIX_URL");
+});
+
+test("offline settings and Twitch configuration accept a missing or empty OpenAI key", () => {
+  expect(loadOpenAIConfig({})).toEqual({ serviceTier: "default", minVoices: 2 });
+  expect(loadConfig({ ...environment, OPENAI_API_KEY: "" }).openai).toEqual({
+    serviceTier: "default",
+    minVoices: 2,
+  });
+  expect(() => requireOpenAIKey(loadOpenAIConfig({}))).toThrow("OPENAI_API_KEY is required");
+});
+
+test("OpenAI settings preserve explicit tier and support overrides", () => {
+  const settings = loadOpenAIConfig({
+    OPENAI_API_KEY: "synthetic-key",
+    CONSENSUS_SERVICE_TIER: "fast",
+    MIN_VOICES: "1",
+  });
+  expect(settings).toEqual({ apiKey: "synthetic-key", serviceTier: "fast", minVoices: 1 });
+  expect(requireOpenAIKey(settings)).toBe("synthetic-key");
+});
+
+test("invalid consensus settings identify variables without exposing values", () => {
+  expect(() =>
+    loadOpenAIConfig({ CONSENSUS_SERVICE_TIER: "private-invalid-tier", MIN_VOICES: "11" }),
+  ).toThrow("Invalid or missing configuration: CONSENSUS_SERVICE_TIER, MIN_VOICES");
+  for (const value of ["0", "2.5", "NaN", ""])
+    expect(() => loadOpenAIConfig({ MIN_VOICES: value })).toThrow("MIN_VOICES");
 });

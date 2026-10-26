@@ -51,7 +51,9 @@ Copy `.env.example` to `.env` and fill in your credentials locally. Keep credent
 | `TWITCH_CLIENT_SECRET` | Twitch application client secret |
 | `TWITCH_CHANNEL` | Broadcaster login, in lowercase |
 | `TWITCH_BOT_LOGIN` | Optional separate bot login |
-| `OPENAI_API_KEY` | OpenAI project API key |
+| `OPENAI_API_KEY` | OpenAI project API key; required only for commands that call OpenAI |
+| `CONSENSUS_SERVICE_TIER` | `default` (initial setting) or `fast`; select after measuring latency and cost |
+| `MIN_VOICES` | Minimum distinct authors for a line; integer from 1 to 10, defaults to `2` |
 | `VOICE_PROVIDER` | `realtime` (default) or `legacy` |
 | `MAIN_VOICE` | Main voice; defaults to `cedar` |
 | `WHISPER_VOICE` | Dissent voice; defaults to `sage` |
