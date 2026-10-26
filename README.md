@@ -21,6 +21,8 @@ Run `npm run setup` to sign in to Twitch. Open the activation URL printed by the
 
 Tokens are saved atomically outside the repository: `%LOCALAPPDATA%\Spokesmob\tokens.json` on Windows, or `~/.config/spokesmob/tokens.json` elsewhere. To sign out, stop the application and delete that file (or the file selected by `TOKEN_FILE`). Keep the file private.
 
+Twitch writes use a shared rate limiter. Chat messages and announcements never retry automatically, and identical chat messages are suppressed locally for 30 seconds. Pinning is a separate request after a confirmed send with no drop reason. An empty send result is treated as not sent and is never pinned or retried.
+
 ## Configuration
 
 Copy `.env.example` to `.env` and fill in your credentials locally. Keep credentials out of source control.
