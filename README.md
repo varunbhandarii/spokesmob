@@ -6,7 +6,7 @@ Spokesmob turns Twitch chat into one spoken voice with visible agreement and an 
 
 ## Development
 
-Requires Node.js 24 and npm.
+Requires Node.js 24.15 or newer and npm. Storage uses Node's built-in SQLite.
 
 ```powershell
 npm install

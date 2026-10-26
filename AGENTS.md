@@ -13,7 +13,7 @@ Spokesmob is a local Node 24 + TypeScript service plus an OBS browser-source ove
   - `eval/`: golden windows + runner
 - TypeScript 7 strict, used for type-checking only (`tsc -b`). Vite, tsx and Vitest transpile.
 - Biome for lint and format. Do not add ESLint, because TypeScript 7 has no compiler API.
-- Other libraries: ESM, zod 4, Vitest 5, Playwright for the overlay smoke test, pino, better-sqlite3 13.
+- Other libraries: ESM, zod 4, Vitest 5, Playwright for the overlay smoke test, pino. Storage uses built-in SQLite through `apps/server/src/store/db.ts`; no other module imports `node:sqlite` directly.
 - Pinned versions live in the root package.json. Do not upgrade majors without being asked.
 - Tool configs use positive include lists (the workspace globs).
 - Windows is the primary dev and runtime OS. Use cross-platform paths and scripts, with no bash-only commands in package.json.
