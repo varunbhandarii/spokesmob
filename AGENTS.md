@@ -24,20 +24,26 @@ Spokesmob is a local Node 24 + TypeScript service plus an OBS browser-source ove
 
 ## Twitch rules (do not violate)
 - **Realtime path: EventSub WebSocket only** (`wss://eventsub.wss.twitch.tv/ws`). Never IRC, never PubSub.
-  - Subscribe within 10 s of `session_welcome`.
+  - Subscribe in parallel within 10 s of `session_welcome`, targeting under 2 s.
   - Handle keepalive, ping/pong and revocation.
-  - On `session_reconnect`, keep the old socket open until the new welcome arrives.
+  - Deduplicate notifications by message ID for 10 minutes across sockets. Drop frames older than 10 minutes and never assume event ordering.
+  - On `session_reconnect`, use `payload.session.reconnect_url` exactly, keep the old socket open until the new welcome arrives, and never resubscribe.
+  - Outside a reconnect handover, keep exactly one live EventSub socket per process. Use the single-instance lock beside the token file.
+  - Other closes and watchdog expiry reconnect to the base URL with capped exponential backoff and fresh subscriptions.
 - **Helix for all writes:** Send Chat Message, Pinned Chat (`/helix/chat/pins`), Announcements, Chat Settings, Clips, Markers, Polls, Custom Rewards, Blocked Terms. When unsure about a field name or limit, fetch the official reference at https://dev.twitch.tv/docs/api/reference/ instead of guessing.
 - **Rate limits.** Every Helix call goes through the token-bucket guard in `apps/server/src/twitch/helix.ts`.
   - At most 60 chat messages per 30 s.
   - At most 1 announcement per 2.5 s.
   - Never send an identical message within 30 s.
   - Keep application duplicate suppression even when broadcaster or moderator messages are exempt from platform rejection.
+  - Never auto-retry chat sends or announcements, including on 401 or 429.
+  - Pin with a separate call after a confirmed send with no drop reason, never `pin: true`. A missing response entry is not sent and must never be pinned or retried.
 - **Auth.**
   - The streamer token comes from the Device Code Grant Flow against one Confidential app.
   - Persist the returned refresh token on every successful refresh, even when it is unchanged. Do not assume rotation or single-use behavior.
   - Include the Confidential app's client secret when refreshing its user token.
-  - Validate tokens hourly.
+  - Validate tokens at startup and every 55 minutes. Share refresh work across concurrent requests and save before exposing the new access token.
+  - Tokens live in an atomic JSON file outside the repository, never in SQLite or source files. `TOKEN_FILE` overrides its location.
   - The app access token is used only for the optional bot account.
 - **Scopes:** request only the scopes listed in `apps/server/src/twitch/scopes.ts`. Never add one without being asked.
 
@@ -69,13 +75,15 @@ Spokesmob is a local Node 24 + TypeScript service plus an OBS browser-source ove
 
 ## Commands
 - `npm run dev`: server, overlay and control with HMR.
-- `npm start`
+- `npm start`: Twitch listener with a single-instance lock.
 - `npm run setup`: Device Code Flow.
+- `npm run twitch:check -- --status`, `--listen 120`, or `--write`: authorization, typed events and guarded write verification.
+- `npm run record -- --minutes 2`: local JSONL capture; `--anonymize <input> <output> --replace-text` creates a fixture with synthetic text.
 - `npm test`: unit and replay tests. Must stay under 60 s, because the Stop hook runs it before any turn ends.
 - `npm run test:e2e`: Playwright overlay smoke test.
 - `npm run typecheck`, `npm run lint`
 - `npm run eval`: costs money. Run only when asked.
-- `npm run mock -- scenarios/<name>.jsonl`
+- `npm run mock -- name-my-cat`: local EventSub, Helix and auth; accepts a scenario name or JSONL path.
 - `npm run sim -- --authors 300 --rate 60`
 
 ## Definition of done for a task
