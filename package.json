@@ -20,7 +20,7 @@
     "test:e2e": "node -e \"console.log('not implemented')\"",
     "dev": "node -e \"console.log('not implemented')\"",
     "start": "node -e \"console.log('not implemented')\"",
-    "setup": "node -e \"console.log('not implemented')\"",
+    "setup": "node --env-file-if-exists=.env --import tsx apps/server/src/cli/setup.ts",
     "mock": "node -e \"console.log('not implemented')\"",
     "sim": "node -e \"console.log('not implemented')\"",
     "eval": "node -e \"console.log('not implemented')\""
@@ -28,6 +28,7 @@
   "devDependencies": {
     "@biomejs/biome": "2.6.3",
     "@types/node": "24.19.2",
+    "@types/ws": "8.18.2",
     "tsx": "4.23.15",
     "typescript": "7.0.2",
     "vitest": "5.0.5"
