@@ -33,6 +33,9 @@ Copy `.env.example` to `.env` and fill in your credentials locally. Keep credent
 | `WHISPER_VOICE` | Dissent voice; defaults to `sage` |
 | `PORT` | Local HTTP port; defaults to `4040` |
 | `EVENTSUB_URL` | EventSub WebSocket URL; override for local development |
+| `HELIX_URL` | Development or testing only, leave unset; defaults to Twitch Helix |
+| `TWITCH_AUTH_URL` | Development or testing only, leave unset; defaults to Twitch OAuth |
+| `TOKEN_FILE` | Development or testing only, leave unset; overrides the local token file |
 | `SPEND_CAP_USD` | Per-stream spend cap; defaults to `5` USD |
 | `LOG_LEVEL` | Structured log verbosity; defaults to `info` |
 
