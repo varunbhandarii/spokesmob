@@ -1,0 +1,29 @@
+{
+  "files": [],
+  "references": [
+    {
+      "path": "apps/server"
+    },
+    {
+      "path": "apps/overlay"
+    },
+    {
+      "path": "apps/control"
+    },
+    {
+      "path": "packages/core"
+    },
+    {
+      "path": "tools/mock-eventsub"
+    },
+    {
+      "path": "tools/recorder"
+    },
+    {
+      "path": "tools/crowd-sim"
+    },
+    {
+      "path": "eval"
+    }
+  ]
+}

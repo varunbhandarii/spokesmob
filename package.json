@@ -1,0 +1,35 @@
+{
+  "name": "spokesmob",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "24.x"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "tools/*",
+    "eval"
+  ],
+  "scripts": {
+    "typecheck": "tsc -b",
+    "lint": "biome check .",
+    "format": "biome format --write .",
+    "test": "vitest run",
+    "test:e2e": "node -e \"console.log('not implemented')\"",
+    "dev": "node -e \"console.log('not implemented')\"",
+    "start": "node -e \"console.log('not implemented')\"",
+    "setup": "node -e \"console.log('not implemented')\"",
+    "mock": "node -e \"console.log('not implemented')\"",
+    "sim": "node -e \"console.log('not implemented')\"",
+    "eval": "node -e \"console.log('not implemented')\""
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.6.3",
+    "@types/node": "24.19.2",
+    "tsx": "4.23.15",
+    "typescript": "7.0.2",
+    "vitest": "5.0.5"
+  }
+}
