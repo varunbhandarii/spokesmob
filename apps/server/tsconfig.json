@@ -4,5 +4,10 @@
     "rootDir": "../..",
     "tsBuildInfoFile": "dist/tsconfig.tsbuildinfo"
   },
-  "include": ["src/**/*.ts", "../../tools/mock-eventsub/src/**/*.ts"]
+  "include": [
+    "src/**/*.ts",
+    "../../tools/mock-eventsub/src/**/*.ts",
+    "../../tools/crowd-sim/src/**/*.ts",
+    "../../tools/recorder/src/**/*.ts"
+  ]
 }

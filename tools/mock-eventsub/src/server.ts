@@ -21,6 +21,7 @@ export interface MockServerOptions {
   clock?: MockClock;
   unusedTimeoutMs?: number;
   autoPlay?: boolean;
+  literalTimestamps?: boolean;
 }
 
 interface Session {
@@ -51,6 +52,7 @@ export async function createMockServer(options: MockServerOptions = {}) {
   let sequence = 0;
   let playing = false;
   let played = false;
+  let playbackPass = 0;
   let stopped = false;
   let origin = "";
 
@@ -68,6 +70,7 @@ export async function createMockServer(options: MockServerOptions = {}) {
   });
   const inject = (frame: EventFrame) => {
     const type = frame.metadata.subscription_type ?? frame.payload.subscription?.type;
+    const revoked = new Set<string>();
     for (const session of sessions.values()) {
       const subscription = [...services.subscriptions.values()].find(
         (item) =>
@@ -75,11 +78,26 @@ export async function createMockServer(options: MockServerOptions = {}) {
           item.type === type,
       );
       if (type && !subscription) continue;
+      const recorded = frame.payload.subscription ?? {};
+      const mapped = subscription
+        ? {
+            ...recorded,
+            id: subscription.id,
+            type: subscription.type,
+            version: subscription.version,
+            status:
+              frame.metadata.message_type === "revocation" ? recorded.status : subscription.status,
+            transport: subscription.transport,
+          }
+        : undefined;
       send(
         session,
-        subscription ? { ...frame, payload: { ...frame.payload, subscription } } : frame,
+        mapped ? { ...frame, payload: { ...frame.payload, subscription: mapped } } : frame,
       );
+      if (subscription && frame.metadata.message_type === "revocation")
+        revoked.add(subscription.id);
     }
+    for (const id of revoked) services.subscriptions.delete(id);
   };
   const reconnect = () => {
     for (const session of sessions.values()) {
@@ -152,29 +170,42 @@ export async function createMockServer(options: MockServerOptions = {}) {
     if (!scenario || playing || stopped) return;
     playing = true;
     played = true;
+    const pass = playbackPass++;
     const start = clock.now();
     const lines = expandScenario(scenario, { startAt: start });
-    for (const line of lines)
+    lines.forEach((line, index) => {
+      const raw = scenario.lines[index]?.kind === "raw";
+      if (
+        raw &&
+        line.kind === "notification" &&
+        line.frame.metadata.message_type.startsWith("session_")
+      )
+        return;
       schedule(() => {
         const next =
-          line.kind === "notification" &&
-          scenario.lines.some((entry) => entry.kind === "raw" && entry.t === line.t)
-            ? line
-            : line.kind === "notification"
-              ? {
-                  ...line,
-                  frame: {
-                    ...line.frame,
-                    metadata: {
-                      ...line.frame.metadata,
-                      message_timestamp: new Date(clock.now()).toISOString(),
-                    },
+          line.kind === "notification"
+            ? {
+                ...line,
+                frame: {
+                  ...line.frame,
+                  metadata: {
+                    ...line.frame.metadata,
+                    message_id:
+                      pass === 0
+                        ? line.frame.metadata.message_id
+                        : `${line.frame.metadata.message_id}:loop:${pass}`,
+                    message_timestamp:
+                      raw && options.literalTimestamps
+                        ? line.frame.metadata.message_timestamp
+                        : new Date(clock.now()).toISOString(),
                   },
-                }
-              : line;
+                },
+              }
+            : line;
         apply(next);
       }, line.t / speed);
-    const end = Math.max(0, ...lines.map((line) => line.t)) / speed + 1;
+    });
+    const end = lines.reduce((maximum, line) => Math.max(maximum, line.t), 0) / speed + 1;
     schedule(() => {
       playing = false;
       if (options.loop) play();

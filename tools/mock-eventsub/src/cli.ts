@@ -8,7 +8,7 @@ async function main(): Promise<void> {
   const input = args[0];
   if (!input || input.startsWith("--"))
     throw new Error(
-      "Usage: npm run mock -- <scenario|recording> [--speed 5] [--port 8081] [--loop]",
+      "Usage: npm run mock -- <scenario|recording> [--speed 5] [--port 8081] [--loop] [--literal-timestamps]",
     );
   const option = (name: string) => {
     const index = args.indexOf(name);
@@ -30,6 +30,7 @@ async function main(): Promise<void> {
     port: Number(option("--port") ?? 8081),
     speed: Number(option("--speed") ?? scenario.header.speed),
     loop: args.includes("--loop"),
+    literalTimestamps: args.includes("--literal-timestamps"),
   });
   console.log(`EVENTSUB_URL=${server.wsUrl}`);
   console.log(`HELIX_URL=${server.helixUrl}`);
