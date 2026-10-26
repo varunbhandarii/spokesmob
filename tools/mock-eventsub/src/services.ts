@@ -58,13 +58,14 @@ function redact(value: Record<string, unknown>): Record<string, unknown> {
   return Object.fromEntries(
     Object.entries(value).map(([key, item]) => [
       key,
-      secretNames.test(key)
-        ? "[REDACTED]"
-        : item && typeof item === "object" && !Array.isArray(item)
-          ? redact(item as Record<string, unknown>)
-          : item,
+      secretNames.test(key) ? "[REDACTED]" : redactNested(item),
     ]),
   );
+}
+
+function redactNested(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(redactNested);
+  return value && typeof value === "object" ? redact(value as Record<string, unknown>) : value;
 }
 
 function json(body: unknown, status = 200, headers: Record<string, string> = {}): Response {
@@ -142,7 +143,12 @@ export function createMockServices(options: MockServiceOptions = {}) {
     const record: MockCall = {
       method,
       path: url.pathname,
-      query: Object.fromEntries(url.searchParams),
+      query: Object.fromEntries(
+        [...url.searchParams].map(([key, value]) => [
+          key,
+          secretNames.test(key) ? "[REDACTED]" : value,
+        ]),
+      ),
       body: redact(body),
       at: now(),
       clientIdPresent: request.headers.has("client-id"),
@@ -323,16 +329,20 @@ export function createMockServices(options: MockServiceOptions = {}) {
         pin = undefined;
         return json(null, 204);
       }
-      if (method === "PUT" && pin?.message_id === body.message_id)
+      if (method === "PUT" && pin?.message_id === url.searchParams.get("message_id"))
         return error(409, "Message is already pinned");
       if (method === "PUT" || method === "PATCH") {
+        const duration = Number(url.searchParams.get("duration_seconds"));
+        if (duration < 30 || duration > 1800 || !Number.isFinite(duration))
+          return error(400, "Invalid pin duration");
         pin = {
-          broadcaster_id: body.broadcaster_id ?? url.searchParams.get("broadcaster_id"),
-          message_id: body.message_id ?? url.searchParams.get("message_id"),
-          duration_seconds: body.duration_seconds,
-          expires_at: new Date(now() + Number(body.duration_seconds ?? 60) * 1000).toISOString(),
+          broadcaster_id: url.searchParams.get("broadcaster_id"),
+          moderator_id: url.searchParams.get("moderator_id"),
+          message_id: url.searchParams.get("message_id"),
+          duration_seconds: duration,
+          ends_at: new Date(now() + duration * 1000).toISOString(),
         };
-        return json({ data: [pin] });
+        return json(null, 204);
       }
     }
     if (route === "/chat/announcements" && method === "POST") return json(null, 204);

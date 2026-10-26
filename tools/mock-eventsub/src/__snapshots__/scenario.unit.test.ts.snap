@@ -1,0 +1,175 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`chat expansion preserves replies, badges, emotes and mention fragments 1`] = `
+[
+  {
+    "frame": {
+      "metadata": {
+        "message_id": "8ec47ac0ea5f21e6deae1775",
+        "message_timestamp": "2026-01-01T00:00:00.000Z",
+        "message_type": "notification",
+        "subscription_type": "channel.chat.message",
+        "subscription_version": "1",
+      },
+      "payload": {
+        "event": {
+          "badges": [],
+          "broadcaster_user_id": "1",
+          "broadcaster_user_login": "demo",
+          "broadcaster_user_name": "demo",
+          "channel_points_custom_reward_id": null,
+          "chatter_user_id": "792656454896",
+          "chatter_user_login": "viewer01",
+          "chatter_user_name": "Viewer 01",
+          "cheer": null,
+          "color": "",
+          "is_source_only": false,
+          "message": {
+            "fragments": [
+              {
+                "cheermote": null,
+                "emote": null,
+                "mention": null,
+                "text": "Hello",
+                "type": "text",
+              },
+            ],
+            "text": "Hello",
+          },
+          "message_id": "afcfdb9fe52ea55dce0b0e6b",
+          "message_type": "text",
+          "reply": null,
+          "source_badges": null,
+          "source_broadcaster_user_id": null,
+          "source_broadcaster_user_login": null,
+          "source_broadcaster_user_name": null,
+          "source_message_id": null,
+        },
+        "subscription": {
+          "condition": {
+            "broadcaster_user_id": "1",
+            "user_id": "1",
+          },
+          "cost": 0,
+          "created_at": "2026-01-01T00:00:00.000Z",
+          "id": "75ff15329ba518f1b949c61b",
+          "status": "enabled",
+          "transport": {
+            "method": "websocket",
+            "session_id": "mock-session",
+          },
+          "type": "channel.chat.message",
+          "version": "1",
+        },
+      },
+    },
+    "kind": "notification",
+    "t": 0,
+  },
+  {
+    "frame": {
+      "metadata": {
+        "message_id": "f605a67020b22dc6aa058ba1",
+        "message_timestamp": "2026-01-01T00:00:00.001Z",
+        "message_type": "notification",
+        "subscription_type": "channel.chat.message",
+        "subscription_version": "1",
+      },
+      "payload": {
+        "event": {
+          "badges": [
+            {
+              "id": "1",
+              "info": "6",
+              "set_id": "subscriber",
+            },
+          ],
+          "broadcaster_user_id": "1",
+          "broadcaster_user_login": "demo",
+          "broadcaster_user_name": "demo",
+          "channel_points_custom_reward_id": null,
+          "chatter_user_id": "1414779357",
+          "chatter_user_login": "viewer02",
+          "chatter_user_name": "Viewer 02",
+          "cheer": null,
+          "color": "",
+          "is_source_only": false,
+          "message": {
+            "fragments": [
+              {
+                "cheermote": null,
+                "emote": null,
+                "mention": {
+                  "user_id": "792656454896",
+                  "user_login": "viewer01",
+                  "user_name": "viewer01",
+                },
+                "text": "@viewer01",
+                "type": "mention",
+              },
+              {
+                "cheermote": null,
+                "emote": null,
+                "mention": null,
+                "text": " ",
+                "type": "text",
+              },
+              {
+                "cheermote": null,
+                "emote": {
+                  "emote_set_id": "0",
+                  "format": [
+                    "static",
+                  ],
+                  "id": "25",
+                  "owner_id": "0",
+                },
+                "mention": null,
+                "text": "Kappa",
+                "type": "emote",
+              },
+            ],
+            "text": "@viewer01 Kappa",
+          },
+          "message_id": "82294e7e83b2a3eec30d45fa",
+          "message_type": "text",
+          "reply": {
+            "parent_message_body": "Hello",
+            "parent_message_id": "afcfdb9fe52ea55dce0b0e6b",
+            "parent_user_id": "792656454896",
+            "parent_user_login": "viewer01",
+            "parent_user_name": "Viewer 01",
+            "thread_message_id": "afcfdb9fe52ea55dce0b0e6b",
+            "thread_user_id": "792656454896",
+            "thread_user_login": "viewer01",
+            "thread_user_name": "Viewer 01",
+          },
+          "source_badges": null,
+          "source_broadcaster_user_id": null,
+          "source_broadcaster_user_login": null,
+          "source_broadcaster_user_name": null,
+          "source_message_id": null,
+        },
+        "subscription": {
+          "condition": {
+            "broadcaster_user_id": "1",
+            "user_id": "1",
+          },
+          "cost": 0,
+          "created_at": "2026-01-01T00:00:00.000Z",
+          "id": "75ff15329ba518f1b949c61b",
+          "status": "enabled",
+          "transport": {
+            "method": "websocket",
+            "session_id": "mock-session",
+          },
+          "type": "channel.chat.message",
+          "version": "1",
+        },
+      },
+    },
+    "kind": "notification",
+    "t": 1,
+  },
+]
+`;

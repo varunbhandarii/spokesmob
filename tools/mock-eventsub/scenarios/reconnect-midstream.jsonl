@@ -1,0 +1,5 @@
+{"scenario":"reconnect-midstream","channel":{"id":"100000001","login":"spokesmob_demo"},"speed":1}
+{"t":0,"kind":"chat","user":"viewer01","name":"Viewer 01","text":"Before reconnect"}
+{"t":1000,"kind":"control","action":"reconnect"}
+{"t":1500,"kind":"chat","user":"viewer02","name":"Viewer 02","text":"After reconnect"}
+{"t":2000,"kind":"chat","user":"viewer03","name":"Viewer 03","text":"Still here"}

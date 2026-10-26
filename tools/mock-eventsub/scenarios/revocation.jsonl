@@ -1,0 +1,3 @@
+{"scenario":"revocation","channel":{"id":"100000001","login":"spokesmob_demo"},"speed":1}
+{"t":0,"kind":"chat","user":"viewer01","name":"Viewer 01","text":"Before revocation"}
+{"t":500,"kind":"control","action":"revoke","type":"channel.chat.message","status":"authorization_revoked"}

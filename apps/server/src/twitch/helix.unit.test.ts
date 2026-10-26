@@ -156,6 +156,28 @@ test("a missing chat result is logged as not sent without a retry or pin", async
   expect(f.mock.calls.filter((call) => call.path === "/helix/chat/messages")).toHaveLength(1);
 });
 
+test("duplicate reservations remain active while a send waits for capacity", async () => {
+  const f = await fixture();
+  const limiter = new RateLimiter(systemClock);
+  limiter.pauseUntil(Date.now() + 60_000);
+  const client = new HelixClient({
+    config,
+    auth: f.auth,
+    log,
+    channelId: f.mock.auth.userId,
+    fetch: f.mock.fetch,
+    clock: systemClock,
+    limiter,
+  });
+  const pending = client.sendChatMessage({ text: "a queued message" });
+  await vi.advanceTimersByTimeAsync(30_000);
+  expect((await client.sendChatMessage({ text: "a queued message" })).suppressed).toBe(true);
+  await vi.advanceTimersByTimeAsync(30_000);
+  expect((await pending).sent).toBe(true);
+  expect((await client.sendChatMessage({ text: "a queued message" })).suppressed).toBe(true);
+  expect(f.mock.calls.filter((call) => call.path === "/helix/chat/messages")).toHaveLength(1);
+});
+
 test("drop reasons stay opaque and pins are separate query-based calls", async () => {
   const f = await fixture();
   f.mock.dropNextChat("future_drop_code");

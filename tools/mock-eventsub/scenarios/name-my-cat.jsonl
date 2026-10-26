@@ -1,0 +1,41 @@
+{"scenario":"name-my-cat","channel":{"id":"100000001","login":"spokesmob_demo"},"speed":1,"seed":42}
+{"t":0,"kind":"chat","user":"viewer01","name":"Viewer 01","text":"name him Gary"}
+{"t":750,"kind":"chat","user":"viewer02","name":"Viewer 02","text":"Gary"}
+{"t":1500,"kind":"chat","user":"viewer03","name":"Viewer 03","text":"Gary the cat"}
+{"t":2250,"kind":"chat","user":"viewer04","name":"Viewer 04","text":"Gary please"}
+{"t":3000,"kind":"chat","user":"viewer05","name":"Viewer 05","text":"Gary"}
+{"t":3750,"kind":"chat","user":"viewer06","name":"Viewer 06","text":"Pickles is better"}
+{"t":4500,"kind":"chat","user":"viewer07","name":"Viewer 07","text":"Gary"}
+{"t":5250,"kind":"chat","user":"viewer08","name":"Viewer 08","text":"Gary the cat"}
+{"t":6000,"kind":"chat","user":"viewer09","name":"Viewer 09","text":"Gary"}
+{"t":6750,"kind":"chat","user":"viewer10","name":"Viewer 10","text":"Kappa","emotes":[{"name":"Kappa","id":"25"}]}
+{"t":7500,"kind":"chat","user":"viewer11","name":"Viewer 11","text":"name him Gary"}
+{"t":8250,"kind":"chat","user":"viewer12","name":"Viewer 12","text":"Pickles"}
+{"t":9000,"kind":"chat","user":"viewer13","name":"Viewer 13","text":"Gary wins"}
+{"t":9750,"kind":"chat","user":"viewer14","name":"Viewer 14","text":"Gary"}
+{"t":10500,"kind":"chat","user":"viewer15","name":"Viewer 15","text":"Gary please"}
+{"t":11250,"kind":"chat","user":"viewer16","name":"Viewer 16","text":"Pickles please"}
+{"t":12000,"kind":"chat","user":"viewer17","name":"Viewer 17","text":"Gary"}
+{"t":12750,"kind":"chat","user":"viewer18","name":"Viewer 18","text":"Gary"}
+{"t":13500,"kind":"chat","user":"viewer19","name":"Viewer 19","text":"name him Gary"}
+{"t":14250,"kind":"chat","user":"viewer20","name":"Viewer 20","text":"Kappa","emotes":[{"name":"Kappa","id":"25"}]}
+{"t":15000,"kind":"chat","user":"viewer21","name":"Viewer 21","text":"Gary"}
+{"t":15750,"kind":"chat","user":"viewer22","name":"Viewer 22","text":"Pickles"}
+{"t":16500,"kind":"chat","user":"viewer23","name":"Viewer 23","text":"Gary the cat"}
+{"t":17250,"kind":"chat","user":"viewer24","name":"Viewer 24","text":"Gary"}
+{"t":18000,"kind":"chat","user":"viewer25","name":"Viewer 25","text":"Gary wins"}
+{"t":18750,"kind":"chat","user":"viewer26","name":"Viewer 26","text":"Pickles is better"}
+{"t":19500,"kind":"chat","user":"viewer27","name":"Viewer 27","text":"Gary"}
+{"t":20250,"kind":"chat","user":"viewer28","name":"Viewer 28","text":"Gary please"}
+{"t":21000,"kind":"chat","user":"viewer29","name":"Viewer 29","text":"Gary"}
+{"t":21750,"kind":"chat","user":"viewer30","name":"Viewer 30","text":"Kappa","emotes":[{"name":"Kappa","id":"25"}]}
+{"t":22500,"kind":"chat","user":"viewer31","name":"Viewer 31","text":"Gary"}
+{"t":23250,"kind":"chat","user":"viewer32","name":"Viewer 32","text":"Pickles"}
+{"t":24000,"kind":"chat","user":"viewer33","name":"Viewer 33","text":"Gary the cat"}
+{"t":24750,"kind":"chat","user":"viewer34","name":"Viewer 34","text":"Gary"}
+{"t":25500,"kind":"chat","user":"viewer35","name":"Viewer 35","text":"Pickles please"}
+{"t":26250,"kind":"chat","user":"viewer36","name":"Viewer 36","text":"Gary"}
+{"t":27000,"kind":"chat","user":"viewer37","name":"Viewer 37","text":"Gary"}
+{"t":27750,"kind":"chat","user":"viewer38","name":"Viewer 38","text":"Pickles"}
+{"t":28500,"kind":"chat","user":"viewer39","name":"Viewer 39","text":"Gary"}
+{"t":30000,"kind":"chat","user":"viewer40","name":"Viewer 40","text":"Gary Kappa","emotes":[{"name":"Kappa","id":"25"}]}

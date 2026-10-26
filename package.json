@@ -19,9 +19,9 @@
     "test": "vitest run",
     "test:e2e": "node -e \"console.log('not implemented')\"",
     "dev": "node -e \"console.log('not implemented')\"",
-    "start": "node -e \"console.log('not implemented')\"",
+    "start": "node --env-file-if-exists=.env --import tsx apps/server/src/index.ts",
     "setup": "node --env-file-if-exists=.env --import tsx apps/server/src/cli/setup.ts",
-    "mock": "node -e \"console.log('not implemented')\"",
+    "mock": "node --import tsx tools/mock-eventsub/src/cli.ts",
     "sim": "node -e \"console.log('not implemented')\"",
     "eval": "node -e \"console.log('not implemented')\""
   },

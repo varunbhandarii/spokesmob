@@ -1,0 +1,5 @@
+{"scenario":"hype-train","channel":{"id":"100000001","login":"spokesmob_demo"},"speed":1}
+{"t":0,"kind":"hype","stage":"begin","level":1,"total":100,"progress":100,"goal":1000,"shared":false}
+{"t":1000,"kind":"hype","stage":"progress","level":1,"total":400,"progress":400,"goal":1000,"shared":false}
+{"t":2000,"kind":"hype","stage":"progress","level":2,"total":1200,"progress":200,"goal":1500,"shared":true}
+{"t":3000,"kind":"hype","stage":"end","level":2,"total":1200,"shared":true}

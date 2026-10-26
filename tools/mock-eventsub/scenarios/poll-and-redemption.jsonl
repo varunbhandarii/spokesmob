@@ -1,0 +1,3 @@
+{"scenario":"poll-and-redemption","channel":{"id":"100000001","login":"spokesmob_demo"},"speed":1}
+{"t":0,"kind":"pollEnd","title":"Name the cat"}
+{"t":100,"kind":"redemption","user":"viewer01","name":"Viewer 01","rewardTitle":"Grab the mic","input":"Hello room"}

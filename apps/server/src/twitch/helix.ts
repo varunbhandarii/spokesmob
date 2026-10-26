@@ -186,15 +186,20 @@ export class HelixClient {
     const channel = this.channel();
     if (!this.guard.reserve(text))
       return { messageId: null, sent: false, dropReason: null, suppressed: true };
-    const result = await this.request<unknown>("POST", "/chat/messages", {
-      kind: "chat",
-      body: {
-        broadcaster_id: channel,
-        sender_id: this.options.auth.identity.userId,
-        message: text,
-        ...(replyTo ? { reply_parent_message_id: replyTo } : {}),
-      },
-    });
+    let result: unknown;
+    try {
+      result = await this.request<unknown>("POST", "/chat/messages", {
+        kind: "chat",
+        body: {
+          broadcaster_id: channel,
+          sender_id: this.options.auth.identity.userId,
+          message: text,
+          ...(replyTo ? { reply_parent_message_id: replyTo } : {}),
+        },
+      });
+    } finally {
+      this.guard.complete(text);
+    }
     const parsed = z
       .object({
         data: z

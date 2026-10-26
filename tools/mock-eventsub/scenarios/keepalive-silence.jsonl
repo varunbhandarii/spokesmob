@@ -1,0 +1,4 @@
+{"scenario":"keepalive-silence","channel":{"id":"100000001","login":"spokesmob_demo"},"speed":1}
+{"t":0,"kind":"chat","user":"viewer01","name":"Viewer 01","text":"Before silence"}
+{"t":100,"kind":"control","action":"silence","ms":15000}
+{"t":16000,"kind":"chat","user":"viewer02","name":"Viewer 02","text":"Back after silence"}

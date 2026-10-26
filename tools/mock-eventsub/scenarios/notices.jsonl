@@ -1,0 +1,6 @@
+{"scenario":"notices","channel":{"id":"100000001","login":"spokesmob_demo"},"speed":1}
+{"t":0,"kind":"notice","noticeType":"sub","user":"viewer01","name":"Viewer 01"}
+{"t":100,"kind":"notice","noticeType":"resub","user":"viewer02","name":"Viewer 02"}
+{"t":200,"kind":"notice","noticeType":"sub_gift","user":"viewer03","name":"Viewer 03"}
+{"t":300,"kind":"notice","noticeType":"raid","user":"viewer04","name":"Viewer 04","data":{"user_id":"200000001","user_login":"friendly_channel","user_name":"Friendly Channel","viewer_count":42,"profile_image_url":""}}
+{"t":400,"kind":"notice","noticeType":"watch_streak","user":"viewer05","name":"Viewer 05"}

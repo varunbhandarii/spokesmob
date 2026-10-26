@@ -1,0 +1,3 @@
+{"scenario":"raid-arrival","channel":{"id":"100000001","login":"spokesmob_demo"},"speed":1}
+{"t":0,"kind":"raid","from":"friendly_channel","name":"Friendly Channel","viewers":42}
+{"t":100,"kind":"chat","user":"viewer01","name":"Viewer 01","text":"Hello room"}
