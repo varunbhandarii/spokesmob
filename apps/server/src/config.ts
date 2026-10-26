@@ -1,5 +1,5 @@
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { z } from "zod";
 
 const environmentSchema = z.object({
@@ -19,6 +19,7 @@ const environmentSchema = z.object({
     .refine((value) => /^https?:/.test(value))
     .default("https://id.twitch.tv/oauth2"),
   TOKEN_FILE: z.string().min(1).optional(),
+  RECORDINGS_DIR: z.string().min(1).optional(),
   LOG_LEVEL: z.enum(["trace", "debug", "info", "warn", "error", "fatal", "silent"]).default("info"),
 });
 
@@ -30,6 +31,7 @@ export interface Config {
   helixUrl: string;
   authUrl: string;
   tokenFile: string;
+  recordingsDir: string;
   logLevel: z.infer<typeof environmentSchema>["LOG_LEVEL"];
 }
 
@@ -58,6 +60,9 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): Config
     helixUrl: value.HELIX_URL.replace(/\/$/, ""),
     authUrl: value.TWITCH_AUTH_URL.replace(/\/$/, ""),
     tokenFile: value.TOKEN_FILE ?? defaultTokenFile(environment),
+    recordingsDir:
+      value.RECORDINGS_DIR ??
+      join(dirname(value.TOKEN_FILE ?? defaultTokenFile(environment)), "recordings"),
     logLevel: value.LOG_LEVEL,
   };
 }

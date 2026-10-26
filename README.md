@@ -50,7 +50,14 @@ Copy `.env.example` to `.env` and fill in your credentials locally. Keep credent
 | `HELIX_URL` | Development or testing only, leave unset; defaults to Twitch Helix |
 | `TWITCH_AUTH_URL` | Development or testing only, leave unset; defaults to Twitch OAuth |
 | `TOKEN_FILE` | Development or testing only, leave unset; overrides the local token file |
+| `RECORDINGS_DIR` | Local chat recording folder; defaults beside the token file; keep it outside the repository |
 | `SPEND_CAP_USD` | Per-stream spend cap; defaults to `5` USD |
 | `LOG_LEVEL` | Structured log verbosity; defaults to `info` |
 
 Setup, startup, and OBS connection instructions will be added as the application becomes available.
+
+## Local recordings
+
+`npm run record -- --minutes 2` records raw Twitch frames. `--out <file>` selects a new output file. Recordings stay local; startup lists and deletes JSONL recordings older than seven days from the configured recording folder. Source folders that are public in Git cannot hold raw recordings.
+
+Use `npm run record -- --anonymize <input> <output> --replace-text` to create a fixture with deterministic fake identities and synthetic chat text. Without `--replace-text`, message text remains and requires each author's consent before publication. Anonymization removes reply bodies, colors and emote owner IDs. Output files must be new; existing files are not overwritten.

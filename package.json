@@ -22,6 +22,7 @@
     "start": "node --env-file-if-exists=.env --import tsx apps/server/src/index.ts",
     "setup": "node --env-file-if-exists=.env --import tsx apps/server/src/cli/setup.ts",
     "mock": "node --import tsx tools/mock-eventsub/src/cli.ts",
+    "record": "node --env-file-if-exists=.env --import tsx tools/recorder/src/cli.ts",
     "sim": "node -e \"console.log('not implemented')\"",
     "eval": "node -e \"console.log('not implemented')\""
   },

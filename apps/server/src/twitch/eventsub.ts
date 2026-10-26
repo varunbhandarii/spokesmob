@@ -97,6 +97,7 @@ export class EventSubClient {
     else this.active = connection;
     this.watch(connection);
     connection.socket.on("message", (data) => {
+      if (!this.running || (connection !== this.active && connection !== this.pending)) return;
       this.watch(connection);
       let input: unknown;
       try {
