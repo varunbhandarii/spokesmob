@@ -1,0 +1,29 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "^(Bash|apply_patch)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .codex/hooks/guard.mjs",
+            "timeout": 15,
+            "statusMessage": "Policy check"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .codex/hooks/stop-tests.mjs",
+            "timeout": 600,
+            "statusMessage": "npm test"
+          }
+        ]
+      }
+    ]
+  }
+}
