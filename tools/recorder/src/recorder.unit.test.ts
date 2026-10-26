@@ -112,6 +112,18 @@ test("synthetic prose preserves fragment categories and changes every captured c
   expect(event.message.fragments[1].text).toBe("@viewer01");
 });
 
+test("identical logins and display names keep distinct pseudonym roles and redact case variants", () => {
+  const input = JSON.parse(raw);
+  input.frame.payload.event.chatter_user_login = "same_viewer";
+  input.frame.payload.event.chatter_user_name = "same_viewer";
+  input.frame.payload.event.message.text = "SAME_VIEWER and SaMe_ViEwEr say hello";
+  const output = anonymizeRecording(JSON.stringify(input));
+  const event = JSON.parse(output).frame.payload.event;
+  expect(event.chatter_user_login).toBe("viewer02");
+  expect(event.chatter_user_name).toBe("Viewer 02");
+  expect(output.toLowerCase()).not.toContain("same_viewer");
+});
+
 test("recording folders default beside the token file and accept an explicit override", () => {
   const environment = {
     TWITCH_CLIENT_ID: "demo",

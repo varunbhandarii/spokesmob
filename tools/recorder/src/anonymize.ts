@@ -98,9 +98,18 @@ export function anonymizeRecording(
     .map((key) =>
       /^\d+$/.test(key) ? `(?<!\\d)${escapePattern(key)}(?!\\d)` : escapePattern(key),
     );
-  const pattern = alternatives.length ? new RegExp(alternatives.join("|"), "gu") : undefined;
+  const foldedReplacements = new Map(
+    [...replacements].map(([key, value]) => [key.toLowerCase(), value]),
+  );
+  const pattern = alternatives.length ? new RegExp(alternatives.join("|"), "giu") : undefined;
   const replace = (value: string) =>
-    pattern ? value.replace(pattern, (match) => replacements.get(match) ?? match) : value;
+    pattern
+      ? value.replace(
+          pattern,
+          (match) =>
+            replacements.get(match) ?? foldedReplacements.get(match.toLowerCase()) ?? match,
+        )
+      : value;
   function clean(value: unknown, key = ""): unknown {
     if (Array.isArray(value)) return value.map((child) => clean(child, key));
     if (object(value)) {
@@ -133,6 +142,10 @@ export function anonymizeRecording(
     // Preserve timestamps even when an unusually short numeric identity appears in a date.
     if (/(?:_at|timestamp)$/.test(key)) return value;
     if (/url$/.test(key)) return "https://example.invalid/local-fixture";
+    const person = people.get(value);
+    if (person && identityId.test(key)) return person.id;
+    if (person && identityLogin.test(key)) return person.login;
+    if (person && identityName.test(key)) return person.name;
     return replacements.get(value) ?? replace(value);
   }
   return `${records.map((value) => JSON.stringify(clean(value))).join("\n")}\n`;
