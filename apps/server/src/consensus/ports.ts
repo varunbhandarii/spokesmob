@@ -1,5 +1,10 @@
 import type { BuiltInput } from "../../../../packages/core/src/prompt.js";
-import type { ConsensusOutput, ModelUsage, RuleCode } from "../../../../packages/core/src/types.js";
+import type {
+  CallUsage,
+  ConsensusOutput,
+  ModelUsage,
+  RuleCode,
+} from "../../../../packages/core/src/types.js";
 import type { OutputModeration } from "../../../../packages/core/src/verify.js";
 
 export interface ModerationResult {
@@ -23,6 +28,8 @@ export interface ModelResult {
   outputModeration: OutputModeration;
   usage: ModelUsage | null;
   latencyMs: number;
+  additionalUsage?: CallUsage[];
+  incompleteReason?: string | null;
 }
 export interface ConsensusModelPort {
   generate(input: BuiltInput, signal?: AbortSignal): Promise<ModelResult>;

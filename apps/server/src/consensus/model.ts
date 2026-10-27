@@ -81,6 +81,9 @@ export class OpenAIConsensusModel implements ConsensusModelPort {
         outputModeration: inlineResult(response.moderation?.output),
         usage: mapUsage(response.usage),
         latencyMs: this.clock.now() - start,
+        ...(response.status === "incomplete"
+          ? { incompleteReason: response.incomplete_details?.reason ?? null }
+          : {}),
       };
     } catch (error) {
       const failure: RuleCode = signal?.aborted

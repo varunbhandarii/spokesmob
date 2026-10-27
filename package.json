@@ -26,7 +26,7 @@
     "twitch:check": "node --env-file-if-exists=.env --import tsx apps/server/src/cli/twitch-check.ts",
     "sim": "node --import tsx tools/crowd-sim/src/cli.ts",
     "consensus": "node --env-file-if-exists=.env --import tsx apps/server/src/cli/consensus.ts",
-    "eval": "node -e \"console.log('not implemented')\""
+    "eval": "node --env-file-if-exists=.env --import tsx eval/src/run.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.3",

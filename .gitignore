@@ -16,6 +16,7 @@ playwright-report/
 test-results/
 blob-report/
 eval/out/
+eval/reports/
 .codex/.stop-state.json
 .DS_Store
 Thumbs.db

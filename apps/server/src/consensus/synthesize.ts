@@ -11,6 +11,7 @@ import type {
   Cluster,
   RuleCode,
   SynthesisResult,
+  Window,
 } from "../../../../packages/core/src/types.js";
 import { type OutputModeration, verifyLine } from "../../../../packages/core/src/verify.js";
 import { assembleWindow, type WindowOptions } from "../../../../packages/core/src/window.js";
@@ -33,6 +34,7 @@ export interface SynthesisOptions {
   signal?: AbortSignal;
   clock?: Clock;
   log?: Pick<Logger, "info">;
+  onWindow?: (window: Window, clusters: readonly Cluster[]) => void;
 }
 export async function synthesize(options: SynthesisOptions): Promise<SynthesisResult> {
   const clock = options.clock ?? systemClock;
@@ -139,6 +141,7 @@ export async function synthesize(options: SynthesisOptions): Promise<SynthesisRe
     result.latency.assembly += clock.now() - assemblyStart;
     if (window.voices < minVoices) return finish("input_moderation", "not_enough_voices");
   }
+  options.onWindow?.(window, clusters);
   const names = window.moodMessages.flatMap((message) => [
     message.authorName,
     ...(message.authorLogin ? [message.authorLogin] : []),
@@ -206,6 +209,7 @@ export async function synthesize(options: SynthesisOptions): Promise<SynthesisRe
       break;
     }
     result.latency.model += generated.latencyMs;
+    usage.push(...(generated.additionalUsage ?? []));
     usage.push({
       source: "model",
       usage: generated.usage,
