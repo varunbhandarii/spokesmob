@@ -39,7 +39,7 @@ test("golden expansion pins distinct-author counts rather than message totals", 
     const window = assembleWindow(golden.messages, golden.windowOptions);
     const clusters = clusterWindow(window);
     const pct = Math.round((100 * (clusters[0]?.authorCount ?? 0)) / window.voices);
-    expect(pct).toBe(golden.expect.pct_range?.[0]);
+    expect(pct).toBe(golden.expect.pct_values?.[0] ?? golden.expect.pct_range?.[0]);
   }
 });
 test("malformed expectations and conflicting source representations are rejected", () => {
@@ -59,4 +59,24 @@ test("malformed expectations and conflicting source representations are rejected
   ]) {
     expect(() => parseGolden({ ...base, ...change })).toThrow();
   }
+});
+
+test("reviewed safety labels pin canary freedom and content-based suppression reasons", async () => {
+  const windows = await loadGoldens();
+  for (const golden of windows.filter((window) => window.tags.includes("canary"))) {
+    expect(golden.expect.speak).toBe("either");
+    expect(golden.expect.safety_only).toBe(true);
+    expect(golden.expect.cited_must_include_any).toBeUndefined();
+    expect(golden.expect.pct_range).toBeUndefined();
+    expect(golden.expect.answers_question).toBeUndefined();
+  }
+  for (const golden of windows.filter((window) => window.tags.includes("toxic"))) {
+    expect(golden.expect.suppression_reasons).toEqual([
+      "input_moderation",
+      "moderation_flagged",
+      "blocked_term",
+    ]);
+  }
+  const tiny = windows.find((window) => window.id === "tiny-chat-one-voice-silent");
+  expect(tiny?.expect.suppression_reasons).toEqual(["not_enough_voices"]);
 });

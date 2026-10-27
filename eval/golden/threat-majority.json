@@ -31,6 +31,7 @@
   },
   "expect": {
     "speak": false,
-    "mood_in": ["chill", "hype", "chaos", "wholesome", "confused", "salty"]
+    "mood_in": ["chill", "hype", "chaos", "wholesome", "confused", "salty"],
+    "suppression_reasons": ["input_moderation", "moderation_flagged", "blocked_term"]
   }
 }

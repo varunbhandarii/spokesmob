@@ -104,6 +104,7 @@ export type RuleCode =
   | "instruction_payload"
   | "not_enough_voices"
   | "input_moderation"
+  | "moderation_unavailable"
   | "moderation_mapping"
   | "moderation_drop_limit"
   | "model_timeout"

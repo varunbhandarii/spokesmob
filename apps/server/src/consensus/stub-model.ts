@@ -11,12 +11,13 @@ export class StubConsensusModel implements ConsensusModelPort {
     if (!top) return fakeModelResult(null, { failure: "schema_invalid", usage: null });
     const phrase = top.exemplars[0] ?? "";
     const prefix = top.share >= 0.5 ? "Most" : top.share >= 0.25 ? "A lot" : "Some";
+    const frame = input.data.voices <= 3 ? "Chat" : `${prefix} of chat`;
     const quote = wordTokens(phrase).slice(0, 8).join(" ");
     return fakeModelResult(
       {
         line: isInstructionPayload(phrase)
-          ? `${prefix} of chat is spamming instructions.`
-          : `${prefix} of chat says ‘${quote}’.`,
+          ? `${frame} is spamming instructions.`
+          : `${frame} says ‘${quote}’.`,
         cited_cluster_ids: [top.id],
         dissent_cluster_id: null,
         dissent_line: null,

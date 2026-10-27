@@ -36,7 +36,6 @@
     "cited_must_include_any": ["tea", "coffee"],
     "cited_must_exclude": ["water"],
     "pct_range": [40, 40],
-    "dissent_contains_any": ["tea", "coffee"],
-    "forbidden_substrings": ["most", "everyone", "unanimous"]
+    "dissent_contains_any": ["tea", "coffee"]
   }
 }

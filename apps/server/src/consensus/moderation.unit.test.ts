@@ -1,4 +1,4 @@
-import { afterEach, expect, test, vi } from "vitest";
+﻿import { afterEach, expect, test, vi } from "vitest";
 import { decodeBase64 } from "../../../../packages/core/src/base64.js";
 import { clearModeration, FakeModerationPort } from "./fakes.js";
 import { ModerationGate, moderationDecision } from "./moderation.js";
@@ -58,7 +58,7 @@ test("missing results, malformed results and failed quick retries fail closed", 
     throw Object.assign(new Error("limited"), { status: 429 });
   });
   const gate = new ModerationGate({ port });
-  await expect(gate.resolve(["Gary"])).rejects.toMatchObject({ reason: "input_moderation" });
+  await expect(gate.resolve(["Gary"])).rejects.toMatchObject({ reason: "moderation_unavailable" });
   expect(port.requests).toHaveLength(2);
   expect(gate.drainUsage()).toHaveLength(2);
 });
@@ -75,7 +75,7 @@ test("a fast transient failure retries once and a slow failure does not retry", 
     throw new Error("late");
   });
   const promise = new ModerationGate({ port: slow }).resolve(["Gary"]);
-  const assertion = expect(promise).rejects.toMatchObject({ reason: "input_moderation" });
+  const assertion = expect(promise).rejects.toMatchObject({ reason: "moderation_unavailable" });
   await vi.advanceTimersByTimeAsync(501);
   await assertion;
   expect(slow.requests).toHaveLength(1);
@@ -87,7 +87,7 @@ test("a quick retry has a 500 ms deadline and abort cancels pending work", async
     return new Promise(() => undefined);
   });
   const pending = new ModerationGate({ port }).resolve(["Gary"]);
-  const failed = expect(pending).rejects.toMatchObject({ reason: "input_moderation" });
+  const failed = expect(pending).rejects.toMatchObject({ reason: "moderation_unavailable" });
   await vi.advanceTimersByTimeAsync(500);
   await failed;
   const controller = new AbortController();

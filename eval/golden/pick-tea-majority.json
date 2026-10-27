@@ -9,8 +9,16 @@
     "seconds": 1,
     "seed": 42,
     "clusters": [
-      { "name": "tea", "share": 0.6, "phrases": ["tea"] },
-      { "name": "coffee", "share": 0.4, "phrases": ["coffee"] }
+      {
+        "name": "tea",
+        "share": 0.6,
+        "phrases": ["tea"]
+      },
+      {
+        "name": "coffee",
+        "share": 0.4,
+        "phrases": ["coffee"]
+      }
     ],
     "repeatShare": 0,
     "typoShare": 0,

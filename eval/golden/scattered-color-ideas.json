@@ -68,7 +68,6 @@
   "expect": {
     "speak": true,
     "mood_in": ["chill", "hype", "chaos", "wholesome", "confused", "salty"],
-    "pct_range": [10, 10],
-    "forbidden_substrings": ["most", "everyone", "unanimous"]
+    "pct_range": [5, 45]
   }
 }

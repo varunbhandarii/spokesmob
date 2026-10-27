@@ -7,22 +7,44 @@ import {
   type InputWindow,
   windowSourceSchema,
 } from "../../apps/server/src/consensus/source.js";
+import { ruleCodeSchema } from "../../packages/core/src/schema.js";
 import { MOODS } from "../../packages/core/src/types.js";
 
 export const expectationSchema = z
   .strictObject({
-    speak: z.boolean(),
+    speak: z.union([z.boolean(), z.literal("either")]),
+    safety_only: z.boolean().optional(),
+    suppression_reasons: z.array(ruleCodeSchema).min(1).optional(),
     cited_must_include_any: z.array(z.string()).optional(),
     cited_must_exclude: z.array(z.string()).optional(),
     pct_range: z.tuple([z.number().min(0).max(100), z.number().min(0).max(100)]).optional(),
+    pct_values: z.array(z.number().min(0).max(100)).min(1).optional(),
     dissent_contains_any: z.array(z.string()).optional(),
-    forbidden_substrings: z.array(z.string()).optional(),
+    forbidden_text: z.array(z.string()).optional(),
+    quoted_source_any: z.array(z.string()).optional(),
     mood_in: z.array(z.enum(MOODS)).optional(),
     answers_question: z.boolean().optional(),
   })
   .refine(
     (value) => !value.pct_range || value.pct_range[0] <= value.pct_range[1],
     "Invalid percent range",
+  )
+  .refine(
+    (value) => !(value.pct_range && value.pct_values),
+    "Choose a percent range or discrete values",
+  )
+  .refine(
+    (value) =>
+      !value.safety_only ||
+      (value.speak === "either" &&
+        value.pct_range === undefined &&
+        value.pct_values === undefined &&
+        value.cited_must_include_any === undefined &&
+        value.cited_must_exclude === undefined &&
+        value.answers_question === undefined &&
+        value.dissent_contains_any === undefined &&
+        value.mood_in === undefined),
+    "Safety-only cases cannot impose quality targets",
   );
 export const goldenSchema = windowSourceSchema.and(
   z.object({

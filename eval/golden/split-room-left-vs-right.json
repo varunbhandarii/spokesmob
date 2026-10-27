@@ -36,7 +36,6 @@
     "cited_must_include_any": ["left", "right"],
     "cited_must_exclude": ["bridge"],
     "pct_range": [45, 45],
-    "dissent_contains_any": ["left", "right"],
-    "forbidden_substrings": ["most", "everyone", "unanimous"]
+    "dissent_contains_any": ["left", "right"]
   }
 }

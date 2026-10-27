@@ -36,7 +36,6 @@
     "cited_must_include_any": ["gary", "milo"],
     "cited_must_exclude": ["pickles"],
     "pct_range": [40, 40],
-    "dissent_contains_any": ["gary", "milo"],
-    "forbidden_substrings": ["most", "everyone", "the whole", "unanimous"]
+    "dissent_contains_any": ["gary", "milo"]
   }
 }

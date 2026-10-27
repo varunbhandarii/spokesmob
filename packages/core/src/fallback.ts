@@ -61,7 +61,7 @@ export function fallbackLine(
   const prefix = { most: "Most", a_lot: "A lot", some: "Some" }[band(top.authorCount / voices)];
   return {
     output: {
-      line: `${prefix} of chat says ${phrase}`,
+      line: voices <= 3 ? `Chat says ${phrase}` : `${prefix} of chat says ${phrase}`,
       cited_cluster_ids: [top.id],
       dissent_cluster_id: null,
       dissent_line: null,

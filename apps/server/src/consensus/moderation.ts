@@ -10,7 +10,7 @@ const resultSchema = z.object({
   scores: z.record(z.string(), z.number().min(0).max(1)),
 });
 export class ModerationFailure extends Error {
-  constructor(readonly reason: "input_moderation" | "moderation_mapping" | "aborted") {
+  constructor(readonly reason: "moderation_unavailable" | "moderation_mapping" | "aborted") {
     super(reason);
   }
 }
@@ -139,14 +139,14 @@ export class ModerationGate {
         if (signal?.aborted) throw new ModerationFailure("aborted");
         if (error instanceof ModerationFailure) throw error;
         const remaining = 500 - (this.clock.now() - start);
-        if (remaining <= 0) throw new ModerationFailure("input_moderation");
+        if (remaining <= 0) throw new ModerationFailure("moderation_unavailable");
         try {
           results = await this.attempt(texts, remaining, signal);
         } catch (retryError) {
           if (signal?.aborted) throw new ModerationFailure("aborted");
           throw retryError instanceof ModerationFailure
             ? retryError
-            : new ModerationFailure("input_moderation");
+            : new ModerationFailure("moderation_unavailable");
         }
       }
       if (signal?.aborted) throw new ModerationFailure("aborted");

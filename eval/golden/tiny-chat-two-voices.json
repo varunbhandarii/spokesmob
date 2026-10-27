@@ -17,6 +17,7 @@
     "speak": true,
     "cited_must_include_any": ["gary"],
     "pct_range": [100, 100],
-    "mood_in": ["chill", "hype", "chaos", "wholesome", "confused", "salty"]
+    "mood_in": ["chill", "hype", "chaos", "wholesome", "confused", "salty"],
+    "forbidden_text": ["most", "everyone", "everybody", "the room"]
   }
 }

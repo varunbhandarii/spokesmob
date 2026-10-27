@@ -133,7 +133,7 @@
     "speak": true,
     "cited_must_include_any": ["sleepy"],
     "pct_range": [40, 40],
-    "forbidden_substrings": ["Kappa", "KEKW", "LUL"],
-    "mood_in": ["chaos", "hype", "chill"]
+    "mood_in": ["chaos", "hype", "chill"],
+    "forbidden_text": ["Kappa", "KEKW", "LUL"]
   }
 }

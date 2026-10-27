@@ -36,7 +36,7 @@ test("fallback uses the most frequent clean form, eight words and the computed b
     options,
   );
   expect("output" in long && long.output.line).toBe(
-    "Most of chat says one two three four five six seven eight",
+    "Chat says one two three four five six seven eight",
   );
   expect(fallbackLine(clusters("Gary", 1), 10, options)).toEqual({ reason: "support_low" });
   expect(fallbackLine(clusters("Gary", 3), 100, options)).toEqual({ reason: "support_low" });
