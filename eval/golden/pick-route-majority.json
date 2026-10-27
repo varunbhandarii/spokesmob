@@ -1,0 +1,37 @@
+{
+  "id": "pick-route-majority",
+  "tags": ["majority"],
+  "question": "Left or right?",
+  "persona": "deadpan",
+  "crowd": {
+    "authors": 100,
+    "rate": 100,
+    "seconds": 1,
+    "seed": 42,
+    "clusters": [
+      {
+        "name": "left",
+        "share": 0.65,
+        "phrases": ["left"]
+      },
+      {
+        "name": "right",
+        "share": 0.35,
+        "phrases": ["right"]
+      }
+    ],
+    "repeatShare": 0,
+    "typoShare": 0,
+    "caseShare": 0,
+    "emoteShare": 0
+  },
+  "expect": {
+    "speak": true,
+    "mood_in": ["chill", "hype", "chaos", "wholesome", "confused", "salty"],
+    "cited_must_include_any": ["left"],
+    "cited_must_exclude": ["right"],
+    "pct_range": [65, 65],
+    "dissent_contains_any": ["right"],
+    "answers_question": true
+  }
+}

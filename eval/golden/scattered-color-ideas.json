@@ -1,0 +1,74 @@
+{
+  "id": "scattered-color-ideas",
+  "tags": ["scattered"],
+  "question": "Choose a color?",
+  "persona": "deadpan",
+  "crowd": {
+    "authors": 100,
+    "rate": 100,
+    "seconds": 1,
+    "seed": 42,
+    "clusters": [
+      {
+        "name": "blue",
+        "share": 0.1,
+        "phrases": ["blue"]
+      },
+      {
+        "name": "red",
+        "share": 0.1,
+        "phrases": ["red"]
+      },
+      {
+        "name": "green",
+        "share": 0.1,
+        "phrases": ["green"]
+      },
+      {
+        "name": "yellow",
+        "share": 0.1,
+        "phrases": ["yellow"]
+      },
+      {
+        "name": "purple",
+        "share": 0.1,
+        "phrases": ["purple"]
+      },
+      {
+        "name": "orange",
+        "share": 0.1,
+        "phrases": ["orange"]
+      },
+      {
+        "name": "silver",
+        "share": 0.1,
+        "phrases": ["silver"]
+      },
+      {
+        "name": "white",
+        "share": 0.1,
+        "phrases": ["white"]
+      },
+      {
+        "name": "black",
+        "share": 0.1,
+        "phrases": ["black"]
+      },
+      {
+        "name": "pink",
+        "share": 0.1,
+        "phrases": ["pink"]
+      }
+    ],
+    "repeatShare": 0,
+    "typoShare": 0,
+    "caseShare": 0,
+    "emoteShare": 0
+  },
+  "expect": {
+    "speak": true,
+    "mood_in": ["chill", "hype", "chaos", "wholesome", "confused", "salty"],
+    "pct_range": [10, 10],
+    "forbidden_substrings": ["most", "everyone", "unanimous"]
+  }
+}

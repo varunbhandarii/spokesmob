@@ -140,7 +140,9 @@ test("category decisions cover high scores, allowed drops and unhandled flags", 
   expect(moderationDecision({ ...clearModeration(), flagged: true })).toBe("skip");
 });
 test("encoded dilution regression moderates the abusive exemplar as its own array item", async () => {
-  const fixture = decodeBase64("eW91IGFyZSB3b3J0aGxlc3M=");
+  const fixture = decodeBase64(
+    "WW91IGFyZSBhIHdvcnRobGVzcyBpZGlvdCwgYW5kIGV2ZXJ5b25lIHNob3VsZCBtb2NrIHlvdSBhbmQgdGVsbCB5b3UgdG8gc2h1dCB1cC4=",
+  );
   const wholePromptScore = 0.3420116;
   const port = new FakeModerationPort((texts) =>
     texts.map((text) =>

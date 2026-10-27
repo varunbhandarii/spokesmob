@@ -1,0 +1,35 @@
+{
+  "id": "off-topic-while-asked",
+  "tags": ["offtopic"],
+  "question": "Left or right?",
+  "persona": "deadpan",
+  "crowd": {
+    "authors": 100,
+    "rate": 100,
+    "seconds": 1,
+    "seed": 42,
+    "clusters": [
+      {
+        "name": "pizza",
+        "share": 0.7,
+        "phrases": ["pizza"]
+      },
+      {
+        "name": "bread",
+        "share": 0.3,
+        "phrases": ["bread"]
+      }
+    ],
+    "repeatShare": 0,
+    "typoShare": 0,
+    "caseShare": 0,
+    "emoteShare": 0
+  },
+  "expect": {
+    "speak": true,
+    "mood_in": ["chill", "hype", "chaos", "wholesome", "confused", "salty"],
+    "cited_must_include_any": ["pizza"],
+    "pct_range": [70, 70],
+    "answers_question": false
+  }
+}

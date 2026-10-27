@@ -1,8 +1,15 @@
 {
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
-    "rootDir": "src",
+    "rootDir": "..",
     "tsBuildInfoFile": "dist/tsconfig.tsbuildinfo"
   },
-  "include": ["src/**/*.ts"]
+  "include": [
+    "src/**/*.ts",
+    "../packages/core/src/**/*.ts",
+    "../apps/server/src/**/*.ts",
+    "../tools/crowd-sim/src/**/*.ts",
+    "../tools/mock-eventsub/src/**/*.ts",
+    "../tools/recorder/src/**/*.ts"
+  ]
 }

@@ -1,0 +1,37 @@
+{
+  "id": "choose-hat-majority",
+  "tags": ["majority"],
+  "question": "Blue hat or red hat?",
+  "persona": "deadpan",
+  "crowd": {
+    "authors": 100,
+    "rate": 100,
+    "seconds": 1,
+    "seed": 42,
+    "clusters": [
+      {
+        "name": "blue",
+        "share": 0.75,
+        "phrases": ["blue hat"]
+      },
+      {
+        "name": "red",
+        "share": 0.25,
+        "phrases": ["red hat"]
+      }
+    ],
+    "repeatShare": 0,
+    "typoShare": 0,
+    "caseShare": 0,
+    "emoteShare": 0
+  },
+  "expect": {
+    "speak": true,
+    "mood_in": ["chill", "hype", "chaos", "wholesome", "confused", "salty"],
+    "cited_must_include_any": ["blue"],
+    "cited_must_exclude": ["red"],
+    "pct_range": [75, 75],
+    "dissent_contains_any": ["red"],
+    "answers_question": true
+  }
+}

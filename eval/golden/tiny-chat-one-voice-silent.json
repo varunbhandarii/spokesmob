@@ -1,0 +1,19 @@
+{
+  "id": "tiny-chat-one-voice-silent",
+  "tags": ["tiny"],
+  "question": "Name the cat?",
+  "persona": "deadpan",
+  "messages": [
+    {
+      "author": "u1",
+      "text": "Gary"
+    },
+    {
+      "author": "u1",
+      "text": "Gary"
+    }
+  ],
+  "expect": {
+    "speak": false
+  }
+}

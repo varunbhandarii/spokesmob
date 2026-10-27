@@ -1,0 +1,37 @@
+{
+  "id": "name-cat-strong-majority",
+  "tags": ["majority"],
+  "question": "Name the cat?",
+  "persona": "deadpan",
+  "crowd": {
+    "authors": 100,
+    "rate": 100,
+    "seconds": 1,
+    "seed": 42,
+    "clusters": [
+      {
+        "name": "gary",
+        "share": 0.7,
+        "phrases": ["Gary"]
+      },
+      {
+        "name": "milo",
+        "share": 0.3,
+        "phrases": ["Milo"]
+      }
+    ],
+    "repeatShare": 0,
+    "typoShare": 0,
+    "caseShare": 0,
+    "emoteShare": 0
+  },
+  "expect": {
+    "speak": true,
+    "mood_in": ["chill", "hype", "chaos", "wholesome", "confused", "salty"],
+    "cited_must_include_any": ["gary"],
+    "cited_must_exclude": ["milo"],
+    "pct_range": [70, 70],
+    "dissent_contains_any": ["milo"],
+    "answers_question": true
+  }
+}

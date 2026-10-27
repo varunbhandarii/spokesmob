@@ -1,0 +1,139 @@
+{
+  "id": "copypasta-emote-wall",
+  "tags": ["emote"],
+  "question": null,
+  "persona": "deadpan",
+  "messages": [
+    {
+      "author": "u0",
+      "text": "the cat is sleepy"
+    },
+    {
+      "author": "u1",
+      "text": "the cat is sleepy"
+    },
+    {
+      "author": "u2",
+      "text": "the cat is sleepy"
+    },
+    {
+      "author": "u3",
+      "text": "the cat is sleepy"
+    },
+    {
+      "author": "u4",
+      "text": "the cat is sleepy"
+    },
+    {
+      "author": "u5",
+      "text": "the cat is sleepy"
+    },
+    {
+      "author": "u6",
+      "text": "the cat is sleepy"
+    },
+    {
+      "author": "u7",
+      "text": "the cat is sleepy"
+    },
+    {
+      "author": "u8",
+      "text": "Kappa",
+      "emotes": ["Kappa"]
+    },
+    {
+      "author": "u9",
+      "text": "Kappa",
+      "emotes": ["Kappa"]
+    },
+    {
+      "author": "u10",
+      "text": "Kappa",
+      "emotes": ["Kappa"]
+    },
+    {
+      "author": "u11",
+      "text": "Kappa",
+      "emotes": ["Kappa"]
+    },
+    {
+      "author": "u12",
+      "text": "Kappa",
+      "emotes": ["Kappa"]
+    },
+    {
+      "author": "u13",
+      "text": "Kappa",
+      "emotes": ["Kappa"]
+    },
+    {
+      "author": "u14",
+      "text": "Kappa",
+      "emotes": ["Kappa"]
+    },
+    {
+      "author": "u15",
+      "text": "Kappa",
+      "emotes": ["Kappa"]
+    },
+    {
+      "author": "u16",
+      "text": "Kappa",
+      "emotes": ["Kappa"]
+    },
+    {
+      "author": "u17",
+      "text": "Kappa",
+      "emotes": ["Kappa"]
+    },
+    {
+      "author": "u18",
+      "text": "Kappa",
+      "emotes": ["Kappa"]
+    },
+    {
+      "author": "u19",
+      "text": "Kappa",
+      "emotes": ["Kappa"]
+    },
+    {
+      "author": "u0",
+      "text": "the cat is sleepy"
+    },
+    {
+      "author": "u0",
+      "text": "the cat is sleepy"
+    },
+    {
+      "author": "u0",
+      "text": "the cat is sleepy"
+    },
+    {
+      "author": "u0",
+      "text": "the cat is sleepy"
+    },
+    {
+      "author": "u0",
+      "text": "the cat is sleepy"
+    },
+    {
+      "author": "u0",
+      "text": "the cat is sleepy"
+    },
+    {
+      "author": "u0",
+      "text": "the cat is sleepy"
+    },
+    {
+      "author": "u0",
+      "text": "the cat is sleepy"
+    }
+  ],
+  "expect": {
+    "speak": true,
+    "cited_must_include_any": ["sleepy"],
+    "pct_range": [40, 40],
+    "forbidden_substrings": ["Kappa", "KEKW", "LUL"],
+    "mood_in": ["chaos", "hype", "chill"]
+  }
+}

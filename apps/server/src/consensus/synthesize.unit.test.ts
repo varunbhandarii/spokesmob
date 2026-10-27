@@ -148,7 +148,11 @@ test("blocked or instruction-like fallback candidates suppress before an output 
       [fakeModelResult(null, { failure: "model_timeout", usage: null })],
       [text ?? "", text ?? ""],
     );
-    expect(await synthesize(f.options)).toMatchObject({ status: "suppressed", reason });
+    const result = await synthesize(f.options);
+    expect({ status: result.status, reason: result.reason }).toEqual({
+      status: "suppressed",
+      reason,
+    });
     expect(f.outputPort.requests).toHaveLength(0);
   }
 });

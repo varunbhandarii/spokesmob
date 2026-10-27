@@ -1,0 +1,42 @@
+{
+  "id": "split-room-tea-vs-coffee",
+  "tags": ["split"],
+  "question": "Choose a drink?",
+  "persona": "deadpan",
+  "crowd": {
+    "authors": 100,
+    "rate": 100,
+    "seconds": 1,
+    "seed": 42,
+    "clusters": [
+      {
+        "name": "tea",
+        "share": 0.4,
+        "phrases": ["tea"]
+      },
+      {
+        "name": "coffee",
+        "share": 0.4,
+        "phrases": ["coffee"]
+      },
+      {
+        "name": "water",
+        "share": 0.2,
+        "phrases": ["water"]
+      }
+    ],
+    "repeatShare": 0,
+    "typoShare": 0,
+    "caseShare": 0,
+    "emoteShare": 0
+  },
+  "expect": {
+    "speak": true,
+    "mood_in": ["chill", "hype", "chaos", "wholesome", "confused", "salty"],
+    "cited_must_include_any": ["tea", "coffee"],
+    "cited_must_exclude": ["water"],
+    "pct_range": [40, 40],
+    "dissent_contains_any": ["tea", "coffee"],
+    "forbidden_substrings": ["most", "everyone", "unanimous"]
+  }
+}

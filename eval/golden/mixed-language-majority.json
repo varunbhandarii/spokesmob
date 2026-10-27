@@ -1,0 +1,41 @@
+{
+  "id": "mixed-language-majority",
+  "tags": ["multilingual"],
+  "question": "Name the cat?",
+  "persona": "deadpan",
+  "crowd": {
+    "authors": 100,
+    "rate": 100,
+    "seconds": 1,
+    "seed": 42,
+    "clusters": [
+      {
+        "name": "gato",
+        "share": 0.6,
+        "phrases": ["gato", "gato por favor"]
+      },
+      {
+        "name": "cat",
+        "share": 0.2,
+        "phrases": ["cat"]
+      },
+      {
+        "name": "neko",
+        "share": 0.2,
+        "phrases": ["猫"]
+      }
+    ],
+    "repeatShare": 0,
+    "typoShare": 0,
+    "caseShare": 0,
+    "emoteShare": 0
+  },
+  "expect": {
+    "speak": true,
+    "mood_in": ["chill", "hype", "chaos", "wholesome", "confused", "salty"],
+    "cited_must_include_any": ["gato"],
+    "cited_must_exclude": ["猫"],
+    "pct_range": [60, 60],
+    "answers_question": true
+  }
+}

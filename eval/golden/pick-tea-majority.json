@@ -1,0 +1,29 @@
+{
+  "id": "pick-tea-majority",
+  "tags": ["majority"],
+  "question": "Tea or coffee?",
+  "persona": "deadpan",
+  "crowd": {
+    "authors": 100,
+    "rate": 100,
+    "seconds": 1,
+    "seed": 42,
+    "clusters": [
+      { "name": "tea", "share": 0.6, "phrases": ["tea"] },
+      { "name": "coffee", "share": 0.4, "phrases": ["coffee"] }
+    ],
+    "repeatShare": 0,
+    "typoShare": 0,
+    "caseShare": 0,
+    "emoteShare": 0
+  },
+  "expect": {
+    "speak": true,
+    "cited_must_include_any": ["tea"],
+    "cited_must_exclude": ["coffee"],
+    "pct_range": [60, 60],
+    "dissent_contains_any": ["coffee"],
+    "mood_in": ["chill", "hype", "chaos", "wholesome", "confused", "salty"],
+    "answers_question": true
+  }
+}

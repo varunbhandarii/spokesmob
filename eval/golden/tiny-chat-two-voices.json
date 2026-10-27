@@ -1,0 +1,22 @@
+{
+  "id": "tiny-chat-two-voices",
+  "tags": ["tiny"],
+  "question": "Name the cat?",
+  "persona": "deadpan",
+  "messages": [
+    {
+      "author": "u1",
+      "text": "Gary"
+    },
+    {
+      "author": "u2",
+      "text": "Gary"
+    }
+  ],
+  "expect": {
+    "speak": true,
+    "cited_must_include_any": ["gary"],
+    "pct_range": [100, 100],
+    "mood_in": ["chill", "hype", "chaos", "wholesome", "confused", "salty"]
+  }
+}
