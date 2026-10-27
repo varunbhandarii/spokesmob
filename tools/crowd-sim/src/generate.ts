@@ -3,6 +3,7 @@ import type { Scenario, ScenarioLine } from "../../mock-eventsub/src/scenario.js
 export interface ClusterShare {
   name: string;
   share: number;
+  phrases?: readonly string[];
 }
 
 export interface CrowdOptions {
@@ -27,10 +28,22 @@ export const defaultClusters: readonly ClusterShare[] = Object.freeze([
 
 export function parseClusters(value: string): ClusterShare[] {
   const clusters = value.split(",").map((item) => {
-    const [name, share, extra] = item.split(":");
+    const [definition, share, extra] = item.split(":");
+    const [name, phrases] = (definition ?? "").split("=");
     if (!name?.trim() || share === undefined || !share.trim() || extra !== undefined)
       throw new Error("Clusters must use name:share pairs");
-    return { name: name.trim(), share: Number(share) };
+    return {
+      name: name.trim(),
+      share: Number(share),
+      ...(phrases
+        ? {
+            phrases: phrases
+              .split("|")
+              .map((phrase) => phrase.trim())
+              .filter(Boolean),
+          }
+        : {}),
+    };
   });
   validateClusters(clusters);
   return clusters;
@@ -86,7 +99,8 @@ function authorClusters(authors: number, clusters: readonly ClusterShare[]): str
   return quotas.flatMap((cluster) => Array.from({ length: cluster.count }, () => cluster.name));
 }
 
-function textFor(cluster: string, random: () => number): string {
+function textFor(cluster: string, random: () => number, phrases?: readonly string[]): string {
+  if (phrases?.length) return phrases[Math.floor(random() * phrases.length)] ?? cluster;
   const alternatives =
     cluster === "noise"
       ? [
@@ -171,7 +185,12 @@ export function generateScenario(options: CrowdOptions = {}): Scenario {
     else if (random() < emoteShare)
       message = { text: "Kappa", emotes: [{ name: "Kappa", id: "25" }] };
     else {
-      let text = textFor(assignments[author] ?? "noise", random);
+      const label = assignments[author] ?? "noise";
+      let text = textFor(
+        label,
+        random,
+        clusters.find((cluster) => cluster.name === label)?.phrases,
+      );
       if (random() < typoShare) text = typo(text, random);
       if (random() < caseShare)
         text = random() < 0.5 ? text.toUpperCase() : text.charAt(0).toUpperCase() + text.slice(1);
@@ -179,7 +198,14 @@ export function generateScenario(options: CrowdOptions = {}): Scenario {
     }
     previousMessages.set(author, message);
     const number = String(author + 1).padStart(Math.max(2, String(authors).length), "0");
-    lines.push({ t, kind: "chat", user: `viewer${number}`, name: `Viewer ${number}`, ...message });
+    lines.push({
+      t,
+      kind: "chat",
+      user: `viewer${number}`,
+      name: `Viewer ${number}`,
+      ...message,
+      label: assignments[author] ?? "noise",
+    });
   }
   return {
     header: {

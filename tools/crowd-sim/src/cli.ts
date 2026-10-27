@@ -1,4 +1,4 @@
-import { writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
@@ -8,9 +8,14 @@ import {
   serializeScenario,
 } from "./generate.js";
 
-export function parseArguments(args: readonly string[]): { options: CrowdOptions; out?: string } {
+export function parseArguments(args: readonly string[]): {
+  options: CrowdOptions;
+  out?: string;
+  spec?: string;
+} {
   const options: CrowdOptions = {};
   let out: string | undefined;
+  let spec: string | undefined;
   const numeric = {
     "--authors": "authors",
     "--rate": "rate",
@@ -27,16 +32,18 @@ export function parseArguments(args: readonly string[]): { options: CrowdOptions
     if (!name || value === undefined || value.startsWith("--"))
       throw new Error("Every option needs a value");
     if (name === "--out") out = value;
+    else if (name === "--spec") spec = value;
     else if (name === "--clusters") options.clusters = parseClusters(value);
     else if (name in numeric) options[numeric[name as keyof typeof numeric]] = Number(value);
     else throw new Error("Unknown crowd option");
   }
-  return { options, ...(out ? { out } : {}) };
+  return { options, ...(out ? { out } : {}), ...(spec ? { spec } : {}) };
 }
 
 async function main(): Promise<void> {
-  const { options, out } = parseArguments(process.argv.slice(2));
-  const scenario = generateScenario(options);
+  const { options, out, spec } = parseArguments(process.argv.slice(2));
+  const configured = spec ? (JSON.parse(await readFile(spec, "utf8")) as CrowdOptions) : {};
+  const scenario = generateScenario({ ...configured, ...options });
   const output = serializeScenario(scenario);
   if (out) {
     await writeFile(out, output, "utf8");

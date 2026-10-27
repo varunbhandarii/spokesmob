@@ -6,6 +6,6 @@ export default defineProject({
   test: {
     name: "core",
     environment: "node",
-    include: ["src/**/*.unit.test.ts", "src/**/*.replay.test.ts"],
+    include: ["src/**/*.unit.test.ts", "src/**/*.replay.test.ts", "src/**/*.quality.test.ts"],
   },
 });

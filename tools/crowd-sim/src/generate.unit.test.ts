@@ -9,6 +9,30 @@ test("a seeded crowd is deterministic and changing the seed changes the conversa
   expect(generateScenario({ authors: 20, rate: 10, seconds: 5, seed: 8 })).not.toEqual(first);
 });
 
+test("phrase lists support multilingual labeled crowds without leaking labels into frames", () => {
+  const clusters = parseClusters("gary=gary|name him gary:0.5,cat=猫|gato:0.5");
+  const scenario = generateScenario({
+    authors: 20,
+    rate: 10,
+    seconds: 2,
+    clusters,
+    typoShare: 0,
+    caseShare: 0,
+    emoteShare: 0,
+  });
+  expect(scenario.lines.every((line) => line.kind === "chat" && Boolean(line.label))).toBe(true);
+  expect(
+    scenario.lines.some((line) => line.kind === "chat" && ["猫", "gato"].includes(line.text)),
+  ).toBe(true);
+  const frames = expandScenario(parseScenario(serializeScenario(scenario)));
+  expect(
+    frames.every(
+      (line) => line.kind === "notification" && !("label" in (line.frame.payload.event ?? {})),
+    ),
+  ).toBe(true);
+  expect(parseArguments(["--spec", "crowd-spec.json"]).spec).toBe("crowd-spec.json");
+});
+
 test("default crowd maintains cluster shares, author count, message rate and per-author pacing", () => {
   const scenario = generateScenario();
   const lastSent = new Map<string, number>();
