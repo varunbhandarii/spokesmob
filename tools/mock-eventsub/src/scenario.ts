@@ -17,7 +17,11 @@ export type ScenarioLine = { t: number } & (
       badges?: (string | { set_id: string; id: string; info: string })[];
       replyTo?: number;
       messageType?: string;
+      label?: string;
     }
+  | { kind: "chatDelete"; message: number }
+  | { kind: "chatClearUser"; user: string; name?: string }
+  | { kind: "chatClear" }
   | {
       kind: "notice";
       noticeType: string;
@@ -89,6 +93,9 @@ export type ExpandedLine =
 
 const knownKinds = new Set([
   "chat",
+  "chatDelete",
+  "chatClearUser",
+  "chatClear",
   "notice",
   "raid",
   "hype",
@@ -127,7 +134,7 @@ function isValidLine(value: Record<string, unknown>): boolean {
     case "chat":
       return (
         strings("user", "name", "text") &&
-        optionalStrings("messageType") &&
+        optionalStrings("messageType", "label") &&
         optionalCounts("replyTo") &&
         arrayOf(
           "emotes",
@@ -141,6 +148,12 @@ function isValidLine(value: Record<string, unknown>): boolean {
               [item.set_id, item.id, item.info].every((field) => typeof field === "string")),
         )
       );
+    case "chatDelete":
+      return numbers("message");
+    case "chatClearUser":
+      return strings("user") && optionalStrings("name");
+    case "chatClear":
+      return true;
     case "notice":
       return (
         strings("noticeType") &&
@@ -241,6 +254,8 @@ export function parseScenario(source: string): Scenario {
     if ("frame" in value && value.kind === undefined) value.kind = "raw";
     if (!isValidLine(value))
       throw new Error(`Unknown or malformed scenario event on line ${index + 1}`);
+    if (value.kind === "chatDelete" && lines[Number(value.message)]?.kind !== "chat")
+      throw new Error(`Invalid chat message reference on line ${index + 1}`);
     lines.push(value as unknown as ScenarioLine);
   });
   if (!header) throw new Error("Scenario is empty");
@@ -360,6 +375,32 @@ export function expandScenario(
         };
         break;
       }
+      case "chatDelete": {
+        type = "channel.chat.message_delete";
+        const target = scenario.lines[line.message];
+        if (target?.kind !== "chat") throw new Error("Deleted message must reference a chat row");
+        event = {
+          ...broadcaster,
+          target_user_id: userId(target.user),
+          target_user_login: target.user,
+          target_user_name: target.name,
+          message_id: messageId(line.message),
+        };
+        break;
+      }
+      case "chatClearUser":
+        type = "channel.chat.clear_user_messages";
+        event = {
+          ...broadcaster,
+          target_user_id: userId(line.user),
+          target_user_login: line.user,
+          target_user_name: line.name ?? line.user,
+        };
+        break;
+      case "chatClear":
+        type = "channel.chat.clear";
+        event = broadcaster;
+        break;
       case "notice":
         type = "channel.chat.notification";
         event = {

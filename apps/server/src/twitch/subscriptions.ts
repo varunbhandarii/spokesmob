@@ -5,6 +5,11 @@ export function subscriptionSpecs(channelId: string, userId: string): Subscripti
   return [
     { type: "channel.chat.message", version: "1", condition: { ...channel, user_id: userId } },
     { type: "channel.chat.notification", version: "1", condition: { ...channel, user_id: userId } },
+    ...["message_delete", "clear_user_messages", "clear"].map((type) => ({
+      type: `channel.chat.${type}`,
+      version: "1",
+      condition: { ...channel, user_id: userId },
+    })),
     { type: "channel.raid", version: "1", condition: { to_broadcaster_user_id: channelId } },
     ...["begin", "progress", "end"].map((stage) => ({
       type: `channel.hype_train.${stage}`,

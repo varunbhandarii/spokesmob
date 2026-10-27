@@ -41,6 +41,12 @@ export function compactEvent(event: TwitchEvent): Record<string, unknown> {
         self: event.self,
         ...(event.replyToId ? { replyToId: event.replyToId } : {}),
       };
+    case "chatDelete":
+      return { kind: event.kind, messageId: event.messageId, userId: event.userId };
+    case "chatClearUser":
+      return { kind: event.kind, userId: event.userId };
+    case "chatClear":
+      return { kind: event.kind };
     case "notice":
       return {
         kind: event.kind,

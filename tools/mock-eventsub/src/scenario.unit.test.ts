@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { expect, test } from "vitest";
-import { expandScenario, parseScenario } from "./scenario.js";
+import { expandScenario, parseScenario, syntheticUserId } from "./scenario.js";
 
 test("scenario parser reports the line number for malformed or unknown events", () => {
   const header = '{"scenario":"test","channel":{"id":"1","login":"demo"}}\n';
@@ -19,11 +19,15 @@ test("scenario parser reports the line number for malformed or unknown events", 
     { kind: "control", action: "revoke", type: "channel.chat.message" },
     { kind: "pollEnd", choices: [{ id: "1", title: "Gary", votes: -1 }] },
     { kind: "raw", frame: { metadata: {}, payload: {} } },
+    { kind: "chatDelete", message: -1 },
+    { kind: "chatClearUser", user: 3 },
+    { kind: "chat", user: "demo", name: "Demo", text: "Hi", label: 4 },
   ];
   for (const fields of invalidFields)
     expect(() => parseScenario(`${header}${JSON.stringify({ t: 0, ...fields })}`)).toThrow(
       "line 2",
     );
+  expect(() => parseScenario(`${header}{"t":0,"kind":"chatDelete","message":0}`)).toThrow("line 2");
 });
 
 test("synthetic fixtures cover all notification kinds with stable IDs and timestamps", async () => {
@@ -36,6 +40,7 @@ test("synthetic fixtures cover all notification kinds with stable IDs and timest
     "revocation",
     "notices",
     "poll-and-redemption",
+    "moderator-actions",
   ];
   const summaries: unknown[] = [];
   for (const file of files) {
@@ -121,8 +126,66 @@ test("synthetic fixtures cover all notification kinds with stable IDs and timest
           "channel.channel_points_custom_reward_redemption.add",
         ],
       },
+      {
+        "count": 8,
+        "name": "moderator-actions",
+        "types": [
+          "channel.chat.message",
+          "channel.chat.message_delete",
+          "channel.chat.clear_user_messages",
+          "channel.chat.clear",
+        ],
+      },
     ]
   `);
+});
+
+test("moderator action frames target existing synthetic messages and users", async () => {
+  const scenario = parseScenario(
+    await readFile(new URL("../scenarios/moderator-actions.jsonl", import.meta.url), "utf8"),
+  );
+  const expanded = expandScenario(scenario);
+  const frames = expanded.map((line) => {
+    if (line.kind !== "notification") throw new Error("Expected notification");
+    expect(line.frame.metadata.subscription_version).toBe("1");
+    expect(line.frame.payload.subscription).toMatchObject({
+      condition: { broadcaster_user_id: "100000001", user_id: "100000001" },
+      version: "1",
+    });
+    return line.frame;
+  });
+  expect(frames[2]?.payload.event).toEqual({
+    broadcaster_user_id: "100000001",
+    broadcaster_user_login: "spokesmob_demo",
+    broadcaster_user_name: "spokesmob_demo",
+    target_user_id: syntheticUserId("viewer01"),
+    target_user_login: "viewer01",
+    target_user_name: "Viewer 01",
+    message_id: frames[0]?.payload.event?.message_id,
+  });
+  expect(frames[4]?.payload.event).toMatchObject({
+    target_user_id: syntheticUserId("viewer02"),
+    target_user_login: "viewer02",
+    target_user_name: "Viewer 02",
+  });
+  expect(frames[6]?.payload.event).toEqual({
+    broadcaster_user_id: "100000001",
+    broadcaster_user_login: "spokesmob_demo",
+    broadcaster_user_name: "spokesmob_demo",
+  });
+  expect(frames[6]?.metadata.message_timestamp).toBe("2026-01-01T00:00:00.600Z");
+});
+
+test("synthetic chat labels remain in scenario data and do not enter event payloads", () => {
+  const source = [
+    { scenario: "labeled", channel: { id: "1", login: "demo" } },
+    { t: 0, kind: "chat", user: "viewer01", name: "Viewer 01", text: "Orange cat", label: "cat" },
+  ];
+  const scenario = parseScenario(source.map((row) => JSON.stringify(row)).join("\n"));
+  expect(scenario.lines[0]).toHaveProperty("label", "cat");
+  const line = expandScenario(scenario)[0];
+  if (line?.kind !== "notification") throw new Error("Expected notification");
+  expect(line.frame.payload.event).not.toHaveProperty("label");
 });
 
 test("chat expansion preserves replies, badges, emotes and mention fragments", () => {

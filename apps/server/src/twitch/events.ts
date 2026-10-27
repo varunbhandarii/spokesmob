@@ -78,6 +78,11 @@ export const noticeSchema = z
     chatter_is_anonymous: z.boolean(),
   })
   .passthrough();
+export const chatDeleteSchema = z
+  .object({ ...channel, target_user_id: id, message_id: id })
+  .passthrough();
+export const chatClearUserSchema = z.object({ ...channel, target_user_id: id }).passthrough();
+export const chatClearSchema = z.object(channel).passthrough();
 export const raidSchema = z
   .object({
     from_broadcaster_user_id: id,
@@ -130,6 +135,9 @@ export type Fragment =
   | { type: "mention"; text: string; userId: string; userLogin: string }
   | { type: "gif"; text: string; gifId: string; url: string };
 export type TwitchEvent =
+  | { kind: "chatDelete"; at: string; channelId: string; messageId: string; userId: string }
+  | { kind: "chatClearUser"; at: string; channelId: string; userId: string }
+  | { kind: "chatClear"; at: string; channelId: string }
   | {
       kind: "chat";
       id: string;
@@ -289,6 +297,29 @@ export function mapNotification(
               }
             : {}),
         };
+      }
+      case "channel.chat.message_delete": {
+        const event = chatDeleteSchema.parse(value);
+        return {
+          kind: "chatDelete",
+          at: timestamp,
+          channelId: event.broadcaster_user_id,
+          messageId: event.message_id,
+          userId: event.target_user_id,
+        };
+      }
+      case "channel.chat.clear_user_messages": {
+        const event = chatClearUserSchema.parse(value);
+        return {
+          kind: "chatClearUser",
+          at: timestamp,
+          channelId: event.broadcaster_user_id,
+          userId: event.target_user_id,
+        };
+      }
+      case "channel.chat.clear": {
+        const event = chatClearSchema.parse(value);
+        return { kind: "chatClear", at: timestamp, channelId: event.broadcaster_user_id };
       }
       case "channel.chat.notification": {
         const event = noticeSchema.parse(value);

@@ -1,0 +1,9 @@
+{"scenario":"moderator-actions","channel":{"id":"100000001","login":"spokesmob_demo"},"seed":17}
+{"t":0,"kind":"chat","user":"viewer01","name":"Viewer 01","text":"Choose the orange cat"}
+{"t":100,"kind":"chat","user":"viewer02","name":"Viewer 02","text":"Choose the orange cat"}
+{"t":200,"kind":"chatDelete","message":0}
+{"t":300,"kind":"chat","user":"viewer02","name":"Viewer 02","text":"Choose the gray cat"}
+{"t":400,"kind":"chatClearUser","user":"viewer02","name":"Viewer 02"}
+{"t":500,"kind":"chat","user":"viewer03","name":"Viewer 03","text":"Choose the black cat"}
+{"t":600,"kind":"chatClear"}
+{"t":700,"kind":"chat","user":"viewer04","name":"Viewer 04","text":"Choose the white cat"}

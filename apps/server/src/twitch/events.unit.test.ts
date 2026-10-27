@@ -1,8 +1,16 @@
 import { readFileSync } from "node:fs";
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
+import { compactEvent } from "../cli/twitch-check.js";
 import { createLogger } from "../log.js";
 import { collectEvents, TwitchBus } from "./bus.js";
-import { chatSchema, mapNotification } from "./events.js";
+import {
+  chatClearSchema,
+  chatClearUserSchema,
+  chatDeleteSchema,
+  chatSchema,
+  mapNotification,
+} from "./events.js";
+import { subscriptionSpecs } from "./subscriptions.js";
 
 const log = createLogger("silent");
 const fixtures = JSON.parse(
@@ -19,6 +27,70 @@ const frame = (type: string, event: unknown) => ({
 });
 const chat = () =>
   structuredClone((fixtures[0] as { payload: { event: Record<string, unknown> } }).payload.event);
+
+test("moderator action subscriptions use the signed-in chat user and current version", () => {
+  const specs = subscriptionSpecs("channel", "reader");
+  for (const type of ["message_delete", "clear_user_messages", "clear"]) {
+    expect(specs.find((spec) => spec.type === `channel.chat.${type}`)).toEqual({
+      type: `channel.chat.${type}`,
+      version: "1",
+      condition: { broadcaster_user_id: "channel", user_id: "reader" },
+    });
+  }
+});
+
+test("moderator actions preserve target IDs and time while accepting future fields", () => {
+  const base = { broadcaster_user_id: "channel", future_field: { enabled: true } };
+  const cases = [
+    {
+      type: "message_delete",
+      schema: chatDeleteSchema,
+      value: { ...base, target_user_id: "viewer", message_id: "deleted" },
+      expected: { kind: "chatDelete", userId: "viewer", messageId: "deleted" },
+    },
+    {
+      type: "clear_user_messages",
+      schema: chatClearUserSchema,
+      value: { ...base, target_user_id: "viewer" },
+      expected: { kind: "chatClearUser", userId: "viewer" },
+    },
+    { type: "clear", schema: chatClearSchema, value: base, expected: { kind: "chatClear" } },
+  ];
+  const bus = new TwitchBus();
+  const deleted = vi.fn();
+  bus.on("chatDelete", (event) => deleted(event.messageId));
+  for (const item of cases) {
+    expect(item.schema.parse(item.value).future_field).toEqual({ enabled: true });
+    const event = mapNotification(frame(`channel.chat.${item.type}`, item.value), "reader", log);
+    expect(event).toEqual({
+      ...item.expected,
+      channelId: "channel",
+      at: "2026-01-01T00:00:00Z",
+    });
+    if (!event) throw new Error("Expected moderator action");
+    bus.emit(event);
+    expect(compactEvent(event)).toEqual(item.expected);
+  }
+  expect(deleted).toHaveBeenCalledExactlyOnceWith("deleted");
+});
+
+test("malformed moderator targets are dropped without logging payload contents", () => {
+  const warn = vi.spyOn(log, "warn");
+  const cases = [
+    ["message_delete", { broadcaster_user_id: "channel", target_user_id: "viewer" }],
+    ["message_delete", { broadcaster_user_id: "channel", target_user_id: "", message_id: "one" }],
+    ["clear_user_messages", { broadcaster_user_id: "channel", target_user_id: null }],
+    ["clear", { broadcaster_user_id: "" }],
+  ] as const;
+  for (const [type, payload] of cases) {
+    expect(mapNotification(frame(`channel.chat.${type}`, payload), "reader", log)).toBeNull();
+    expect(warn).toHaveBeenLastCalledWith(
+      { type: `channel.chat.${type}` },
+      "Malformed EventSub payload dropped",
+    );
+  }
+  warn.mockRestore();
+});
 
 test("captured event structures with synthetic identities and text map to stable events", () => {
   const output = fixtures.map((fixture) => mapNotification(fixture, "900000001", log));
