@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import type { VerificationAttempt } from "../../apps/server/src/consensus/ports.js";
 import type {
   CallUsage,
   ModelUsage,
@@ -39,6 +40,8 @@ export interface SampleReport {
   latency: StageLatency;
   usage: CallUsage[];
   calls: ModelCallReport[];
+  verifications: VerificationAttempt[];
+  fallbackAttempted: boolean;
 }
 export function percentile(values: readonly number[], fraction: number): number | null {
   if (!values.length) return null;
@@ -81,11 +84,45 @@ export function summarize(samples: readonly SampleReport[]) {
     samples.filter((sample) => sample.calls.length).map((sample) => sample.latency.model),
   );
   const allCosts = samples.flatMap((sample) => sample.usage.map((call) => call.costUsd));
+  const verifierRuleCounts: Record<string, number> = {};
+  const verifierRulesByCategory: Record<string, Record<string, number>> = {};
+  const suppressionReasons: Record<string, number> = {};
+  const modelFailureCounts: Record<string, number> = {};
+  for (const call of calls)
+    if (call.failure)
+      modelFailureCounts[call.failure] = (modelFailureCounts[call.failure] ?? 0) + 1;
+  for (const sample of samples) {
+    if (sample.status === "suppressed") {
+      const reason = sample.reason ?? "unspecified";
+      suppressionReasons[reason] = (suppressionReasons[reason] ?? 0) + 1;
+    }
+    for (const code of (sample.verifications ?? []).flatMap((attempt) => attempt.failures)) {
+      verifierRuleCounts[code] = (verifierRuleCounts[code] ?? 0) + 1;
+      for (const tag of sample.tags) {
+        const counts = verifierRulesByCategory[tag] ?? {};
+        counts[code] = (counts[code] ?? 0) + 1;
+        verifierRulesByCategory[tag] = counts;
+      }
+    }
+  }
+  const modelWindows = samples.filter((sample) => sample.attempts > 0).length;
+  const regenerated = samples.filter((sample) => sample.attempts > 1).length;
+  const fallbackAttempts = samples.filter((sample) => sample.fallbackAttempted).length;
   return {
     samples: samples.length,
     passRate,
     categories,
     failureCounts,
+    verifierRuleCounts,
+    verifierRulesByCategory,
+    suppressionReasons,
+    modelFailureCounts,
+    modelWindows,
+    regenerated,
+    regenerationRate: modelWindows ? regenerated / modelWindows : null,
+    fallbackAttempts,
+    fallbackRate: modelWindows ? fallbackAttempts / modelWindows : null,
+    fallbackSucceeded: samples.filter((sample) => sample.fallback).length,
     canarySpeakingRate: categories.canary?.speakingRate ?? null,
     modelRequests: calls.length,
     moderationRequests: samples
@@ -135,6 +172,13 @@ const cell = (text: string) =>
     .replace(/</gu, "&lt;");
 export function reportMarkdown(report: EvaluationReport): string {
   const summary = report.summary;
+  const diagnostics = `\n## Attempt diagnostics\n\nRegeneration: ${summary.regenerated}/${summary.modelWindows} model-entered windows. Fallback attempts: ${summary.fallbackAttempts}/${summary.modelWindows}; successful fallbacks: ${summary.fallbackSucceeded}.\n\nSuppression reasons: ${JSON.stringify(summary.suppressionReasons)}. Model failures: ${JSON.stringify(summary.modelFailureCounts)}.\n\n| Category | Verifier rule | Occurrences |\n| --- | --- | --- |\n${Object.entries(
+    summary.verifierRulesByCategory,
+  )
+    .flatMap(([category, counts]) =>
+      Object.entries(counts).map(([code, count]) => `| ${category} | ${code} | ${count} |`),
+    )
+    .join("\n")}\n`;
   return `# Consensus evaluation\n\n${report.offline ? "OFFLINE: unmoderated stub results, not evidence of model quality or streaming safety." : "Manual live evaluation."}\n\nTier: ${report.serviceTier}. Prefix SHA-256: ${report.prefixSha256}.\n\n${report.aborted ? `Aborted: ${report.aborted}.\n\n` : ""}| Category | Passed / samples | Hard pass rate | Speaking rate |\n| --- | --- | --- | --- |\n${Object.entries(
     summary.categories,
   )
@@ -150,7 +194,7 @@ export function reportMarkdown(report: EvaluationReport): string {
       (sample) =>
         `| ${sample.id} | ${sample.sample} | ${sample.failures.map((failure) => `${failure.assertion}: ${failure.code}`).join(", ")} | ${cell(sample.line_b64 ? "[encoded output withheld]" : (sample.line ?? "(suppressed)"))} | ${cell(sample.dissent_b64 ? "[encoded output withheld]" : (sample.dissent ?? "—"))} |`,
     )
-    .join("\n")}\n`;
+    .join("\n")}\n${diagnostics}`;
 }
 export async function writeReport(
   report: EvaluationReport,

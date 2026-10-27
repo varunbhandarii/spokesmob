@@ -19,7 +19,14 @@ export interface ModerationPort {
   ): Promise<{
     results: ModerationResult[];
     usage: ModelUsage | null;
+    costUsd?: number | null;
   }>;
+}
+export interface VerificationAttempt {
+  kind: "generation" | "fallback_preflight" | "fallback";
+  attempt: number;
+  ok: boolean;
+  failures: RuleCode[];
 }
 export interface ModelResult {
   output: ConsensusOutput | null;

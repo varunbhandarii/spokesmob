@@ -1,5 +1,9 @@
 import { afterEach, expect, test, vi } from "vitest";
-import { FakeModerationPort, fakeModelResult } from "../../apps/server/src/consensus/fakes.js";
+import {
+  FakeConsensusModel,
+  FakeModerationPort,
+  fakeModelResult,
+} from "../../apps/server/src/consensus/fakes.js";
 import type { ConsensusModelPort } from "../../apps/server/src/consensus/ports.js";
 import { StubConsensusModel } from "../../apps/server/src/consensus/stub-model.js";
 import { evaluate } from "./evaluate.js";
@@ -129,6 +133,43 @@ test("percentiles use nearest rank and missing samples remain unknown", () => {
   expect(percentile([], 0.95)).toBe(null);
   expect(percentile([4, 1, 2, 3], 0.5)).toBe(2);
   expect(percentile([4, 1, 2, 3], 0.95)).toBe(4);
+});
+
+test("reports count regenerated verifications, fallback attempts and known free moderation separately", async () => {
+  const windows = await tiny();
+  const bad = fakeModelResult({
+    line: "Chat says Neptune",
+    cited_cluster_ids: ["c1"],
+    dissent_cluster_id: null,
+    dissent_line: null,
+    mood: "chill",
+    answers_question: true,
+  });
+  const model = new FakeConsensusModel([bad, bad]);
+  const port = new FakeModerationPort();
+  const report = await evaluate({
+    windows,
+    n: 1,
+    offline: true,
+    serviceTier: "default",
+    ports: () => ({
+      model,
+      moderation: {
+        moderate: async (texts, signal) => ({
+          ...(await port.moderate(texts, signal)),
+          costUsd: 0,
+        }),
+      },
+    }),
+  });
+  expect(report.summary.regenerationRate).toBe(1);
+  expect(report.summary.fallbackRate).toBe(1);
+  expect(report.summary.fallbackSucceeded).toBe(1);
+  expect(report.summary.verifierRuleCounts.novel_token).toBe(2);
+  expect(report.summary.verifierRulesByCategory.tiny?.novel_token).toBe(2);
+  expect(report.summary.totalCostUsd).toBe(report.summary.knownModelCostUsd);
+  expect(report.summary.unknownUsageCalls > 0).toBe(true);
+  expect(reportMarkdown(report)).toContain("novel_token");
 });
 
 test("returned usage can trip the runtime projection guard before further requests", async () => {

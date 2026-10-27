@@ -147,6 +147,8 @@ test("standalone moderation preserves item order and prefix counting hashes only
   });
   const result = await new OpenAIModerationPort(moderation.client).moderate(["Gary"]);
   expect(result.results[0]?.scores.harassment).toBe(0.1);
+  expect(result.usage).toBe(null);
+  expect(result.costUsd).toBe(0);
   expect(moderation.requests[0]?.input).toEqual(["Gary"]);
   const count = fixture({ input_tokens: 1600, object: "response.input_tokens" });
   expect(await count.model.countPrefix()).toMatchObject({

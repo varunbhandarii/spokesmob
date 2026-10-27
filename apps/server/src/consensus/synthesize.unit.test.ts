@@ -91,6 +91,16 @@ test("regeneration adds only a stable rule code and can then pass", async () => 
   });
   expect(f.model.requests[1]?.data.previous_attempt_rejected).toBe("novel_token");
 });
+
+test("attempt diagnostics retain rejected verifier codes without including text", async () => {
+  const f = fixture([bad, fakeModelResult(good)]);
+  const attempts: { ok: boolean; failures: RuleCode[] }[] = [];
+  await synthesize({ ...f.options, onVerification: (attempt) => attempts.push(attempt) });
+  expect(attempts.map((attempt) => ({ ok: attempt.ok, failures: attempt.failures }))).toEqual([
+    { ok: false, failures: ["novel_token"] },
+    { ok: true, failures: [] },
+  ]);
+});
 test("two rejected generations use a separately moderated fallback", async () => {
   const f = fixture([bad, bad]);
   const result = await synthesize(f.options);

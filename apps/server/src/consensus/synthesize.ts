@@ -17,7 +17,12 @@ import { type OutputModeration, verifyLine } from "../../../../packages/core/src
 import { assembleWindow, type WindowOptions } from "../../../../packages/core/src/window.js";
 import { type Clock, systemClock } from "../clock.js";
 import { ModerationFailure, type ModerationGate, moderationDecision } from "./moderation.js";
-import type { ConsensusModelPort, ModelResult, ModerationPort } from "./ports.js";
+import type {
+  ConsensusModelPort,
+  ModelResult,
+  ModerationPort,
+  VerificationAttempt,
+} from "./ports.js";
 
 export interface SynthesisOptions {
   messages: readonly ChatMessage[];
@@ -35,6 +40,8 @@ export interface SynthesisOptions {
   clock?: Clock;
   log?: Pick<Logger, "info">;
   onWindow?: (window: Window, clusters: readonly Cluster[]) => void;
+  onVerification?: (attempt: VerificationAttempt) => void;
+  onFallback?: () => void;
 }
 export async function synthesize(options: SynthesisOptions): Promise<SynthesisResult> {
   const clock = options.clock ?? systemClock;
@@ -170,6 +177,12 @@ export async function synthesize(options: SynthesisOptions): Promise<SynthesisRe
       ...(ignorePrevious ? { previousLine: null } : {}),
     });
     result.latency.verification += clock.now() - verifyStart;
+    options.onVerification?.({
+      kind: ignorePrevious ? "fallback" : "generation",
+      attempt: result.attempts,
+      ok: verified.ok,
+      failures: [...verified.failures],
+    });
     if (verified.ok) {
       const keys = output.cited_cluster_ids.map((id) => mapping.get(id) ?? "");
       result.status = "verified";
@@ -236,6 +249,7 @@ export async function synthesize(options: SynthesisOptions): Promise<SynthesisRe
     reason = verified.failures[0] ?? "schema_invalid";
   }
   if (aborted()) return finish("aborted", "aborted");
+  options.onFallback?.();
   const fallback = fallbackLine(clusters, window.voices, {
     blocklist: options.blocklist,
     minVoices,
@@ -247,6 +261,12 @@ export async function synthesize(options: SynthesisOptions): Promise<SynthesisRe
     previousLine: null,
   };
   const preflight = verifyLine(fallback.output, fallbackContext);
+  options.onVerification?.({
+    kind: "fallback_preflight",
+    attempt: result.attempts,
+    ok: preflight.ok,
+    failures: [...preflight.failures],
+  });
   if (!preflight.ok) return finish("verification", preflight.failures[0] ?? reason);
   let outputResult: OutputModeration = { status: "error" };
   let outputUsage: CallUsage = {
@@ -260,7 +280,7 @@ export async function synthesize(options: SynthesisOptions): Promise<SynthesisRe
       [fallback.output.line],
       options.signal,
     );
-    outputUsage = { ...outputUsage, usage: response.usage };
+    outputUsage = { ...outputUsage, usage: response.usage, costUsd: response.costUsd ?? null };
     const item = response.results[0];
     if (response.results.length === 1 && item && typeof item.flagged === "boolean") {
       outputResult = {
@@ -278,7 +298,15 @@ export async function synthesize(options: SynthesisOptions): Promise<SynthesisRe
     ...fallbackContext,
     moderation: { line: outputResult },
   });
-  if (!verified.ok) return finish("output_moderation", verified.failures[0] ?? reason);
+  if (!verified.ok) {
+    options.onVerification?.({
+      kind: "fallback",
+      attempt: result.attempts,
+      ok: false,
+      failures: [...verified.failures],
+    });
+    return finish("output_moderation", verified.failures[0] ?? reason);
+  }
   result.fallback = true;
   accept(fallback.output, built.mapping, outputResult, true);
   return finish(null, null);

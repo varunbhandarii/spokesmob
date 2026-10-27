@@ -6,6 +6,7 @@ import type {
   ConsensusModelPort,
   ModelResult,
   ModerationPort,
+  VerificationAttempt,
 } from "../../apps/server/src/consensus/ports.js";
 import { StubConsensusModel } from "../../apps/server/src/consensus/stub-model.js";
 import { synthesize } from "../../apps/server/src/consensus/synthesize.js";
@@ -85,6 +86,8 @@ export async function evaluate(options: EvaluationOptions): Promise<EvaluationRe
       if (!job) break;
       const traces: { input: BuiltInput; result: ModelResult }[] = [];
       const calls: ModelCallReport[] = [];
+      const verifications: VerificationAttempt[] = [];
+      let fallbackAttempted = false;
       let fallbackModeration: OutputModeration = { status: "error" };
       const estimatedCost = estimates.get(job.window.id);
       if (estimatedCost === undefined) throw new Error("Missing cost projection");
@@ -193,6 +196,10 @@ export async function evaluate(options: EvaluationOptions): Promise<EvaluationRe
           finalWindow = window;
           finalClusters = clusters;
         },
+        onVerification: (attempt) => verifications.push(attempt),
+        onFallback: () => {
+          fallbackAttempted = true;
+        },
       });
       if (
         !options.offline &&
@@ -245,6 +252,8 @@ export async function evaluate(options: EvaluationOptions): Promise<EvaluationRe
         latency: result.latency,
         usage: result.usage,
         calls,
+        verifications,
+        fallbackAttempted,
       };
     }
   }

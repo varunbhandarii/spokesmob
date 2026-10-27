@@ -106,7 +106,7 @@ export class ModerationGate {
           );
         }),
       ]);
-      usage = { ...usage, usage: response.usage };
+      usage = { ...usage, usage: response.usage, costUsd: response.costUsd ?? null };
       if (!Array.isArray(response.results) || response.results.length !== texts.length)
         throw new ModerationFailure("moderation_mapping");
       const parsed = response.results.map((item) => resultSchema.safeParse(item));

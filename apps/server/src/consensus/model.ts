@@ -149,6 +149,7 @@ export class OpenAIModerationPort implements ModerationPort {
         ),
       })),
       usage: null,
+      costUsd: 0,
     };
   }
 }
