@@ -1,6 +1,7 @@
 import type { Logger } from "pino";
 import type { Clock } from "../clock.js";
 import type { Config } from "../config.js";
+import { ChannelBlocklist } from "../consensus/blocked-terms.js";
 import { TokenProvider } from "./auth.js";
 import { TwitchBus } from "./bus.js";
 import type { Fetch } from "./device-flow.js";
@@ -19,6 +20,7 @@ export async function createTwitchRuntime(options: {
 }) {
   const bus = new TwitchBus();
   let client: EventSubClient | undefined;
+  let blocklist: ChannelBlocklist | undefined;
   const injected = {
     ...(options.fetch ? { fetch: options.fetch } : {}),
     ...(options.clock ? { clock: options.clock } : {}),
@@ -39,6 +41,8 @@ export async function createTwitchRuntime(options: {
     const channel = (await helix.getUsers({ logins: [options.config.channel] }))[0];
     if (!channel) throw new Error("Cannot resolve TWITCH_CHANNEL");
     helix.setChannel(channel.id);
+    blocklist = new ChannelBlocklist({ helix, log: options.log, ...injected });
+    await blocklist.start();
     client = new EventSubClient({
       config: options.config,
       log: options.log,
@@ -55,12 +59,15 @@ export async function createTwitchRuntime(options: {
       client,
       channel,
       bus,
+      blocklist,
       stop: async () => {
+        blocklist?.stop();
         auth.stop();
         await client?.stop();
       },
     };
   } catch (error) {
+    blocklist?.stop();
     auth.stop();
     throw error;
   }
