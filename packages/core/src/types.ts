@@ -101,6 +101,7 @@ export type RuleCode =
   | "moderation_flagged"
   | "moderation_error"
   | "near_duplicate"
+  | "instruction_payload"
   | "not_enough_voices"
   | "input_moderation"
   | "moderation_mapping"
