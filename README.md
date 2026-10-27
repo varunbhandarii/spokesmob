@@ -49,6 +49,10 @@ For labeled conversations, give each cluster its own phrases: `--clusters "gary=
 
 ## Configuration
 
+`npm run consensus -- name-my-cat` checks recorded scenario input locally. A JSONL path or a golden JSON file also works; `--window 8` sets scenario window length and `--question "Name the cat?"` supplies context. Offline output is unmoderated, uses a deterministic stub and is not for streaming.
+
+`--live` uses the OpenAI consensus pipeline and costs money. Run it manually after reviewing the expected call count. It prints verified lines or suppression reasons, author-counted percentages, dissent, mood, per-stage latency and available cost. `--tier fast` overrides the configured tier. Nothing is spoken or posted. `npm run consensus -- --count-prefix` uses the API token counter and prints the static prefix token count and SHA-256; run it only as an approved API check.
+
 Copy `.env.example` to `.env` and fill in your credentials locally. Keep credentials out of source control.
 
 | Variable | Purpose |
