@@ -1,6 +1,7 @@
 import type { Logger } from "pino";
 import { trimVerifiedAudio } from "../../../../packages/core/src/audio-trim.js";
 import { testTonePcm } from "../../../../packages/core/src/test-tone.js";
+import { similarity } from "../../../../packages/core/src/transcript.js";
 import { VOICE_THRESHOLDS as T } from "../../../../packages/core/src/voice-thresholds.js";
 import { type Clock, systemClock } from "../clock.js";
 import { voiceCost } from "./cost.js";
@@ -253,10 +254,15 @@ export class VoiceManager {
       const record: VoiceAttemptRecord = {
         reason: generated.reason,
         detail: generated.detail,
+        transcript: generated.transcript || null,
+        gateFailures: generated.reason === "drift" ? [generated.detail ?? "transcript"] : [],
+        transcriptGateChecked: generated.reason === "drift",
+        audioGateChecked: false,
+        rawAudioComplete: generated.reason === null,
         ttfaMs: generated.ttfaMs,
         completeMs: generated.completeMs,
-        similarity: null,
-        audioMetrics: null,
+        similarity: generated.transcript ? similarity(line, generated.transcript) : null,
+        audioMetrics: generated.audioMetrics,
         usage: generated.usage,
         costUsd: voiceCost(generated.usage),
       };
@@ -279,6 +285,13 @@ export class VoiceManager {
           channel: result.channel,
         });
         record.similarity = verified.similarity;
+        record.transcriptGateChecked = true;
+        record.audioGateChecked = true;
+        record.gateFailures = verified.ok
+          ? []
+          : verified.reason === "drift"
+            ? ["transcript", ...verified.failures]
+            : verified.failures;
         record.audioMetrics = verified.audioMetrics;
         if (verified.ok) {
           result.status = "verified";
@@ -306,6 +319,7 @@ export class VoiceManager {
         ...result,
         attempts: result.attempts.map((attempt) => ({
           ...attempt,
+          transcript: undefined,
           audioMetrics: attempt.audioMetrics,
         })),
       },

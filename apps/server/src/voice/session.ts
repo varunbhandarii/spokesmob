@@ -1,5 +1,10 @@
 import type { RealtimeClientEvent } from "openai/resources/realtime/realtime";
 import { z } from "zod";
+import {
+  type AudioMetrics,
+  analyzeAudio,
+  decodePcm16LE,
+} from "../../../../packages/core/src/audio.js";
 import { seededRandom } from "../../../../packages/core/src/random.js";
 import { normalizeSpoken, spokenWordCount } from "../../../../packages/core/src/transcript.js";
 import { VOICE_THRESHOLDS as T } from "../../../../packages/core/src/voice-thresholds.js";
@@ -195,6 +200,7 @@ export class RealtimeSession {
       detail,
       pcm: new Uint8Array(),
       transcript: "",
+      audioMetrics: null,
       ttfaMs: null,
       completeMs: null,
       usage: null,
@@ -392,11 +398,24 @@ export class RealtimeSession {
         ...(p.responseId ? { response_id: p.responseId } : {}),
       });
     }
+    const rawPcm = Buffer.concat(p.chunks);
+    let audioMetrics: AudioMetrics | null = null;
+    try {
+      if (rawPcm.length)
+        audioMetrics = analyzeAudio(
+          decodePcm16LE(rawPcm),
+          T.SAMPLE_RATE,
+          T.ACTIVITY_RMS_FLOOR_DBFS,
+        );
+    } catch {
+      /* Malformed audio remains rejected; metrics cannot describe it reliably. */
+    }
     p.resolve({
       reason,
       detail,
-      pcm: reason ? new Uint8Array() : Uint8Array.from(Buffer.concat(p.chunks)),
+      pcm: reason ? new Uint8Array() : Uint8Array.from(rawPcm),
       transcript: p.transcript,
+      audioMetrics,
       ttfaMs,
       completeMs,
       usage,

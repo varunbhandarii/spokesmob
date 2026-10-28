@@ -23,6 +23,7 @@ export interface SessionAttempt {
   detail: string | null;
   pcm: Uint8Array;
   transcript: string;
+  audioMetrics: AudioMetrics | null;
   ttfaMs: number | null;
   completeMs: number | null;
   usage: VoiceUsage | null;
@@ -30,6 +31,11 @@ export interface SessionAttempt {
 export interface VoiceAttemptRecord {
   reason: VoiceFailure | null;
   detail: string | null;
+  transcript: string | null;
+  gateFailures: string[];
+  transcriptGateChecked: boolean;
+  audioGateChecked: boolean;
+  rawAudioComplete: boolean;
   ttfaMs: number | null;
   completeMs: number | null;
   similarity: number | null;

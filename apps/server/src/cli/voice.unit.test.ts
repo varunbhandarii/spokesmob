@@ -22,3 +22,10 @@ test("check command rejects ambiguous or invalid calibration modes before use", 
   );
   await expect(voiceCheck(["--calibrate", "0"], () => undefined)).rejects.toThrow("count");
 });
+test("calibration refuses an expected cost above the limit before any external call", async () => {
+  const fetch = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("No external network"));
+  await expect(
+    voiceCheck(["--calibrate", "40", "--yes", "--max-cost-usd", "0.01"], () => undefined),
+  ).rejects.toThrow("Expected voice cost exceeds");
+  expect(fetch).not.toHaveBeenCalled();
+});

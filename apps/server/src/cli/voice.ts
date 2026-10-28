@@ -1,13 +1,11 @@
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 import { OpenAI } from "openai";
 import { WebSocket } from "ws";
-import { createBlocklist } from "../../../../packages/core/src/blocklist.js";
-import { verifyTemplated } from "../../../../packages/core/src/verify.js";
 import {
   defaultTokenFile,
   loadOpenAIConfig,
@@ -15,16 +13,15 @@ import {
   requireOpenAIKey,
 } from "../config.js";
 import { OpenAIModerationPort } from "../consensus/model.js";
+import {
+  calibrationMarkdown,
+  runVoiceCalibration,
+  serializeCalibration,
+} from "../voice/calibration.js";
 import { CHECK_LINES } from "../voice/check-lines.js";
 import { VoiceManager } from "../voice/manager.js";
 import { realtimeFactory } from "../voice/transport.js";
-import type { VoiceResult } from "../voice/types.js";
 
-const percentile = (values: number[], fraction: number) => {
-  if (!values.length) return null;
-  const sorted = values.slice().sort((a, b) => a - b);
-  return sorted[Math.ceil(fraction * sorted.length) - 1] ?? null;
-};
 async function overlayUrl(tokenFile: string) {
   const value = (await readFile(join(dirname(tokenFile), "overlay-url.txt"), "utf8")).trim();
   const url = new URL(value);
@@ -121,6 +118,7 @@ export async function voiceCheck(
       "kill-test": { type: "boolean" },
       "copy-url": { type: "boolean" },
       yes: { type: "boolean" },
+      "max-cost-usd": { type: "string", default: "0.10" },
     },
   });
   const modes = [
@@ -145,6 +143,8 @@ export async function voiceCheck(
   const count = values.calibrate === undefined ? 1 : Number(values.calibrate);
   if (!Number.isSafeInteger(count) || count < 1 || count > 1000)
     throw new Error("Calibration count must be 1 to 1000");
+  const limitUsd = Number(values["max-cost-usd"]);
+  if (!Number.isFinite(limitUsd) || limitUsd <= 0) throw new Error("Cost limit must be positive");
   output(
     JSON.stringify({
       kind: "voice_projection",
@@ -153,12 +153,15 @@ export async function voiceCheck(
       maximumAttempts: count * 2,
       expectedCostUsd: count * 0.0012,
       maximumGenerationEstimateUsd: count * 2 * 0.0085,
+      runtimeLimitUsd: limitUsd,
     }),
   );
   if (!values.yes) {
     output("Paid mode requires explicit approval and --yes. No API call made.");
     return;
   }
+  if (count * 0.0012 > limitUsd)
+    throw new Error("Expected voice cost exceeds the selected limit; no API call made");
   if (!values.calibrate) {
     output(
       JSON.stringify(
@@ -184,114 +187,6 @@ export async function voiceCheck(
     throw new Error("Line file must contain a JSON string array");
   const client = new OpenAI({ apiKey: requireOpenAIKey(openai), maxRetries: 0 });
   const moderation = new OpenAIModerationPort(client);
-  const blocklist = createBlocklist();
-  const manager = new VoiceManager({
-    mainVoice: voice.mainVoice,
-    dissentVoice: voice.dissentVoice,
-    factory: realtimeFactory(openai.apiKey ?? "", voice.realtimeUrl),
-    transport: { prepare() {}, play() {}, stop() {} },
-  });
-  const samples: {
-    index: number;
-    text: string;
-    readyMs: number;
-    result: VoiceResult;
-    playbackStartMs: null;
-    releaseEligibleMs: number;
-  }[] = [];
-  try {
-    await manager.start();
-    for (let index = 0; index < count; index++) {
-      const line = String(lines[index % lines.length]);
-      if (blocklist.check(line).blocked) throw new Error("Calibration line rejected by blocklist");
-      const moderationResult = await moderation.moderate([line]);
-      const item = moderationResult.results[0];
-      const gate = verifyTemplated(line, {
-        blocklist,
-        moderation:
-          moderationResult.results.length === 1 && item
-            ? {
-                status: "ok",
-                flagged: item.flagged || Object.values(item.categories).some(Boolean),
-              }
-            : { status: "error" },
-      });
-      if (!gate.ok) throw new Error("Calibration line failed output verification");
-      const start = Date.now();
-      const take = manager.prepare(line, index % 2 ? "dissent" : "main");
-      const result = await take.ready;
-      const readyMs = Date.now() - start;
-      samples.push({
-        index: index + 1,
-        text: line,
-        readyMs,
-        result: { ...result },
-        playbackStartMs: null,
-        releaseEligibleMs: Math.max(1000, readyMs),
-      });
-      output(
-        JSON.stringify({
-          kind: "voice_sample",
-          index: index + 1,
-          status: result.status,
-          readyMs,
-          attempts: result.attempts.length,
-        }),
-      );
-      take.cancel("calibration_complete");
-    }
-  } finally {
-    manager.close();
-  }
-  const attempts = samples.flatMap((sample) => sample.result.attempts);
-  const cost = attempts.some((attempt) => attempt.costUsd === null)
-    ? null
-    : attempts.reduce((sum, attempt) => sum + (attempt.costUsd ?? 0), 0);
-  const latencies = (key: "ttfaMs" | "completeMs") =>
-    attempts.flatMap((attempt) => (attempt[key] === null ? [] : [attempt[key] as number]));
-  const stats = (numbers: number[]) => ({
-    p50: percentile(numbers, 0.5),
-    p95: percentile(numbers, 0.95),
-    max: numbers.length ? Math.max(...numbers) : null,
-  });
-  const summary = {
-    lines: count,
-    verified: samples.filter((sample) => sample.result.status === "verified").length,
-    firstAudioMs: stats(latencies("ttfaMs")),
-    completeMs: stats(latencies("completeMs")),
-    readyMs: stats(samples.map((sample) => sample.readyMs)),
-    releaseEligibleMs: stats(samples.map((sample) => sample.releaseEligibleMs)),
-    playbackMeasured: false,
-    meanSimilarity:
-      attempts
-        .filter((attempt) => attempt.similarity !== null)
-        .reduce((sum, attempt) => sum + (attempt.similarity ?? 0), 0) /
-      Math.max(1, attempts.filter((attempt) => attempt.similarity !== null).length),
-    refusals: attempts.filter((attempt) => attempt.reason === "refusal").length,
-    drifts: attempts.filter((attempt) => attempt.reason === "drift").length,
-    totalCostUsd: cost,
-    meanCostPerLineUsd: cost === null ? null : cost / count,
-    budget: {
-      consensusP95Ms: 1217,
-      assemblyMs: 50,
-      verifierMs: 10,
-      preRollMs: 100,
-      previewHoldMs: 1000,
-      estimatedCloseToVerifiedAudioP95Ms:
-        50 +
-        1217 +
-        10 +
-        Math.max(
-          1000,
-          percentile(
-            samples.map((sample) => sample.readyMs),
-            0.95,
-          ) ?? 0,
-        ) +
-        100,
-      inputModerationNotIncluded: true,
-    },
-  };
   const path = values.report
     ? resolve(values.report)
     : join(
@@ -300,14 +195,48 @@ export async function voiceCheck(
         `voice-${new Date().toISOString().replace(/[:.]/g, "-")}.json`,
       );
   if (!path.endsWith(".json")) throw new Error("Voice report must use a JSON path");
+  for (const destination of [path, path.replace(/\.json$/, ".md")]) {
+    try {
+      await access(destination);
+      throw new Error("Report already exists");
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT")
+        throw new Error("Voice report destination is unavailable");
+    }
+  }
   await mkdir(dirname(path), { recursive: true });
-  await writeFile(path, `${JSON.stringify({ summary, samples }, null, 2)}\n`, { flag: "wx" });
-  await writeFile(
-    path.replace(/\.json$/, ".md"),
-    `# Voice calibration\n\n${JSON.stringify(summary, null, 2)}\n\nPlayback start is unmeasured without an overlay. Release-eligible time includes the 1 s stand-in preview. No PCM was saved.\n`,
-    { flag: "wx" },
-  );
-  output(JSON.stringify({ kind: "voice_summary", ...summary, report: path }));
+  const budget = { limitUsd, reservedUsd: 0 };
+  const charged = new Map<string, number>();
+  const manager = new VoiceManager({
+    mainVoice: voice.mainVoice,
+    dissentVoice: voice.dissentVoice,
+    factory: realtimeFactory(openai.apiKey ?? "", voice.realtimeUrl),
+    transport: { prepare() {}, play() {}, stop() {} },
+    allowAttempt: () => {
+      if (budget.reservedUsd + 0.0085 > budget.limitUsd) return false;
+      budget.reservedUsd += 0.0085;
+      return true;
+    },
+    onUsage: (take, attempt, _usage, cost) => {
+      const key = `${take}:${attempt}`;
+      const previous = charged.get(key) ?? 0.0085;
+      const current = cost ?? previous;
+      budget.reservedUsd += current - previous;
+      charged.set(key, current);
+    },
+  });
+  const report = await runVoiceCalibration({
+    count,
+    lines: lines as string[],
+    manager,
+    moderation,
+    budget,
+    output,
+  });
+  await writeFile(path, `${serializeCalibration(report)}\n`, { flag: "wx" });
+  await writeFile(path.replace(/\.json$/, ".md"), calibrationMarkdown(report), { flag: "wx" });
+  output(JSON.stringify({ kind: "voice_summary", ...report.summary, report: path }));
+  if (report.summary.aborted) process.exitCode = 1;
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href)
   voiceCheck().catch(() => {
