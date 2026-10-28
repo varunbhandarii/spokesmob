@@ -1,15 +1,10 @@
 import { type AudioPlayer, createAudioPlayer } from "./audio/player.js";
 import { audioAllowed, decodeAudioFrame, parseControl } from "./protocol.js";
+import { sourceActive, sourceAudioStatus } from "./source-active.js";
 import { connectOverlay } from "./ws.js";
 
-declare global {
-  interface Window {
-    obsstudio?: { getStatus?: (callback: (status: { active: boolean }) => void) => void };
-  }
-}
-
 const status = document.querySelector<HTMLOutputElement>("#status");
-const obs = window.obsstudio !== undefined;
+const obs = "obsstudio" in window && window.obsstudio !== undefined;
 const allowed = audioAllowed(obs, window.location.search);
 let player: AudioPlayer | null = null;
 let active = true;
@@ -51,7 +46,7 @@ try {
         if (authorized && !player)
           player = await createAudioPlayer((event) => connection.send(event));
         player?.enabled(authorized && active);
-        audioState = !allowed ? "preview, silent" : authorized ? "audio ready" : "preview, silent";
+        audioState = sourceAudioStatus(allowed, authorized, active);
         showStatus();
         return;
       }
@@ -59,19 +54,13 @@ try {
     },
   });
   window.addEventListener("obsSourceActiveChanged", (event) => {
-    const detail = (event as CustomEvent<{ active?: boolean }>).detail;
-    if (typeof detail?.active !== "boolean") return;
-    active = detail.active;
+    const next = sourceActive(active, event);
+    if (next === active) return;
+    active = next;
     player?.enabled(authorized && active);
     connection.send({ type: "active", active });
-    audioState =
-      !allowed || !authorized ? "preview, silent" : active ? "audio ready" : "source inactive";
+    audioState = sourceAudioStatus(allowed, authorized, active);
     showStatus();
-  });
-  window.obsstudio?.getStatus?.((state) => {
-    active = state.active;
-    player?.enabled(authorized && active);
-    connection.send({ type: "active", active });
   });
   window.addEventListener("pagehide", () => {
     connection.close();
