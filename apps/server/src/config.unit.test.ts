@@ -29,9 +29,9 @@ test("service URLs accept local overrides and reject unrelated protocols", () =>
 });
 
 test("offline settings and Twitch configuration accept a missing or empty OpenAI key", () => {
-  expect(loadOpenAIConfig({})).toEqual({ serviceTier: "default", minVoices: 2 });
+  expect(loadOpenAIConfig({})).toEqual({ serviceTier: "fast", minVoices: 2 });
   expect(loadConfig({ ...environment, OPENAI_API_KEY: "" }).openai).toEqual({
-    serviceTier: "default",
+    serviceTier: "fast",
     minVoices: 2,
   });
   expect(() => requireOpenAIKey(loadOpenAIConfig({}))).toThrow("OPENAI_API_KEY is required");
@@ -40,10 +40,10 @@ test("offline settings and Twitch configuration accept a missing or empty OpenAI
 test("OpenAI settings preserve explicit tier and support overrides", () => {
   const settings = loadOpenAIConfig({
     OPENAI_API_KEY: "synthetic-key",
-    CONSENSUS_SERVICE_TIER: "fast",
+    CONSENSUS_SERVICE_TIER: "default",
     MIN_VOICES: "1",
   });
-  expect(settings).toEqual({ apiKey: "synthetic-key", serviceTier: "fast", minVoices: 1 });
+  expect(settings).toEqual({ apiKey: "synthetic-key", serviceTier: "default", minVoices: 1 });
   expect(requireOpenAIKey(settings)).toBe("synthetic-key");
 });
 

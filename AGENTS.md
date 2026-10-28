@@ -17,6 +17,7 @@ Spokesmob is a local Node 24 + TypeScript service plus an OBS browser-source ove
 - Pinned versions live in the root package.json. Do not upgrade majors without being asked.
 - Tool configs use positive include lists (the workspace globs).
 - Windows is the primary dev and runtime OS. Use cross-platform paths and scripts, with no bash-only commands in package.json.
+- Core logic has no network, file or clock access. Pass a seed for every random choice.
 - Your shell is PowerShell:
   - Do not chain with `&&` or `||`, because Windows PowerShell 5.1 lacks them. Use `;` or separate commands.
   - Use `npm.cmd` if execution policy blocks `npm`.
@@ -50,8 +51,11 @@ Spokesmob is a local Node 24 + TypeScript service plus an OBS browser-source ove
 ## OpenAI rules
 - **Consensus model:** `gpt-6-luna` via the Responses API.
   - `reasoning.effort: "none"` and `store: false`.
+  - The selected service tier is `fast`; `CONSENSUS_SERVICE_TIER=default` is an explicit override.
   - Strict `json_schema`: `additionalProperties: false`, all fields required.
   - Moderate input exemplars through `/v1/moderations` as separate string array items with stable item mapping. Whole-prompt moderation does not replace per-exemplar results. Fail closed on errors, missing results or unhandled flagged cases.
+  - Premoderate exemplars while the window fills. Remove flagged buckets and rebuild the window before counting; severe or unhandled flags suppress the whole window. Deleted messages, cleared users and chat clears never contribute votes.
+  - Apply the blocklist to every spoken string, including dissent and templated lines.
   - Keep inline `moderation: {model: "omni-moderation-latest"}` for output moderation. Fail closed when a moderation result has `type: "error"`; every spoken output line and dissent must pass output moderation.
   - Prompt order: the static prefix comes first (instructions, persona guide, schema restatement, examples; at least 1,024 tokens), and window data comes last. Use one `prompt_cache_key` per persona.
 - **Voice:** `gpt-realtime-2.1-mini` over a server WebSocket (`OpenAIRealtimeWS` from `openai/realtime/ws`).
@@ -82,9 +86,16 @@ Spokesmob is a local Node 24 + TypeScript service plus an OBS browser-source ove
 - `npm test`: unit and replay tests. Must stay under 60 s, because the Stop hook runs it before any turn ends.
 - `npm run test:e2e`: Playwright overlay smoke test.
 - `npm run typecheck`, `npm run lint`
+- `npm run consensus -- <scenario|golden>`: offline consensus check with unmoderated fakes. `--live` and `--count-prefix` call the API and require explicit approval.
+- `npm run eval -- --offline`: free harness checks through the real pipeline with fakes.
 - `npm run eval`: costs money. Run only when asked.
 - `npm run mock -- name-my-cat`: local EventSub, Helix and auth; accepts a scenario name or JSONL path.
 - `npm run sim -- --authors 300 --rate 60`
+
+## Skills
+- Use [eventsub-subscription](.agents/skills/eventsub-subscription/SKILL.md) for subscription mapping, mock support and replay coverage.
+- Use [helix-call](.agents/skills/helix-call/SKILL.md) for typed, rate-guarded Twitch writes and contract tests.
+- Use [golden-window](.agents/skills/golden-window/SKILL.md) for synthetic consensus windows and human-reviewed author-counted expectations.
 
 ## Definition of done for a task
 - Code compiles under strict TypeScript and `npm test` passes.

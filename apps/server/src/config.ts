@@ -8,7 +8,7 @@ const openaiEnvironmentSchema = z.object({
     .trim()
     .optional()
     .transform((value) => value || undefined),
-  CONSENSUS_SERVICE_TIER: z.enum(["default", "fast"]).default("default"),
+  CONSENSUS_SERVICE_TIER: z.enum(["default", "fast"]).default("fast"),
   MIN_VOICES: z.coerce.number().int().min(1).max(10).default(2),
 });
 

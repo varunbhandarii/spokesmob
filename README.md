@@ -47,6 +47,20 @@ Generate a larger synthetic conversation with `npm run sim -- --authors 300 --ra
 
 For labeled conversations, give each cluster its own phrases: `--clusters "gary=gary|name him gary:0.5,cat=猫|gato:0.5"`. `--spec <file.json>` loads the same generator settings from JSON; explicit command options override the file. Generated chat rows carry a ground-truth label for offline quality checks, which the mock omits from Twitch payloads.
 
+## How a line is chosen
+
+Messages are normalized into text and emote signals. Self messages, commands and excluded or moderator-deleted messages do not count. Repeated messages from one person never create extra votes. Emote-only participants still count toward the window's voice total and mood.
+
+Similar messages form clusters, with negations kept apart. The server moderates each selected exemplar separately while the window fills, caches those results, removes flagged buckets and rebuilds the counts. Severe flags or unavailable moderation suppress the window. Channel blocked terms add to the built-in blocklist.
+
+OpenAI receives the active question, voice total, mood signals and up to twelve clusters containing author counts, shares and short exemplars. It receives no author names or IDs. Chat strings remain untrusted data inside a marked JSON envelope. The model proposes a short line, citations and optional dissent; the application computes agreement from the cited author sets.
+
+When every cluster has a share below 0.20, the prompt can name up to three cited options using source wording. When at least two clusters each have a share of 0.25 or more, it cites only the largest one, breaking ties either way, and puts the next-largest one in dissent. It never adds opposing sides together as the main agreement in that case.
+
+The verifier checks support, wording, length, blocked terms, contact patterns, usernames and output moderation before a line is accepted. A rejected generation can be rewritten once. A transport failure or two rejected generations can use a separately moderated, verified fallback; otherwise the window is suppressed with a reason. Consensus commands print results without speaking or posting them.
+
+Fast is the selected model tier. In a paired local comparison, model-call p95 was 1.639 s on fast versus 6.007 s on default, with zero versus eight timeouts. After the share-rule prompt fix, the full fast evaluation passed all 100 quality and latency checks; p95 was 1.217 s and mean model cost was about USD 0.000114 per call. These are recorded measurements, not fixed response-time guarantees.
+
 ## Configuration
 
 `npm run consensus -- name-my-cat` checks recorded scenario input locally. A JSONL path or a golden JSON file also works; `--window 8` sets scenario window length and `--question "Name the cat?"` supplies context. Offline output is unmoderated, uses a deterministic stub and is not for streaming.
@@ -68,7 +82,7 @@ Copy `.env.example` to `.env` and fill in your credentials locally. Keep credent
 | `TWITCH_CHANNEL` | Broadcaster login, in lowercase |
 | `TWITCH_BOT_LOGIN` | Optional separate bot login |
 | `OPENAI_API_KEY` | OpenAI project API key; required only for commands that call OpenAI |
-| `CONSENSUS_SERVICE_TIER` | `default` (initial setting) or `fast`; select after measuring latency and cost |
+| `CONSENSUS_SERVICE_TIER` | `fast` (selected default); `default` is available as an explicit override |
 | `MIN_VOICES` | Minimum distinct authors for a line; integer from 1 to 10, defaults to `2` |
 | `VOICE_PROVIDER` | `realtime` (default) or `legacy` |
 | `MAIN_VOICE` | Main voice; defaults to `cedar` |

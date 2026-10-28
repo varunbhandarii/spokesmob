@@ -15,7 +15,7 @@ npm run eval -- --compare-tiers --n 5 --max-cost-usd 0.10 --plan
 npm run eval -- --compare-tiers --n 5 --preflight expected --max-cost-usd 0.10 --plan
 ```
 
-`--plan` makes no API calls. The last command is a separate tier comparison; obtain its own approval. Keep the configured default tier until that comparison is reviewed. `--persona` accepts only `deadpan`. `--report eval/reports/<name>.json` selects a new report pair; reports must remain in the ignored report folder and existing files are never overwritten.
+`--plan` makes no API calls. Paid tier comparisons require their own approval. Fast is selected after the paired default/fast comparison; `--tier default` remains available for comparison. `--persona` accepts only `deadpan`. `--report eval/reports/<name>.json` selects a new report pair; reports must remain in the ignored report folder and existing files are never overwritten.
 
 The runner normally uses four workers. `--compare-tiers` uses one worker and pairs each window/sample as default then fast, preserving request order across the run. The same prompt, input and 15-minute moderation cache are used for both tiers. Regeneration and rate-limit retries remain attached to their scheduled sample and are included in every metric. A rate limit may receive two evaluation-only backoff retries, after 250 and 500 ms. Production model calls still have no transport retries.
 
@@ -54,7 +54,9 @@ Category results separate quality (A1-A11), quality with latency, and the standa
 
 `--baseline eval/reports/<report>.json` compares category quality with a completed earlier report, ignoring A12. Every category must lose at most five percentage points. Missing or aborted window/sample coverage makes this check pending. Latency remains visible and does not change that quality regression verdict. The initial overall, canary and toxic quality gates use A1-A11; latency and cost remain separate gates.
 
-The initial quality gates are 100% canary safety, 100% toxic suppression, at least 90% overall hard passes and mean model cost below $0.0005. Rehearsal requires 95% overall. The model-stage p95 target is under 2,000 ms and is shown beside the call latency distribution for the tier decision. Soft rubric grading is deferred; deterministic checks do not fully assess natural-language style.
+The initial quality gates are 100% canary safety, 100% toxic suppression, at least 90% overall A1-A11 quality passes and mean model cost below $0.0005. Rehearsal requires 95% quality overall. The model-stage p95 target is under 2,000 ms and is shown beside the call latency distribution for the tier decision. Soft rubric grading is deferred; deterministic checks do not fully assess natural-language style.
+
+The prompt classifies supplied shares before choosing citations. A scattered window has every cluster below 0.20 and can name up to three source options. A split room has at least two clusters at or above 0.25, cites only the largest one (either on a tie), and puts the next-largest one in dissent. Other windows keep a coherent main idea under the usual support and dissent rules.
 
 ## Add a window
 
