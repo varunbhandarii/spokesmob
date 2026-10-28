@@ -12,6 +12,30 @@ const openaiEnvironmentSchema = z.object({
   MIN_VOICES: z.coerce.number().int().min(1).max(10).default(2),
 });
 
+const voiceEnvironmentSchema = z.object({
+  VOICE_PROVIDER: z.enum(["realtime", "legacy"]).default("realtime"),
+  MAIN_VOICE: z
+    .string()
+    .trim()
+    .regex(/^[a-z][a-z0-9_-]{0,63}$/)
+    .default("cedar"),
+  WHISPER_VOICE: z
+    .string()
+    .trim()
+    .regex(/^[a-z][a-z0-9_-]{0,63}$/)
+    .default("sage"),
+  PORT: z.coerce.number().int().min(1).max(65535).default(4040),
+  SPEND_CAP_USD: z.coerce.number().finite().positive().default(5),
+});
+
+export interface VoiceConfig {
+  provider: "realtime";
+  mainVoice: string;
+  dissentVoice: string;
+  port: number;
+  spendCapUsd: number;
+}
+
 export interface OpenAIConfig {
   apiKey?: string;
   serviceTier: "default" | "fast";
@@ -50,6 +74,7 @@ export interface Config {
   recordingsDir: string;
   logLevel: z.infer<typeof environmentSchema>["LOG_LEVEL"];
   openai: OpenAIConfig;
+  voice: VoiceConfig;
 }
 
 function configError(issues: readonly { path: PropertyKey[] }[]): Error {
@@ -70,6 +95,23 @@ export function loadOpenAIConfig(environment: NodeJS.ProcessEnv = process.env): 
 export function requireOpenAIKey(config: OpenAIConfig): string {
   if (!config.apiKey) throw new Error("OPENAI_API_KEY is required for OpenAI requests");
   return config.apiKey;
+}
+
+export function loadVoiceConfig(environment: NodeJS.ProcessEnv = process.env): VoiceConfig {
+  const result = voiceEnvironmentSchema.safeParse(environment);
+  if (!result.success) throw configError(result.error.issues);
+  const value = result.data;
+  if (value.VOICE_PROVIDER === "legacy")
+    throw new Error(
+      "VOICE_PROVIDER=legacy is unavailable in this version; use realtime. Failed realtime lines remain caption-only.",
+    );
+  return {
+    provider: "realtime",
+    mainVoice: value.MAIN_VOICE,
+    dissentVoice: value.WHISPER_VOICE,
+    port: value.PORT,
+    spendCapUsd: value.SPEND_CAP_USD,
+  };
 }
 
 export function defaultTokenFile(environment: NodeJS.ProcessEnv = process.env): string {
@@ -99,5 +141,6 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): Config
       join(dirname(value.TOKEN_FILE ?? defaultTokenFile(environment)), "recordings"),
     logLevel: value.LOG_LEVEL,
     openai: loadOpenAIConfig(environment),
+    voice: loadVoiceConfig(environment),
   };
 }

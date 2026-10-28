@@ -84,7 +84,7 @@ Copy `.env.example` to `.env` and fill in your credentials locally. Keep credent
 | `OPENAI_API_KEY` | OpenAI project API key; required only for commands that call OpenAI |
 | `CONSENSUS_SERVICE_TIER` | `fast` (selected default); `default` is available as an explicit override |
 | `MIN_VOICES` | Minimum distinct authors for a line; integer from 1 to 10, defaults to `2` |
-| `VOICE_PROVIDER` | `realtime` (default) or `legacy` |
+| `VOICE_PROVIDER` | `realtime`; legacy is unavailable in this version |
 | `MAIN_VOICE` | Main voice; defaults to `cedar` |
 | `WHISPER_VOICE` | Dissent voice; defaults to `sage` |
 | `PORT` | Local HTTP port; defaults to `4040` |

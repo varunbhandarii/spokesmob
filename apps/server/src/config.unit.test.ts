@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { loadConfig, loadOpenAIConfig, requireOpenAIKey } from "./config.js";
+import { loadConfig, loadOpenAIConfig, loadVoiceConfig, requireOpenAIKey } from "./config.js";
 
 const environment = {
   TWITCH_CLIENT_ID: "demo-client",
@@ -53,4 +53,43 @@ test("invalid consensus settings identify variables without exposing values", ()
   ).toThrow("Invalid or missing configuration: CONSENSUS_SERVICE_TIER, MIN_VOICES");
   for (const value of ["0", "2.5", "NaN", ""])
     expect(() => loadOpenAIConfig({ MIN_VOICES: value })).toThrow("MIN_VOICES");
+});
+
+test("voice settings work without credentials and preserve supported overrides", () => {
+  expect(loadVoiceConfig({})).toEqual({
+    provider: "realtime",
+    mainVoice: "cedar",
+    dissentVoice: "sage",
+    port: 4040,
+    spendCapUsd: 5,
+  });
+  expect(loadConfig(environment).voice).toEqual(loadVoiceConfig({}));
+  expect(
+    loadVoiceConfig({
+      MAIN_VOICE: "marin",
+      WHISPER_VOICE: "cedar",
+      PORT: "5050",
+      SPEND_CAP_USD: "2.50",
+    }),
+  ).toEqual({
+    provider: "realtime",
+    mainVoice: "marin",
+    dissentVoice: "cedar",
+    port: 5050,
+    spendCapUsd: 2.5,
+  });
+});
+
+test("legacy selection fails clearly and invalid settings never expose values", () => {
+  expect(() => loadVoiceConfig({ VOICE_PROVIDER: "legacy" })).toThrow(
+    "unavailable in this version",
+  );
+  expect(() => loadConfig({ ...environment, VOICE_PROVIDER: "legacy" })).toThrow("caption-only");
+  expect(() =>
+    loadVoiceConfig({ MAIN_VOICE: "private-invalid-value!", PORT: "65536", SPEND_CAP_USD: "NaN" }),
+  ).toThrow("Invalid or missing configuration: MAIN_VOICE, PORT, SPEND_CAP_USD");
+  for (const PORT of ["0", "1.5", "NaN", ""])
+    expect(() => loadVoiceConfig({ PORT })).toThrow("PORT");
+  for (const SPEND_CAP_USD of ["-1", "0", "Infinity", ""])
+    expect(() => loadVoiceConfig({ SPEND_CAP_USD })).toThrow("SPEND_CAP_USD");
 });
