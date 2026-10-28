@@ -1,8 +1,10 @@
 import type { Logger } from "pino";
+import { trimVerifiedAudio } from "../../../../packages/core/src/audio-trim.js";
+import { testTonePcm } from "../../../../packages/core/src/test-tone.js";
 import { VOICE_THRESHOLDS as T } from "../../../../packages/core/src/voice-thresholds.js";
 import { type Clock, systemClock } from "../clock.js";
 import { voiceCost } from "./cost.js";
-import { verifyAndTrim } from "./gates.js";
+import { checkUsableAudio, verifyAndTrim } from "./gates.js";
 import { RealtimeSession } from "./session.js";
 import type { RealtimeFactory } from "./transport.js";
 import type { VoiceAttemptRecord, VoiceChannel, VoiceResult, VoiceUsage } from "./types.js";
@@ -135,6 +137,12 @@ export class VoiceManager {
     };
   }
   prepare(line: string, channel: VoiceChannel = "main"): VoiceTake {
+    return this.createTake(line, channel, false);
+  }
+  prepareTestTone(): VoiceTake {
+    return this.createTake("Test tone", "main", true);
+  }
+  private createTake(line: string, channel: VoiceChannel, tone: boolean): VoiceTake {
     const id = ++this.sequence;
     const controller = new AbortController();
     const result: VoiceResult = {
@@ -203,6 +211,20 @@ export class VoiceManager {
     this.swapIfIdle(channel);
     slot.busy = id;
     this.options.transport.prepare(id, channel, line);
+    if (tone) {
+      const raw = testTonePcm();
+      if (!checkUsableAudio(raw, "Test tone").ok)
+        throw new Error("Generated tone failed validation");
+      const released = trimVerifiedAudio(raw);
+      state.pcm = released.pcm;
+      result.status = "verified";
+      result.durationMs = released.durationMs;
+      result.trim = released.trim;
+      result.verifiedAtMs = this.clock.now();
+      slot.busy = null;
+      resolveReady(result);
+      return take;
+    }
     void this.generate(state, line).catch(() => {
       if (!controller.signal.aborted) result.status = "caption_only";
       state.resolveReady(result);

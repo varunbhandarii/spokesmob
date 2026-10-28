@@ -11,6 +11,9 @@ const secretFields = [
   "refreshToken",
   "clientSecret",
   "deviceCode",
+  "apiKey",
+  "overlayToken",
+  "token",
 ];
 
 export function createLogger(
