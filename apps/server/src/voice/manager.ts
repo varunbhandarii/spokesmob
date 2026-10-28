@@ -1,5 +1,6 @@
 import type { Logger } from "pino";
 import { trimVerifiedAudio } from "../../../../packages/core/src/audio-trim.js";
+import type { PlaybackReport } from "../../../../packages/core/src/overlay-protocol.js";
 import { testTonePcm } from "../../../../packages/core/src/test-tone.js";
 import { similarity } from "../../../../packages/core/src/transcript.js";
 import { VOICE_THRESHOLDS as T } from "../../../../packages/core/src/voice-thresholds.js";
@@ -10,9 +11,7 @@ import { RealtimeSession } from "./session.js";
 import type { RealtimeFactory } from "./transport.js";
 import type { VoiceAttemptRecord, VoiceChannel, VoiceResult, VoiceUsage } from "./types.js";
 
-export type PlaybackReport =
-  | { type: "started" | "ended" | "stopped"; take: number }
-  | { type: "played"; take: number; samples: number };
+export type { PlaybackReport } from "../../../../packages/core/src/overlay-protocol.js";
 export interface VoiceTransport {
   prepare(take: number, channel: VoiceChannel, text: string): void;
   play(take: number, channel: VoiceChannel, pcm: Uint8Array, durationMs: number): void;

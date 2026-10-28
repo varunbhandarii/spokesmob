@@ -1,21 +1,17 @@
 import { WebSocket } from "ws";
 import { z } from "zod";
+import {
+  playbackReportSchema,
+  voiceCheckCommandSchema,
+} from "../../../../packages/core/src/overlay-protocol.js";
 import type { PlaybackReport, VoiceTransport } from "../voice/manager.js";
 import type { VoiceChannel } from "../voice/types.js";
 
-const take = z.number().int().positive().max(0xffffffff);
 const messageSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("hello"), audio: z.boolean(), obs: z.boolean() }),
   z.object({ type: z.literal("active"), active: z.boolean() }),
-  z.object({ type: z.enum(["started", "ended", "stopped"]), take }),
-  z.object({ type: z.literal("played"), take, samples: z.number().int().nonnegative() }),
-  z.object({
-    type: z.literal("voice_command"),
-    request: z.string().regex(/^[a-z0-9-]{1,64}$/),
-    mode: z.enum(["tone", "say", "kill_test"]),
-    text: z.string().min(1).max(500).optional(),
-    dissent: z.boolean().optional(),
-  }),
+  ...playbackReportSchema.options,
+  voiceCheckCommandSchema,
 ]);
 export type VoiceCommand = Extract<z.infer<typeof messageSchema>, { type: "voice_command" }>;
 export function encodeAudioFrame(

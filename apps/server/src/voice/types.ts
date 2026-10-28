@@ -1,7 +1,8 @@
 import type { AudioMetrics } from "../../../../packages/core/src/audio.js";
 import type { TrimMetrics } from "../../../../packages/core/src/audio-trim.js";
+import type { AudioChannel } from "../../../../packages/core/src/overlay-protocol.js";
 
-export type VoiceChannel = "main" | "dissent";
+export type VoiceChannel = AudioChannel;
 export type VoiceFailure =
   | "refusal"
   | "drift"
