@@ -11,7 +11,20 @@ import { consensusOutputSchema } from "../../../../packages/core/src/schema.js";
 import type { ModelUsage, RuleCode } from "../../../../packages/core/src/types.js";
 import type { OutputModeration } from "../../../../packages/core/src/verify.js";
 import { type Clock, systemClock } from "../clock.js";
-import type { ConsensusModelPort, ModelResult, ModerationPort } from "./ports.js";
+import type { ApiFailure, ConsensusModelPort, ModelResult, ModerationPort } from "./ports.js";
+
+export function classifyApiFailure(error: unknown): ApiFailure | null {
+  if (error instanceof OpenAI.APIConnectionTimeoutError) return "timeout";
+  if (error instanceof OpenAI.APIConnectionError) return "transport";
+  if (error instanceof OpenAI.APIError) {
+    if (error.status === 401 || error.status === 403) return "auth";
+    if (error.status === 408) return "timeout";
+    if (error.status === 429) return "rate_limit";
+    if (error.status !== undefined && error.status >= 500) return "server";
+    return "request";
+  }
+  return null;
+}
 
 const usageSchema = z.object({
   input_tokens: z.number().nonnegative(),
@@ -96,10 +109,13 @@ export class OpenAIConsensusModel implements ConsensusModelPort {
               ? "schema_invalid"
               : "model_error";
       // Transport errors may omit usage. Never infer a free failed attempt.
+      const apiFailure = signal?.aborted ? null : classifyApiFailure(error);
       const usage =
-        typeof error === "object" && error !== null && "usage" in error
-          ? mapUsage(error.usage)
-          : null;
+        apiFailure === "timeout" || apiFailure === "server"
+          ? null
+          : typeof error === "object" && error !== null && "usage" in error
+            ? mapUsage(error.usage)
+            : null;
       return {
         output: null,
         failure,
@@ -107,6 +123,7 @@ export class OpenAIConsensusModel implements ConsensusModelPort {
         outputModeration: { status: "error" },
         usage,
         latencyMs: this.clock.now() - start,
+        apiFailure,
       };
     }
   }

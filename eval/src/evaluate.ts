@@ -1,8 +1,10 @@
 import { createHash } from "node:crypto";
 import { type Clock, sleep, systemClock } from "../../apps/server/src/clock.js";
 import { FakeModerationPort } from "../../apps/server/src/consensus/fakes.js";
+import { classifyApiFailure } from "../../apps/server/src/consensus/model.js";
 import { ModerationGate } from "../../apps/server/src/consensus/moderation.js";
 import type {
+  ApiFailure,
   ConsensusModelPort,
   ModelResult,
   ModerationPort,
@@ -24,7 +26,9 @@ import {
   evaluationPlan,
   SPEND_LIMIT_USD,
 } from "./plan.js";
+import { compareQuality, type QualityBaseline } from "./regression.js";
 import {
+  type ApiCallReport,
   type EvaluationReport,
   type ModelCallReport,
   type SampleReport,
@@ -36,11 +40,13 @@ export interface EvaluationOptions {
   windows: readonly GoldenWindow[];
   n: number;
   offline: boolean;
-  serviceTier: "default" | "fast";
+  serviceTier: "default" | "fast" | "interleaved";
+  maxCostUsd?: number;
+  baseline?: QualityBaseline;
   minVoices?: number;
   signal?: AbortSignal;
   clock?: Clock;
-  ports?: () => { model: ConsensusModelPort; moderation: ModerationPort };
+  ports?: (tier: "default" | "fast") => { model: ConsensusModelPort; moderation: ModerationPort };
 }
 export async function evaluate(options: EvaluationOptions): Promise<EvaluationReport> {
   if (!Number.isSafeInteger(options.n) || options.n < 1 || !options.windows.length)
@@ -50,8 +56,11 @@ export async function evaluate(options: EvaluationOptions): Promise<EvaluationRe
   const minVoices = options.minVoices ?? 2;
   const clock = options.clock ?? systemClock;
   const plan = evaluationPlan(options.windows, options.n, options.serviceTier, minVoices);
-  if (!options.offline && plan.projectedCostWithRateRetriesUsd > SPEND_LIMIT_USD)
-    throw new Error("Projected cost exceeds $0.50; no API calls made");
+  const maxCost = options.maxCostUsd ?? SPEND_LIMIT_USD;
+  if (!Number.isFinite(maxCost) || maxCost <= 0 || maxCost > SPEND_LIMIT_USD)
+    throw new Error("Cost limit must be positive and at most $0.50");
+  if (!options.offline && plan.projectedCostWithRateRetriesUsd > maxCost)
+    throw new Error(`Projected cost exceeds $${maxCost.toFixed(2)}; no API calls made`);
   const controller = new AbortController();
   const abort = () => controller.abort();
   options.signal?.addEventListener("abort", abort, { once: true });
@@ -62,42 +71,90 @@ export async function evaluate(options: EvaluationOptions): Promise<EvaluationRe
     controller.abort();
   };
   let committedCost = 0;
+  const failureStreak = { model: 0, moderation: 0 };
+  const recordApi = (source: "model" | "moderation", failure: ApiFailure | null) => {
+    if (failure === "auth") return failRun("auth_error");
+    failureStreak[source] = failure ? failureStreak[source] + 1 : 0;
+    if (failureStreak[source] >= 3) failRun(`${source}_consecutive_api_failures`);
+  };
+  const tiers: ("default" | "fast")[] =
+    options.serviceTier === "interleaved" ? ["default", "fast"] : [options.serviceTier];
   const jobs = options.windows.flatMap((window) =>
-    Array.from({ length: options.n }, (_, index) => ({ window, sample: index + 1 })),
+    Array.from({ length: options.n }, (_, index) =>
+      tiers.map((serviceTier) => ({ window, sample: index + 1, serviceTier })),
+    ).flat(),
   );
   const estimates = new Map(
-    options.windows.map((window) => [
-      window.id,
-      estimatedCallCost(estimatedInputTokens(window), options.serviceTier),
-    ]),
+    options.windows.map((window) => [window.id, estimatedInputTokens(window)]),
   );
   let next = 0;
   const samples: (SampleReport | undefined)[] = Array.from({ length: jobs.length });
   async function worker() {
-    const ports = options.ports?.() ?? {
-      model: new StubConsensusModel(),
-      moderation: new FakeModerationPort(),
+    const portsByTier = new Map<
+      "default" | "fast",
+      { model: ConsensusModelPort; moderation: ModerationPort }
+    >();
+    const portsFor = (tier: "default" | "fast") => {
+      let ports = portsByTier.get(tier);
+      if (!ports) {
+        ports = options.ports?.(tier) ?? {
+          model: new StubConsensusModel(),
+          moderation: new FakeModerationPort(),
+        };
+        portsByTier.set(tier, ports);
+      }
+      return ports;
     };
-    const gate = new ModerationGate({ port: ports.moderation, clock });
+    let apiCalls: ApiCallReport[] = [];
+    const moderationPort: ModerationPort = {
+      moderate: async (texts, signal) => {
+        const start = clock.now();
+        const sampleApiCalls = apiCalls;
+        try {
+          const response = await portsFor(tiers[0] ?? "default").moderation.moderate(texts, signal);
+          sampleApiCalls.push({
+            source: "moderation",
+            failure: null,
+            latencyMs: clock.now() - start,
+          });
+          recordApi("moderation", null);
+          return response;
+        } catch (error) {
+          if (!controller.signal.aborted) {
+            const failure = signal?.aborted
+              ? "timeout"
+              : (classifyApiFailure(error) ?? "transport");
+            sampleApiCalls.push({ source: "moderation", failure, latencyMs: clock.now() - start });
+            recordApi("moderation", failure);
+          }
+          throw error;
+        }
+      },
+    };
+    const gate = new ModerationGate({ port: moderationPort, clock });
     const blocklist = createBlocklist();
     while (!controller.signal.aborted) {
       const index = next++;
       const job = jobs[index];
       if (!job) break;
+      apiCalls = [];
+      const tier = job.serviceTier;
+      const ports = portsFor(tier);
       const traces: { input: BuiltInput; result: ModelResult }[] = [];
       const calls: ModelCallReport[] = [];
       const verifications: VerificationAttemptReport[] = [];
       let fallbackAttempted = false;
       let fallbackModeration: OutputModeration = { status: "error" };
-      const estimatedCost = estimates.get(job.window.id);
-      if (estimatedCost === undefined) throw new Error("Missing cost projection");
+      const estimatedTokens = estimates.get(job.window.id);
+      if (estimatedTokens === undefined) throw new Error("Missing cost projection");
+      const estimatedCost = estimatedCallCost(estimatedTokens, tier);
       const model: ConsensusModelPort = {
         generate: async (input, signal) => {
           const extraUsage: CallUsage[] = [];
           let latency = 0;
           for (let retry = 0; ; retry++) {
             if (!options.offline) {
-              if (committedCost + estimatedCost > SPEND_LIMIT_USD) {
+              if (committedCost + estimatedCost > maxCost) {
                 failRun("projected_cost_limit");
                 throw new Error("Budget exhausted");
               }
@@ -107,7 +164,7 @@ export async function evaluate(options: EvaluationOptions): Promise<EvaluationRe
             const callStart = clock.now();
             try {
               generated = await ports.model.generate(input, signal);
-            } catch {
+            } catch (error) {
               generated = {
                 output: null,
                 failure: signal?.aborted ? "aborted" : "model_error",
@@ -115,18 +172,32 @@ export async function evaluate(options: EvaluationOptions): Promise<EvaluationRe
                 outputModeration: { status: "error" },
                 usage: null,
                 latencyMs: clock.now() - callStart,
+                apiFailure: signal?.aborted ? null : (classifyApiFailure(error) ?? "transport"),
               };
             }
-            const costUsd = modelCost(generated.usage, options.serviceTier);
+            const apiFailure =
+              generated.apiFailure ??
+              (generated.failure === "model_timeout"
+                ? "timeout"
+                : generated.failure === "model_rate_limit"
+                  ? "rate_limit"
+                  : generated.failure === "model_error"
+                    ? "transport"
+                    : null);
+            if (apiFailure === "timeout" || apiFailure === "server")
+              generated = { ...generated, usage: null };
+            if (!signal?.aborted) recordApi("model", apiFailure);
+            apiCalls.push({ source: "model", failure: apiFailure, latencyMs: generated.latencyMs });
+            const costUsd = modelCost(generated.usage, tier);
             if (!options.offline && costUsd !== null) committedCost += costUsd - estimatedCost;
-            if (!options.offline && committedCost > SPEND_LIMIT_USD)
-              failRun("projected_cost_limit");
+            if (!options.offline && committedCost > maxCost) failRun("projected_cost_limit");
             calls.push({
               failure: generated.failure,
               incompleteReason: generated.incompleteReason ?? null,
               latencyMs: generated.latencyMs,
               usage: generated.usage,
               costUsd,
+              apiFailure,
             });
             traces.push({ input, result: generated });
             latency += generated.latencyMs;
@@ -134,7 +205,7 @@ export async function evaluate(options: EvaluationOptions): Promise<EvaluationRe
               extraUsage.push({
                 source: "model",
                 usage: generated.usage,
-                serviceTier: options.serviceTier,
+                serviceTier: tier,
                 costUsd,
               });
               const delay = 250 * 2 ** retry;
@@ -149,15 +220,6 @@ export async function evaluate(options: EvaluationOptions): Promise<EvaluationRe
                 };
               continue;
             }
-            if (
-              !options.offline &&
-              (generated.failure === "model_rate_limit" ||
-                generated.failure === "model_timeout" ||
-                generated.failure === "model_error" ||
-                generated.inputModeration.status === "error" ||
-                generated.outputModeration.status === "error")
-            )
-              failRun(generated.failure ?? "moderation_error");
             return {
               ...generated,
               latencyMs: latency,
@@ -168,7 +230,7 @@ export async function evaluate(options: EvaluationOptions): Promise<EvaluationRe
       };
       const outputPort: ModerationPort = {
         moderate: async (texts, signal) => {
-          const response = await ports.moderation.moderate(texts, signal);
+          const response = await moderationPort.moderate(texts, signal);
           const item = response.results[0];
           fallbackModeration =
             response.results.length === 1 && item && typeof item.flagged === "boolean"
@@ -185,7 +247,7 @@ export async function evaluate(options: EvaluationOptions): Promise<EvaluationRe
       const result = await synthesize({
         ...job.window,
         minVoices,
-        serviceTier: options.serviceTier,
+        serviceTier: tier,
         model,
         moderation: gate,
         outputModeration: outputPort,
@@ -226,13 +288,6 @@ export async function evaluate(options: EvaluationOptions): Promise<EvaluationRe
           fallbackAttempted = true;
         },
       });
-      if (
-        !options.offline &&
-        ["moderation_unavailable", "moderation_mapping", "moderation_error"].includes(
-          result.reason ?? "",
-        )
-      )
-        failRun(result.reason ?? "moderation_error");
       const accepted = [...traces]
         .reverse()
         .find((trace) => trace.result.output?.line === result.line && !trace.result.failure);
@@ -255,6 +310,8 @@ export async function evaluate(options: EvaluationOptions): Promise<EvaluationRe
         id: job.window.id,
         tags: job.window.tags,
         sample: job.sample,
+        serviceTier: tier,
+        order: index + 1,
         pass: failures.length === 0,
         failures,
         status: result.status,
@@ -277,18 +334,25 @@ export async function evaluate(options: EvaluationOptions): Promise<EvaluationRe
         latency: result.latency,
         usage: result.usage,
         calls,
+        apiCalls,
         verifications,
         fallbackAttempted,
       };
     }
   }
   try {
-    await Promise.all(Array.from({ length: Math.min(4, jobs.length) }, () => worker()));
+    await Promise.all(
+      Array.from(
+        { length: options.serviceTier === "interleaved" ? 1 : Math.min(4, jobs.length) },
+        () => worker(),
+      ),
+    );
   } finally {
     options.signal?.removeEventListener("abort", abort);
   }
   if (options.signal?.aborted) aborted ??= "aborted";
   const finished = samples.filter((sample): sample is SampleReport => sample !== undefined);
+  const baseline = options.baseline;
   return {
     createdAt: new Date(clock.now()).toISOString(),
     offline: options.offline,
@@ -298,6 +362,25 @@ export async function evaluate(options: EvaluationOptions): Promise<EvaluationRe
     plan,
     aborted,
     summary: summarize(finished),
+    tierSummaries: Object.fromEntries(
+      tiers.map((tier) => [
+        tier,
+        summarize(finished.filter((sample) => sample.serviceTier === tier)),
+      ]),
+    ),
+    qualityRegression: baseline
+      ? Object.fromEntries(
+          tiers.map((tier) => [
+            tier,
+            aborted
+              ? { comparable: false, pass: null, categories: {} }
+              : compareQuality(
+                  baseline,
+                  finished.filter((sample) => sample.serviceTier === tier),
+                ),
+          ]),
+        )
+      : {},
     samples: finished,
   };
 }

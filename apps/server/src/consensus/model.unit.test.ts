@@ -156,3 +156,20 @@ test("standalone moderation preserves item order and prefix counting hashes only
     sha256: expect.stringMatching(/^[a-f0-9]{64}$/),
   });
 });
+
+test("auth and server errors retain safe failure classifications without inventing usage", async () => {
+  for (const [status, apiFailure] of [
+    [401, "auth"],
+    [403, "auth"],
+    [500, "server"],
+    [503, "server"],
+  ] as const) {
+    const f = fixture({ error: { message: "Synthetic service error" } }, status);
+    expect(await f.model.generate(input)).toMatchObject({
+      failure: "model_error",
+      apiFailure,
+      usage: null,
+    });
+    expect(f.fetch).toHaveBeenCalledTimes(1);
+  }
+});

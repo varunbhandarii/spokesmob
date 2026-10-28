@@ -19,7 +19,8 @@ export interface EvaluationPlan {
   expectedCostUsd: number;
   projectedCostUsd: number;
   projectedCostWithRateRetriesUsd: number;
-  serviceTier: "default" | "fast";
+  serviceTier: "default" | "fast" | "interleaved";
+  tiers?: { default: EvaluationPlan; fast: EvaluationPlan };
   tokenEstimate: "utf8 bytes divided by three; API count pending";
 }
 export function estimatedInputTokens(window: GoldenWindow): number {
@@ -41,9 +42,28 @@ export function estimatedCallCost(tokens: number, tier: "default" | "fast"): num
 export function evaluationPlan(
   windows: readonly GoldenWindow[],
   n: number,
-  tier: "default" | "fast",
+  tier: "default" | "fast" | "interleaved",
   minVoices: number,
 ): EvaluationPlan {
+  if (tier === "interleaved") {
+    const standard = evaluationPlan(windows, n, "default", minVoices);
+    const fast = evaluationPlan(windows, n, "fast", minVoices);
+    return {
+      ...standard,
+      samples: standard.samples + fast.samples,
+      samplesPerWindow: 2 * n,
+      expectedPrimaryCalls: standard.expectedPrimaryCalls + fast.expectedPrimaryCalls,
+      maximumGenerationCalls: standard.maximumGenerationCalls + fast.maximumGenerationCalls,
+      maximumModelRequestsWithRateRetries:
+        standard.maximumModelRequestsWithRateRetries + fast.maximumModelRequestsWithRateRetries,
+      expectedCostUsd: standard.expectedCostUsd + fast.expectedCostUsd,
+      projectedCostUsd: standard.projectedCostUsd + fast.projectedCostUsd,
+      projectedCostWithRateRetriesUsd:
+        standard.projectedCostWithRateRetriesUsd + fast.projectedCostWithRateRetriesUsd,
+      serviceTier: "interleaved",
+      tiers: { default: standard, fast },
+    };
+  }
   let expectedPrimaryCalls = 0;
   let maximumGenerationCalls = 0;
   let expectedCostUsd = 0;

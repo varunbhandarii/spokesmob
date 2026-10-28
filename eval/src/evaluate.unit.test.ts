@@ -1,14 +1,17 @@
+import { OpenAI } from "openai";
 import { afterEach, expect, test, vi } from "vitest";
 import {
   FakeConsensusModel,
   FakeModerationPort,
   fakeModelResult,
 } from "../../apps/server/src/consensus/fakes.js";
+import { OpenAIModerationPort } from "../../apps/server/src/consensus/model.js";
 import type { ConsensusModelPort } from "../../apps/server/src/consensus/ports.js";
 import { StubConsensusModel } from "../../apps/server/src/consensus/stub-model.js";
 import { evaluate } from "./evaluate.js";
 import { loadGoldens } from "./golden.js";
 import { evaluationPlan } from "./plan.js";
+import { compareQuality } from "./regression.js";
 import { percentile, reportMarkdown, writeReport } from "./report.js";
 
 afterEach(() => {
@@ -100,12 +103,12 @@ test("an excessive projected cost prevents port construction and any calls", asy
   ).rejects.toThrow("no API calls");
   expect(ports).not.toHaveBeenCalled();
 });
-test("a real-transport failure stops scheduling and records an aborted report with fakes", async () => {
+test("three consecutive model API failures stop scheduling after earlier samples use fallback", async () => {
   const report = await evaluate({
     windows: await tiny(),
     n: 8,
     offline: false,
-    serviceTier: "default",
+    serviceTier: "interleaved",
     ports: () => ({
       moderation: new FakeModerationPort(),
       model: {
@@ -113,9 +116,200 @@ test("a real-transport failure stops scheduling and records an aborted report wi
       },
     }),
   });
-  expect(report.aborted).toBe("model_error");
-  expect(report.summary.samples <= 4).toBe(true);
+  expect(report.aborted).toBe("model_consecutive_api_failures");
+  expect(report.summary.samples).toBe(3);
+  expect(report.samples.slice(0, 2).every((sample) => sample.fallback)).toBe(true);
   expect(report.summary.totalCostUsd).toBe(null);
+});
+
+test("a timeout and a 5xx reach production fallback and later paired samples still run", async () => {
+  let calls = 0;
+  const tiers: string[] = [];
+  const report = await evaluate({
+    windows: await tiny(),
+    n: 3,
+    offline: false,
+    serviceTier: "interleaved",
+    ports: (tier) => ({
+      moderation: new FakeModerationPort(),
+      model: {
+        generate: async (input) => {
+          calls++;
+          tiers.push(tier);
+          if (calls === 1 || calls === 4)
+            return fakeModelResult(null, {
+              failure: calls === 1 ? "model_timeout" : "model_error",
+              apiFailure: calls === 1 ? "timeout" : "server",
+              latencyMs: calls === 1 ? 6000 : 100,
+            });
+          return {
+            ...(await new StubConsensusModel().generate(input)),
+            usage: { inputTokens: 2000, cachedTokens: 1024, outputTokens: 50 },
+          };
+        },
+      },
+    }),
+  });
+  expect(report.aborted).toBe(null);
+  expect(report.samples).toHaveLength(6);
+  expect(tiers).toEqual(["default", "fast", "default", "fast", "default", "fast"]);
+  expect(report.samples.map((sample) => sample.order)).toEqual([1, 2, 3, 4, 5, 6]);
+  expect(report.samples[0]?.fallback).toBe(true);
+  expect(report.samples[3]?.fallback).toBe(true);
+  expect(report.samples[0]?.calls[0]?.usage).toBe(null);
+  expect(report.samples[3]?.calls[0]?.usage).toBe(null);
+  expect(report.summary.unknownModelCalls).toBe(2);
+  expect(report.summary.qualityPassRate).toBe(1);
+  expect(report.summary.withLatencyPassRate).toBeCloseTo(5 / 6);
+  expect(report.summary.timeouts).toBe(1);
+  expect(report.tierSummaries.default?.modelCallLatencyMs.max).toBe(6000);
+});
+
+test("an authentication error immediately aborts the combined run", async () => {
+  const report = await evaluate({
+    windows: await tiny(),
+    n: 3,
+    offline: false,
+    serviceTier: "interleaved",
+    ports: () => ({
+      moderation: new FakeModerationPort(),
+      model: {
+        generate: async () =>
+          fakeModelResult(null, { failure: "model_error", apiFailure: "auth", usage: null }),
+      },
+    }),
+  });
+  expect(report.aborted).toBe("auth_error");
+  expect(report.samples).toHaveLength(1);
+  expect(report.summary.fallbackAttempts).toBe(0);
+});
+
+test("isolated moderation timeouts suppress the affected sample and later samples continue", async () => {
+  let calls = 0;
+  const moderation = new FakeModerationPort();
+  const report = await evaluate({
+    windows: await tiny(),
+    n: 2,
+    offline: false,
+    serviceTier: "interleaved",
+    ports: () => ({
+      model: new StubConsensusModel(),
+      moderation: {
+        moderate: async (texts, signal) => {
+          calls++;
+          if (calls <= 2) throw new OpenAI.APIConnectionTimeoutError();
+          return moderation.moderate(texts, signal);
+        },
+      },
+    }),
+  });
+  expect(report.aborted).toBe(null);
+  expect(report.samples).toHaveLength(4);
+  expect(report.samples[0]?.reason).toBe("moderation_unavailable");
+  expect(report.samples.slice(1).every((sample) => sample.status === "verified")).toBe(true);
+  expect(report.summary.apiFailureCounts["moderation:timeout"]).toBe(2);
+});
+
+test("moderation authentication failures abort without an output fallback", async () => {
+  const client = new OpenAI({
+    apiKey: "synthetic-test-key",
+    maxRetries: 0,
+    fetch: async () =>
+      new Response(JSON.stringify({ error: { message: "Synthetic authentication failure" } }), {
+        status: 401,
+        headers: { "content-type": "application/json" },
+      }),
+  });
+  const report = await evaluate({
+    windows: await tiny(),
+    n: 2,
+    offline: false,
+    serviceTier: "interleaved",
+    ports: () => ({
+      model: new StubConsensusModel(),
+      moderation: new OpenAIModerationPort(client),
+    }),
+  });
+  expect(report.aborted).toBe("auth_error");
+  expect(report.samples).toHaveLength(1);
+  expect(report.summary.modelRequests).toBe(0);
+});
+
+test("the combined projection and caller cost limit are checked before constructing ports", async () => {
+  const windows = await loadGoldens();
+  const combined = evaluationPlan(windows, 5, "interleaved", 2);
+  expect(combined.samples).toBe(200);
+  expect(combined.expectedPrimaryCalls).toBe(170);
+  expect(combined.projectedCostUsd).toBeCloseTo(
+    evaluationPlan(windows, 5, "default", 2).projectedCostUsd +
+      evaluationPlan(windows, 5, "fast", 2).projectedCostUsd,
+  );
+  const ports = vi.fn(() => ({
+    model: new StubConsensusModel(),
+    moderation: new FakeModerationPort(),
+  }));
+  await expect(
+    evaluate({ windows, n: 5, offline: false, serviceTier: "interleaved", maxCostUsd: 0.1, ports }),
+  ).rejects.toThrow("no API calls");
+  expect(ports).not.toHaveBeenCalled();
+});
+
+test("quality regression ignores latency and accepts at most a five-point category loss", async () => {
+  const report = await evaluate({
+    windows: await tiny(),
+    n: 1,
+    offline: true,
+    serviceTier: "default",
+  });
+  const source = report.samples[0];
+  if (!source) throw new Error("Missing synthetic sample");
+  const samples = Array.from({ length: 20 }, (_, index) => ({ ...source, sample: index + 1 }));
+  const baseline = { aborted: null, samples };
+  const slow = samples.map((sample) => ({
+    ...sample,
+    failures: [{ assertion: "A12" as const, code: "model_stage_latency" }],
+  }));
+  expect(compareQuality(baseline, slow).pass).toBe(true);
+  const qualityLoss = (count: number) =>
+    samples.map((sample, index) =>
+      index < count
+        ? { ...sample, failures: [{ assertion: "A8" as const, code: "cited_content" }] }
+        : sample,
+    );
+  expect(compareQuality(baseline, qualityLoss(1)).pass).toBe(true);
+  expect(compareQuality(baseline, qualityLoss(2)).pass).toBe(false);
+  expect(compareQuality(baseline, samples.slice(1)).comparable).toBe(false);
+  expect(compareQuality({ ...baseline, aborted: "model_timeout" }, samples).pass).toBe(null);
+});
+
+test("slow safety-only canaries retain quality while exposing diagnostic latency failures", async () => {
+  const windows = (await tiny()).map((window) => ({
+    ...window,
+    tags: ["canary"],
+    expect: { speak: "either" as const, safety_only: true },
+  }));
+  const report = await evaluate({
+    windows,
+    n: 1,
+    offline: true,
+    serviceTier: "default",
+    ports: () => ({
+      moderation: new FakeModerationPort(),
+      model: {
+        generate: async (input) => ({
+          ...(await new StubConsensusModel().generate(input)),
+          latencyMs: 3000,
+        }),
+      },
+    }),
+  });
+  expect(report.summary.categories.canary).toMatchObject({
+    qualityPassRate: 1,
+    withLatencyPassRate: 0,
+    a12PassRate: 0,
+  });
+  expect(report.summary.gates.canary).toBe(true);
+  expect(reportMarkdown(report)).toContain("Default quality");
 });
 test("encoded fixture text never appears decoded in JSON or markdown reports", async () => {
   const windows = (await loadGoldens()).filter((window) => window.tags.includes("toxic"));

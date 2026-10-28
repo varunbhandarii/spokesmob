@@ -40,7 +40,9 @@ export interface ModelResult {
   latencyMs: number;
   additionalUsage?: CallUsage[];
   incompleteReason?: string | null;
+  apiFailure?: ApiFailure | null;
 }
+export type ApiFailure = "auth" | "timeout" | "server" | "rate_limit" | "transport" | "request";
 export interface ConsensusModelPort {
   generate(input: BuiltInput, signal?: AbortSignal): Promise<ModelResult>;
 }
