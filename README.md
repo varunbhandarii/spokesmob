@@ -87,6 +87,7 @@ Copy `.env.example` to `.env` and fill in your credentials locally. Keep credent
 | `VOICE_PROVIDER` | `realtime`; legacy is unavailable in this version |
 | `MAIN_VOICE` | Main voice; defaults to `cedar` |
 | `WHISPER_VOICE` | Dissent voice; defaults to `sage` |
+| `OPENAI_REALTIME_URL` | Development and tests only: loopback mock WebSocket; leave unset for OpenAI |
 | `PORT` | Local HTTP port; defaults to `4040` |
 | `EVENTSUB_URL` | EventSub WebSocket URL; override for local development |
 | `HELIX_URL` | Development or testing only, leave unset; defaults to Twitch Helix |

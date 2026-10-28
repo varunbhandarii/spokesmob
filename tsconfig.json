@@ -17,6 +17,9 @@
       "path": "tools/mock-eventsub"
     },
     {
+      "path": "tools/mock-realtime"
+    },
+    {
       "path": "tools/recorder"
     },
     {

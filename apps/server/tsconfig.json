@@ -8,6 +8,7 @@
     "src/**/*.ts",
     "../../packages/core/src/**/*.ts",
     "../../tools/mock-eventsub/src/**/*.ts",
+    "../../tools/mock-realtime/src/**/*.ts",
     "../../tools/crowd-sim/src/**/*.ts",
     "../../tools/recorder/src/**/*.ts"
   ]

@@ -26,6 +26,18 @@ const voiceEnvironmentSchema = z.object({
     .default("sage"),
   PORT: z.coerce.number().int().min(1).max(65535).default(4040),
   SPEND_CAP_USD: z.coerce.number().finite().positive().default(5),
+  OPENAI_REALTIME_URL: z
+    .url()
+    .refine((value) => {
+      const url = new URL(value);
+      return (
+        /^wss?:$/.test(url.protocol) &&
+        ["127.0.0.1", "localhost", "[::1]"].includes(url.hostname) &&
+        !url.username &&
+        !url.password
+      );
+    })
+    .optional(),
 });
 
 export interface VoiceConfig {
@@ -34,6 +46,7 @@ export interface VoiceConfig {
   dissentVoice: string;
   port: number;
   spendCapUsd: number;
+  realtimeUrl?: string;
 }
 
 export interface OpenAIConfig {
@@ -111,6 +124,7 @@ export function loadVoiceConfig(environment: NodeJS.ProcessEnv = process.env): V
     dissentVoice: value.WHISPER_VOICE,
     port: value.PORT,
     spendCapUsd: value.SPEND_CAP_USD,
+    ...(value.OPENAI_REALTIME_URL ? { realtimeUrl: value.OPENAI_REALTIME_URL } : {}),
   };
 }
 

@@ -10,6 +10,7 @@
     "../apps/server/src/**/*.ts",
     "../tools/crowd-sim/src/**/*.ts",
     "../tools/mock-eventsub/src/**/*.ts",
+    "../tools/mock-realtime/src/**/*.ts",
     "../tools/recorder/src/**/*.ts"
   ]
 }

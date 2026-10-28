@@ -93,3 +93,15 @@ test("legacy selection fails clearly and invalid settings never expose values", 
   for (const SPEND_CAP_USD of ["-1", "0", "Infinity", ""])
     expect(() => loadVoiceConfig({ SPEND_CAP_USD })).toThrow("SPEND_CAP_USD");
 });
+
+test("realtime overrides are limited to loopback mocks", () => {
+  expect(loadVoiceConfig({ OPENAI_REALTIME_URL: "ws://127.0.0.1:8081/realtime" }).realtimeUrl).toBe(
+    "ws://127.0.0.1:8081/realtime",
+  );
+  for (const OPENAI_REALTIME_URL of [
+    "ws://example.com/realtime",
+    "file:///local",
+    "ws://user:secret@localhost/realtime",
+  ])
+    expect(() => loadVoiceConfig({ OPENAI_REALTIME_URL })).toThrow("OPENAI_REALTIME_URL");
+});
