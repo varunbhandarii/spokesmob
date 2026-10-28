@@ -115,6 +115,6 @@ Spokesmob is a local Node 24 + TypeScript service plus an OBS browser-source ove
 
 ## Style
 - Small modules with one responsibility.
-- Explicit types at boundaries. Use named exports in application and library code; default exports are allowed only in Vitest configuration files.
+- Explicit types at boundaries. Use named exports in application and library code; default exports are allowed only in Vitest, Vite and Playwright configuration files.
 - Comments explain why, not what.
 - Error paths log and degrade (caption-only, templated line, silence) rather than crash.
