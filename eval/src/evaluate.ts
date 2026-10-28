@@ -42,10 +42,12 @@ export interface EvaluationOptions {
   offline: boolean;
   serviceTier: "default" | "fast" | "interleaved";
   maxCostUsd?: number;
+  preflight?: "conservative" | "expected";
   baseline?: QualityBaseline;
   minVoices?: number;
   signal?: AbortSignal;
   clock?: Clock;
+  onProgress?: (completed: number, total: number) => void;
   ports?: (tier: "default" | "fast") => { model: ConsensusModelPort; moderation: ModerationPort };
 }
 export async function evaluate(options: EvaluationOptions): Promise<EvaluationReport> {
@@ -57,9 +59,12 @@ export async function evaluate(options: EvaluationOptions): Promise<EvaluationRe
   const clock = options.clock ?? systemClock;
   const plan = evaluationPlan(options.windows, options.n, options.serviceTier, minVoices);
   const maxCost = options.maxCostUsd ?? SPEND_LIMIT_USD;
+  const preflight = options.preflight ?? "conservative";
+  const preflightProjection =
+    preflight === "expected" ? plan.expectedCostUsd : plan.projectedCostWithRateRetriesUsd;
   if (!Number.isFinite(maxCost) || maxCost <= 0 || maxCost > SPEND_LIMIT_USD)
     throw new Error("Cost limit must be positive and at most $0.50");
-  if (!options.offline && plan.projectedCostWithRateRetriesUsd > maxCost)
+  if (!options.offline && preflightProjection > maxCost)
     throw new Error(`Projected cost exceeds $${maxCost.toFixed(2)}; no API calls made`);
   const controller = new AbortController();
   const abort = () => controller.abort();
@@ -88,6 +93,7 @@ export async function evaluate(options: EvaluationOptions): Promise<EvaluationRe
     options.windows.map((window) => [window.id, estimatedInputTokens(window)]),
   );
   let next = 0;
+  let completed = 0;
   const samples: (SampleReport | undefined)[] = Array.from({ length: jobs.length });
   async function worker() {
     const portsByTier = new Map<
@@ -338,6 +344,7 @@ export async function evaluate(options: EvaluationOptions): Promise<EvaluationRe
         verifications,
         fallbackAttempted,
       };
+      options.onProgress?.(++completed, jobs.length);
     }
   }
   try {
@@ -360,6 +367,12 @@ export async function evaluate(options: EvaluationOptions): Promise<EvaluationRe
     serviceTier: options.serviceTier,
     prefixSha256: createHash("sha256").update(STATIC_PREFIX).digest("hex"),
     plan,
+    budget: {
+      preflight,
+      maxCostUsd: maxCost,
+      preflightProjectionUsd: preflightProjection,
+      reservedCostUsd: committedCost,
+    },
     aborted,
     summary: summarize(finished),
     tierSummaries: Object.fromEntries(

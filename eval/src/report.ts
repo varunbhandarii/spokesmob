@@ -223,6 +223,12 @@ export interface EvaluationReport {
   serviceTier: "default" | "fast" | "interleaved";
   prefixSha256: string;
   plan: EvaluationPlan;
+  budget: {
+    preflight: "conservative" | "expected";
+    maxCostUsd: number;
+    preflightProjectionUsd: number;
+    reservedCostUsd: number;
+  };
   aborted: string | null;
   summary: ReturnType<typeof summarize>;
   tierSummaries: Partial<Record<"default" | "fast", ReturnType<typeof summarize>>>;
@@ -342,6 +348,7 @@ export function reportMarkdown(report: EvaluationReport): string {
       ? "OFFLINE: unmoderated stub results, not evidence of model quality or streaming safety."
       : "Manual live evaluation.",
     `Tier: ${report.serviceTier}. Prefix SHA-256: ${report.prefixSha256}.`,
+    `Preflight: ${report.budget.preflight}, projection ${money(report.budget.preflightProjectionUsd)}. Runtime reservation limit: ${money(report.budget.maxCostUsd)}; final accounted/reserved amount: ${money(report.budget.reservedCostUsd)}.`,
     ...(report.serviceTier === "interleaved"
       ? [
           "One worker; each window/sample runs default then fast. Regeneration and rate-limit retries stay with their sample. Windows with no model call retain their scheduled tier and order.",

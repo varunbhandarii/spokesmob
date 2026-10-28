@@ -24,6 +24,7 @@ export async function runEvaluation(
       tier: { type: "string" },
       "compare-tiers": { type: "boolean" },
       "max-cost-usd": { type: "string", default: "0.50" },
+      preflight: { type: "string", default: "conservative" },
       baseline: { type: "string" },
       offline: { type: "boolean" },
       report: { type: "string" },
@@ -41,6 +42,9 @@ export async function runEvaluation(
   if (tier !== "default" && tier !== "fast" && tier !== "interleaved")
     throw new Error("Tier must be default or fast");
   const maxCostUsd = Number(values["max-cost-usd"]);
+  const preflight = values.preflight;
+  if (preflight !== "conservative" && preflight !== "expected")
+    throw new Error("Preflight must be conservative or expected");
   if (!Number.isFinite(maxCostUsd) || maxCostUsd <= 0 || maxCostUsd > 0.5)
     throw new Error("Cost limit must be positive and at most $0.50");
   const tags = values.tags?.split(",").filter(Boolean) ?? [];
@@ -52,7 +56,17 @@ export async function runEvaluation(
   if (!windows.length) throw new Error("No golden windows match the selection");
   const output = options.output ?? console.log;
   const plan = evaluationPlan(windows, n, tier, config.minVoices);
-  output(JSON.stringify({ kind: "plan", offline: !!values.offline, maxCostUsd, ...plan }));
+  output(
+    JSON.stringify({
+      kind: "plan",
+      offline: !!values.offline,
+      maxCostUsd,
+      preflight,
+      preflightProjectionUsd:
+        preflight === "expected" ? plan.expectedCostUsd : plan.projectedCostWithRateRetriesUsd,
+      ...plan,
+    }),
+  );
   if (values.plan) return null;
   const baseline = values.baseline ? await loadQualityBaseline(values.baseline) : undefined;
   if (values.offline)
@@ -73,9 +87,14 @@ export async function runEvaluation(
       offline: !!values.offline,
       serviceTier: tier,
       maxCostUsd,
+      preflight,
       ...(baseline ? { baseline } : {}),
       minVoices: config.minVoices,
       signal: controller.signal,
+      onProgress: (completed, total) => {
+        if (completed % 20 === 0 || completed === total)
+          output(JSON.stringify({ kind: "progress", completed, total }));
+      },
       ...(client
         ? {
             ports: (requestedTier: "default" | "fast") => ({

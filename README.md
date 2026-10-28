@@ -57,6 +57,8 @@ For labeled conversations, give each cluster its own phrases: `--clusters "gary=
 
 `npm run eval -- --compare-tiers --n 5 --max-cost-usd 0.10 --plan` projects a paired default/fast evaluation of all windows. Remove `--plan` only after approval within the displayed cost limit. Comparison samples alternate default then fast with one worker. Reports separate quality from latency and show each tier's p50/p95/max, timeouts and available cost; `--baseline eval/reports/<report>.json` checks category quality against an earlier completed run.
 
+The conservative preflight is the default. Use `--preflight expected` only with explicit approval to admit a run using its expected cached-cost projection; the selected runtime limit and conservative per-request reservations still apply.
+
 Copy `.env.example` to `.env` and fill in your credentials locally. Keep credentials out of source control.
 
 | Variable | Purpose |

@@ -254,6 +254,48 @@ test("the combined projection and caller cost limit are checked before construct
   expect(ports).not.toHaveBeenCalled();
 });
 
+test("expected preflight retains conservative runtime reservations for unknown costs", async () => {
+  const windows = await tiny();
+  const plan = evaluationPlan(windows, 8, "interleaved", 2);
+  const maxCostUsd = plan.expectedCostUsd * 1.5;
+  expect(plan.projectedCostWithRateRetriesUsd).toBeGreaterThan(maxCostUsd);
+  const report = await evaluate({
+    windows,
+    n: 8,
+    offline: false,
+    serviceTier: "interleaved",
+    preflight: "expected",
+    maxCostUsd,
+    ports: () => ({ model: new StubConsensusModel(), moderation: new FakeModerationPort() }),
+  });
+  expect(report.aborted).toBe("projected_cost_limit");
+  expect(report.summary.modelRequests).toBeGreaterThan(0);
+  expect(report.summary.modelRequests).toBeLessThan(plan.expectedPrimaryCalls);
+  expect(report.budget.preflight).toBe("expected");
+  expect(report.budget.reservedCostUsd).toBeLessThanOrEqual(maxCostUsd);
+  expect(report.budget.reservedCostUsd).toBeGreaterThan(0);
+  expect(report.summary.unknownModelCalls).toBe(report.summary.modelRequests);
+});
+
+test("expected preflight still rejects an expected cost above the selected limit", async () => {
+  const ports = vi.fn(() => ({
+    model: new StubConsensusModel(),
+    moderation: new FakeModerationPort(),
+  }));
+  await expect(
+    evaluate({
+      windows: await tiny(),
+      n: 5,
+      offline: false,
+      serviceTier: "interleaved",
+      preflight: "expected",
+      maxCostUsd: 0.000001,
+      ports,
+    }),
+  ).rejects.toThrow("no API calls");
+  expect(ports).not.toHaveBeenCalled();
+});
+
 test("quality regression ignores latency and accepts at most a five-point category loss", async () => {
   const report = await evaluate({
     windows: await tiny(),
