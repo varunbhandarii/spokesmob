@@ -15,7 +15,7 @@ import {
   fakeModelResult,
 } from "./fakes.js";
 import { ModerationGate } from "./moderation.js";
-import type { ModelResult } from "./ports.js";
+import type { ModelResult, VerificationAttempt } from "./ports.js";
 import { type SynthesisOptions, synthesize } from "./synthesize.js";
 
 const good: ConsensusOutput = {
@@ -92,14 +92,18 @@ test("regeneration adds only a stable rule code and can then pass", async () => 
   expect(f.model.requests[1]?.data.previous_attempt_rejected).toBe("novel_token");
 });
 
-test("attempt diagnostics retain rejected verifier codes without including text", async () => {
+test("attempt diagnostics retain rejected wording and exact novel tokens", async () => {
   const f = fixture([bad, fakeModelResult(good)]);
-  const attempts: { ok: boolean; failures: RuleCode[] }[] = [];
+  const attempts: VerificationAttempt[] = [];
   await synthesize({ ...f.options, onVerification: (attempt) => attempts.push(attempt) });
   expect(attempts.map((attempt) => ({ ok: attempt.ok, failures: attempt.failures }))).toEqual([
     { ok: false, failures: ["novel_token"] },
     { ok: true, failures: [] },
   ]);
+  expect(attempts[0]).toMatchObject({
+    line: "Most of chat wants Neptune.",
+    offendingTokens: { line: ["Neptune"], dissent: [] },
+  });
 });
 test("two rejected generations use a separately moderated fallback", async () => {
   const f = fixture([bad, bad]);

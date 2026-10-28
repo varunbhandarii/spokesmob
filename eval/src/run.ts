@@ -18,6 +18,7 @@ export async function runEvaluation(
     args: options.args ?? process.argv.slice(2),
     options: {
       tags: { type: "string" },
+      window: { type: "string" },
       n: { type: "string", default: "5" },
       tier: { type: "string" },
       offline: { type: "boolean" },
@@ -34,9 +35,11 @@ export async function runEvaluation(
   if (tier !== "default" && tier !== "fast") throw new Error("Tier must be default or fast");
   const tags = values.tags?.split(",").filter(Boolean) ?? [];
   const windows = (await loadGoldens()).filter(
-    (window) => !tags.length || window.tags.some((tag) => tags.includes(tag)),
+    (window) =>
+      (!values.window || window.id === values.window) &&
+      (!tags.length || window.tags.some((tag) => tags.includes(tag))),
   );
-  if (!windows.length) throw new Error("No golden windows match the selected tags");
+  if (!windows.length) throw new Error("No golden windows match the selection");
   const output = options.output ?? console.log;
   const plan = evaluationPlan(windows, n, tier, config.minVoices);
   output(JSON.stringify({ kind: "plan", offline: !!values.offline, ...plan }));

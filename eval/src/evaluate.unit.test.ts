@@ -170,6 +170,40 @@ test("reports count regenerated verifications, fallback attempts and known free 
   expect(report.summary.totalCostUsd).toBe(report.summary.knownModelCostUsd);
   expect(report.summary.unknownUsageCalls > 0).toBe(true);
   expect(reportMarkdown(report)).toContain("novel_token");
+  expect(report.samples[0]?.verifications[0]).toMatchObject({
+    line: "Chat says Neptune",
+    offendingTokens: { line: ["Neptune"], dissent: [] },
+  });
+  expect(reportMarkdown(report)).toContain("Chat says Neptune");
+  expect(report.samples[0]?.verifications.at(-1)?.line).toBe(null);
+});
+
+test("rejected text and novel tokens from encoded windows stay encoded in reports", async () => {
+  const windows = (await tiny()).map((window) => ({ ...window, encoded: true }));
+  const bad = fakeModelResult({
+    line: "Chat says Neptune",
+    cited_cluster_ids: ["c1"],
+    dissent_cluster_id: null,
+    dissent_line: null,
+    mood: "chill",
+    answers_question: true,
+  });
+  const report = await evaluate({
+    windows,
+    n: 1,
+    offline: true,
+    serviceTier: "default",
+    ports: () => ({
+      model: new FakeConsensusModel([bad, bad]),
+      moderation: new FakeModerationPort(),
+    }),
+  });
+  expect(JSON.stringify(report).includes("Neptune")).toBe(false);
+  expect(reportMarkdown(report).includes("Neptune")).toBe(false);
+  expect(report.samples[0]?.verifications[0]?.line_b64).toBe(
+    Buffer.from("Chat says Neptune").toString("base64"),
+  );
+  expect(report.samples[0]?.verifications[0]?.offendingTokens_b64).toBeTruthy();
 });
 
 test("returned usage can trip the runtime projection guard before further requests", async () => {

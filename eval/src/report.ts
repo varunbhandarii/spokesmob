@@ -40,8 +40,13 @@ export interface SampleReport {
   latency: StageLatency;
   usage: CallUsage[];
   calls: ModelCallReport[];
-  verifications: VerificationAttempt[];
+  verifications: VerificationAttemptReport[];
   fallbackAttempted: boolean;
+}
+export interface VerificationAttemptReport extends VerificationAttempt {
+  line_b64?: string;
+  dissent_b64?: string;
+  offendingTokens_b64?: string;
 }
 export function percentile(values: readonly number[], fraction: number): number | null {
   if (!values.length) return null;
@@ -177,6 +182,21 @@ export function reportMarkdown(report: EvaluationReport): string {
   )
     .flatMap(([category, counts]) =>
       Object.entries(counts).map(([code, count]) => `| ${category} | ${code} | ${count} |`),
+    )
+    .join(
+      "\n",
+    )}\n\n| Window | Sample / attempt | Target | Rule codes | Rejected text | Offending tokens |\n| --- | --- | --- | --- | --- | --- |\n${report.samples
+    .flatMap((sample) =>
+      sample.verifications
+        .filter((attempt) => attempt.failures.length)
+        .flatMap((attempt) =>
+          (["line", "dissent"] as const)
+            .filter((target) => attempt[target] || attempt[`${target}_b64`])
+            .map(
+              (target) =>
+                `| ${sample.id} | ${sample.sample} / ${attempt.attempt} (${attempt.kind}) | ${target} | ${attempt.failures.join(", ")} | ${cell(attempt[`${target}_b64`] ? "[encoded output withheld]" : (attempt[target] ?? ""))} | ${cell(attempt.offendingTokens_b64 ? "[encoded tokens withheld]" : attempt.offendingTokens[target].join(", "))} |`,
+            ),
+        ),
     )
     .join("\n")}\n`;
   return `# Consensus evaluation\n\n${report.offline ? "OFFLINE: unmoderated stub results, not evidence of model quality or streaming safety." : "Manual live evaluation."}\n\nTier: ${report.serviceTier}. Prefix SHA-256: ${report.prefixSha256}.\n\n${report.aborted ? `Aborted: ${report.aborted}.\n\n` : ""}| Category | Passed / samples | Hard pass rate | Speaking rate |\n| --- | --- | --- | --- |\n${Object.entries(

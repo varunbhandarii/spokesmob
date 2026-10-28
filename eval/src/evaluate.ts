@@ -6,7 +6,6 @@ import type {
   ConsensusModelPort,
   ModelResult,
   ModerationPort,
-  VerificationAttempt,
 } from "../../apps/server/src/consensus/ports.js";
 import { StubConsensusModel } from "../../apps/server/src/consensus/stub-model.js";
 import { synthesize } from "../../apps/server/src/consensus/synthesize.js";
@@ -30,6 +29,7 @@ import {
   type ModelCallReport,
   type SampleReport,
   summarize,
+  type VerificationAttemptReport,
 } from "./report.js";
 
 export interface EvaluationOptions {
@@ -86,7 +86,7 @@ export async function evaluate(options: EvaluationOptions): Promise<EvaluationRe
       if (!job) break;
       const traces: { input: BuiltInput; result: ModelResult }[] = [];
       const calls: ModelCallReport[] = [];
-      const verifications: VerificationAttempt[] = [];
+      const verifications: VerificationAttemptReport[] = [];
       let fallbackAttempted = false;
       let fallbackModeration: OutputModeration = { status: "error" };
       const estimatedCost = estimates.get(job.window.id);
@@ -196,7 +196,32 @@ export async function evaluate(options: EvaluationOptions): Promise<EvaluationRe
           finalWindow = window;
           finalClusters = clusters;
         },
-        onVerification: (attempt) => verifications.push(attempt),
+        onVerification: (attempt) => {
+          const rejected = attempt.failures.length > 0;
+          const encoded =
+            job.window.encoded ||
+            [attempt.line, attempt.dissent].some((text) => !!text && blocklist.check(text).blocked);
+          verifications.push({
+            ...attempt,
+            line: rejected && !encoded ? attempt.line : null,
+            dissent: rejected && !encoded ? attempt.dissent : null,
+            offendingTokens:
+              rejected && !encoded ? attempt.offendingTokens : { line: [], dissent: [] },
+            ...(rejected && encoded
+              ? {
+                  ...(attempt.line
+                    ? { line_b64: Buffer.from(attempt.line).toString("base64") }
+                    : {}),
+                  ...(attempt.dissent
+                    ? { dissent_b64: Buffer.from(attempt.dissent).toString("base64") }
+                    : {}),
+                  offendingTokens_b64: Buffer.from(
+                    JSON.stringify(attempt.offendingTokens),
+                  ).toString("base64"),
+                }
+              : {}),
+          });
+        },
         onFallback: () => {
           fallbackAttempted = true;
         },

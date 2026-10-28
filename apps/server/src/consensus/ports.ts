@@ -27,6 +27,9 @@ export interface VerificationAttempt {
   attempt: number;
   ok: boolean;
   failures: RuleCode[];
+  line: string | null;
+  dissent: string | null;
+  offendingTokens: { line: string[]; dissent: string[] };
 }
 export interface ModelResult {
   output: ConsensusOutput | null;

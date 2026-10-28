@@ -194,6 +194,18 @@ test("source-language words are quoted and invented translations are rejected", 
   ]);
 });
 
+test("novel-token diagnostics retain every offending source word separately for line and dissent", () => {
+  const { ctx, output } = fixture();
+  const rejected = verifyLine({ ...output, line: "Chat wants Neptune and inventedword." }, ctx);
+  expect(rejected.ok).toBe(false);
+  expect(rejected.failures).toEqual(["novel_token"]);
+  expect(rejected.offendingTokens).toEqual({ line: ["Neptune", "inventedword"], dissent: [] });
+  const dissent = verifyLine({ ...output, dissent_line: "Some prefer Neptune." }, ctx);
+  expect(dissent.ok).toBe(true);
+  expect(dissent.dissent).toBe(null);
+  expect(dissent.offendingTokens).toEqual({ line: [], dissent: ["Neptune"] });
+});
+
 test("invalid dissent is dropped independently for support, length, safety or moderation", () => {
   const { ctx, output } = fixture();
   for (const change of [

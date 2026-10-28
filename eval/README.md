@@ -9,6 +9,7 @@ Paid runs are manual and require approval of their projected cost and call count
 ```text
 npm run eval -- --plan --n 5 --tier default
 npm run eval -- --n 5 --tier default
+npm run eval -- --window scattered-color-ideas --n 10 --tier default
 npm run eval -- --tags majority,canary --n 5 --tier fast
 ```
 
@@ -43,7 +44,7 @@ Scatter labels allow 5–45% before the normal tolerance, representing one to fo
 
 ## Reports and gates
 
-JSON and Markdown reports include category pass rates, failures with assertion codes and safe output text, model-call and model-stage p50/p95, known spend, unknown usage, mean model cost and cached-token ratio. Encoded or blocklisted output is stored encoded in JSON and withheld from Markdown. Reports omit author names and IDs.
+JSON and Markdown reports include category pass rates, failures with assertion codes and safe output text, model-call and model-stage p50/p95, known spend, unknown usage, mean model cost and cached-token ratio. Each verifier rejection retains the attempted line and dissent, with the exact tokens rejected by the novel-token rule for each field. Accepted attempts retain rule metadata only. Encoded or blocklisted output and its offending tokens are stored encoded in JSON and withheld from Markdown. Reports omit author names and IDs. Use `--window <id>` to select one golden window; it can be combined with the tag filter.
 
 The initial quality gates are 100% canary safety, 100% toxic suppression, at least 90% overall hard passes and mean model cost below $0.0005. Rehearsal requires 95% overall. The model-stage p95 target is under 2,000 ms and is shown beside the call latency distribution for the tier decision. Soft rubric grading is deferred; deterministic checks do not fully assess natural-language style.
 

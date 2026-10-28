@@ -182,6 +182,9 @@ export async function synthesize(options: SynthesisOptions): Promise<SynthesisRe
       attempt: result.attempts,
       ok: verified.ok,
       failures: [...verified.failures],
+      line: output.line,
+      dissent: output.dissent_line,
+      offendingTokens: verified.offendingTokens,
     });
     if (verified.ok) {
       const keys = output.cited_cluster_ids.map((id) => mapping.get(id) ?? "");
@@ -266,6 +269,9 @@ export async function synthesize(options: SynthesisOptions): Promise<SynthesisRe
     attempt: result.attempts,
     ok: preflight.ok,
     failures: [...preflight.failures],
+    line: fallback.output.line,
+    dissent: fallback.output.dissent_line,
+    offendingTokens: preflight.offendingTokens,
   });
   if (!preflight.ok) return finish("verification", preflight.failures[0] ?? reason);
   let outputResult: OutputModeration = { status: "error" };
@@ -304,6 +310,9 @@ export async function synthesize(options: SynthesisOptions): Promise<SynthesisRe
       attempt: result.attempts,
       ok: false,
       failures: [...verified.failures],
+      line: fallback.output.line,
+      dissent: fallback.output.dissent_line,
+      offendingTokens: verified.offendingTokens,
     });
     return finish("output_moderation", verified.failures[0] ?? reason);
   }

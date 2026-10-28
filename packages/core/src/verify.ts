@@ -30,6 +30,7 @@ export interface Verification {
   citedAuthors: string[];
   pct: number;
   failures: RuleCode[];
+  offendingTokens: { line: string[]; dissent: string[] };
 }
 
 function moderationFailure(value: OutputModeration | undefined): RuleCode | undefined {
@@ -99,6 +100,7 @@ function contentFailure(
   clusters: readonly Cluster[],
   share: number,
   ctx: VerifyContext,
+  offendingTokens: string[],
 ): RuleCode | undefined {
   if (usernameFailure(text, ctx)) return "username_banned";
   if (
@@ -119,16 +121,16 @@ function contentFailure(
     const letters = [...token].filter((char) => /\p{L}/u.test(char));
     const capitalized = /^\p{Lu}/u.test(token);
     if ((letters.length >= 6 || capitalized) && !stems(token).some((stem) => allowed.has(stem))) {
-      return "novel_token";
+      offendingTokens.push(token);
     }
     // Script-specific words stay in source form inside quotes rather than being translated.
     if (/[^\p{Script=Latin}\p{M}\p{N}\p{P}\p{Z}]/u.test(token)) {
       if (!exemplars.some((source) => source.includes(token)) || !quotedTokens(text).has(token)) {
-        return "novel_token";
+        if (!offendingTokens.includes(token)) offendingTokens.push(token);
       }
     }
   }
-  return undefined;
+  return offendingTokens.length ? "novel_token" : undefined;
 }
 
 function quotedTokens(text: string): Set<string> {
@@ -151,6 +153,7 @@ export function verifyTemplated(
 }
 
 export function verifyLine(output: unknown, ctx: VerifyContext): Verification {
+  const offendingTokens = { line: [] as string[], dissent: [] as string[] };
   const empty = (failure: RuleCode): Verification => ({
     ok: false,
     line: null,
@@ -158,6 +161,7 @@ export function verifyLine(output: unknown, ctx: VerifyContext): Verification {
     citedAuthors: [],
     pct: 0,
     failures: [failure],
+    offendingTokens,
   });
   const parsed = consensusOutputSchema.safeParse(output);
   if (!parsed.success) return empty("schema_invalid");
@@ -181,7 +185,13 @@ export function verifyLine(output: unknown, ctx: VerifyContext): Verification {
     return empty("support_low");
   const failure =
     textFailure(value.line, limits.MAX_WORDS, ctx.blocklist) ??
-    contentFailure(value.line, cited, support.authorIds.length / ctx.voices, ctx) ??
+    contentFailure(
+      value.line,
+      cited,
+      support.authorIds.length / ctx.voices,
+      ctx,
+      offendingTokens.line,
+    ) ??
     moderationFailure(ctx.moderation.line);
   if (failure) return empty(failure);
   if (
@@ -202,7 +212,13 @@ export function verifyLine(output: unknown, ctx: VerifyContext): Verification {
       cluster.authorCount < Math.max(2, Math.ceil(limits.DISSENT_FRACTION * ctx.voices))
         ? "dissent_unsupported"
         : (textFailure(value.dissent_line, limits.MAX_DISSENT_WORDS, ctx.blocklist) ??
-          contentFailure(value.dissent_line, [cluster], cluster.authorCount / ctx.voices, ctx) ??
+          contentFailure(
+            value.dissent_line,
+            [cluster],
+            cluster.authorCount / ctx.voices,
+            ctx,
+            offendingTokens.dissent,
+          ) ??
           moderationFailure(ctx.moderation.dissent));
     if (dissentFailure) failures.push(dissentFailure);
     else dissent = value.dissent_line;
@@ -214,5 +230,6 @@ export function verifyLine(output: unknown, ctx: VerifyContext): Verification {
     citedAuthors: support.authorIds,
     pct: support.pct,
     failures,
+    offendingTokens,
   };
 }
