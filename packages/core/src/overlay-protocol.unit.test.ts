@@ -10,6 +10,7 @@ import {
   clientMessageSchema,
   controlClientMessageSchema,
   overlayClientMessageSchema,
+  resolveOverlayLayout,
   serverControlMessageSchema,
   serverOverlayMessageSchema,
   stateMessageSchema,
@@ -27,6 +28,8 @@ const state: BeatView = {
   heldBy: ["off", "offline", "no_audio_client"],
   question: null,
   layout: "wide",
+  mood: null,
+  hype: null,
 };
 const line = {
   type: "line",
@@ -111,6 +114,44 @@ test("the declared diagram covers every beat step and cancellation from active s
     expect(BEAT_TRANSITIONS.some((row) => row.from === from && row.to === "held")).toBe(true);
     expect(BEAT_TRANSITIONS.some((row) => row.from === from && row.to === "off")).toBe(true);
   }
+});
+
+test("visual snapshots retain effective mood and active train state across an overlay reload", () => {
+  const visual = { ...state, mood: "hype", hype: { level: 4, shared: true } };
+  const message = { type: "hello", role: "overlay", audio: true, state: visual };
+  expect(serverOverlayMessageSchema.parse(JSON.parse(JSON.stringify(message)))).toEqual(message);
+  expect(beatViewSchema.safeParse({ ...visual, hype: { level: -1, shared: true } }).success).toBe(
+    false,
+  );
+  for (const query of [null, "invalid"]) {
+    expect(resolveOverlayLayout(query, "wide")).toBe("wide");
+    expect(resolveOverlayLayout(query, "compact")).toBe("compact");
+  }
+  expect(resolveOverlayLayout("stage", "wide")).toBe("stage");
+  expect(resolveOverlayLayout("stage", "compact")).toBe("stage");
+});
+
+test("name payload caps apply independently of author counts and reject oversized batches", () => {
+  expect(
+    serverOverlayMessageSchema.safeParse({
+      type: "particles",
+      names: Array(200).fill("a".repeat(50)),
+    }).success,
+  ).toBe(true);
+  expect(
+    serverOverlayMessageSchema.safeParse({
+      ...line,
+      voices: 300,
+      citedNames: Array(40).fill("Viewer"),
+    }).success,
+  ).toBe(true);
+  for (const value of [
+    { type: "particles", names: Array(201).fill("Viewer") },
+    { type: "particles", names: ["a".repeat(51)] },
+    { ...line, citedNames: Array(41).fill("Viewer") },
+    { ...line, citedNames: ["a".repeat(51)] },
+  ])
+    expect(serverOverlayMessageSchema.safeParse(value).success).toBe(false);
 });
 
 test("role-specific schemas separate overlay playback reports from control commands", () => {

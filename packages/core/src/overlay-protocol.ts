@@ -3,7 +3,10 @@ import { beatModeSchema, beatSettingsPatchSchema } from "./beat-settings.js";
 import {
   beatLogRecordSchema,
   beatViewSchema,
+  displayNameSchema,
   eventNoticeSchema,
+  type Layout,
+  layoutSchema,
   questionSchema,
   voiceAttemptLogSchema,
 } from "./beat-types.js";
@@ -77,6 +80,7 @@ export const controlActionSchema = z.discriminatedUnion("action", [
   z.strictObject({ action: z.literal("question"), question: z.string().min(1).max(100) }),
   z.strictObject({ action: z.literal("settings"), changes: beatSettingsPatchSchema }),
   z.strictObject({ action: z.literal("testOffline"), enabled: z.boolean() }),
+  z.strictObject({ action: z.literal("layout"), layout: layoutSchema }),
   z.strictObject({ action: z.enum(["gag", "ungag"]), userId: z.string().min(1) }),
 ]);
 export type ControlAction = z.infer<typeof controlActionSchema>;
@@ -127,7 +131,7 @@ export const listeningMessageSchema = z.strictObject({
 });
 export const particlesMessageSchema = z.strictObject({
   type: z.literal("particles"),
-  names: z.array(z.string().min(1)),
+  names: z.array(displayNameSchema).max(200),
 });
 export const particlesClearMessageSchema = z.strictObject({ type: z.literal("particles_clear") });
 export const lineMessageSchema = z.strictObject({
@@ -141,7 +145,7 @@ export const lineMessageSchema = z.strictObject({
   question: questionSchema,
   answersQuestion: z.boolean(),
   templated: z.boolean(),
-  citedNames: z.array(z.string().min(1)),
+  citedNames: z.array(displayNameSchema).max(40),
   holdMs: z.number().int().min(500).max(3000),
   quiet: z.boolean(),
 });
@@ -239,3 +243,8 @@ export type StateMessage = z.infer<typeof stateMessageSchema>;
 export type LineMessage = z.infer<typeof lineMessageSchema>;
 export type OverlayMessage = z.infer<typeof serverOverlayMessageSchema>;
 export type ControlMessage = z.infer<typeof serverControlMessageSchema>;
+
+export function resolveOverlayLayout(queryLayout: string | null, stateLayout: Layout): Layout {
+  const pinned = layoutSchema.safeParse(queryLayout);
+  return pinned.success ? pinned.data : stateLayout;
+}

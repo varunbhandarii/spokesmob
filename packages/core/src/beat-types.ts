@@ -24,6 +24,12 @@ export const heldReasonSchema = z.enum([
 ]);
 export type HeldReason = z.infer<typeof heldReasonSchema>;
 export const layoutSchema = z.enum(["wide", "stage", "compact"]);
+export type Layout = z.infer<typeof layoutSchema>;
+export const displayNameSchema = z.string().min(1).max(50);
+export const hypeStateSchema = z.strictObject({
+  level: z.number().int().nonnegative(),
+  shared: z.boolean(),
+});
 export const questionSchema = z.string().max(100).nullable();
 export const beatViewSchema = z.strictObject({
   step: beatStepSchema,
@@ -36,13 +42,15 @@ export const beatViewSchema = z.strictObject({
   heldBy: z.array(heldReasonSchema).refine((reasons) => new Set(reasons).size === reasons.length),
   question: questionSchema,
   layout: layoutSchema,
+  mood: z.enum(MOODS).nullable(),
+  hype: hypeStateSchema.nullable(),
 });
 export type BeatView = z.infer<typeof beatViewSchema>;
 
 export const eventNoticeSchema = z.discriminatedUnion("kind", [
   z.strictObject({
     kind: z.literal("raid"),
-    name: z.string().min(1),
+    name: displayNameSchema,
     viewers: z.number().int().nonnegative(),
   }),
   z.strictObject({
@@ -82,7 +90,7 @@ export interface BeatWindow {
   voices: number;
   messages: number;
 }
-export type BeatTimerKind = "window" | "hold" | "reading" | "cooldown" | "mute";
+export type BeatTimerKind = "window" | "hold" | "reading" | "cooldown" | "mute" | "mood";
 export interface BeatTimer {
   id: number;
   kind: BeatTimerKind;
@@ -98,6 +106,8 @@ export interface ActiveBeat {
   dissent: BeatVoice | null;
   holdUntil: number | null;
   mainEndedAt: number | null;
+  output: "idle" | "sending" | "pinning";
+  outcome: "spoken" | "caption_only" | null;
 }
 export interface BeatGates {
   enabled: boolean;
@@ -120,6 +130,8 @@ export interface BeatState extends BeatView {
   previousLine: string | null;
   questionChanged: boolean;
   nextId: number;
+  lastMood: Mood | null;
+  raidHypeUntil: number | null;
 }
 
 export const beatLogStatusSchema = z.enum([
@@ -200,7 +212,7 @@ export const beatLogRecordSchema = z.strictObject({
   voices: z.number().int().nonnegative(),
   mood: z.enum(MOODS).nullable(),
   citedExemplars: z.array(z.string()),
-  citedNames: z.array(z.string()),
+  citedNames: z.array(displayNameSchema).max(40),
   latency: z.strictObject({
     assemblyMs: ms,
     moderationMs: ms,
@@ -237,6 +249,9 @@ export type BeatEvent =
   | { type: "event"; event: QueuedEventLine }
   | { type: "settings"; changes: BeatSettingsPatch }
   | { type: "question"; question: string | null }
+  | { type: "layout"; layout: Layout }
+  | { type: "notice"; notice: EventNotice }
+  | { type: "pinDone"; beatId: number }
   | {
       type: "postDone";
       beatId: number;
@@ -247,6 +262,7 @@ export type BeatEvent =
 
 export type BeatEffect =
   | { type: "openWindow"; window: BeatWindow }
+  | { type: "slideWindow"; windowId: number; startAt: number }
   | { type: "closeWindow"; windowId: number; nextWindow: BeatWindow | null; at: number }
   | {
       type: "synthesize";
@@ -257,13 +273,13 @@ export type BeatEffect =
       previousLine: string | null;
     }
   | { type: "verifyEvent"; beatId: number; event: QueuedEventLine }
-  | { type: "abortSynthesis"; beatId: number }
+  | { type: "abortSynthesis"; beatId: number | null }
   | { type: "preview"; beatId: number; line: BeatLine; holdMs: number; quiet: boolean }
   | { type: "prepareVoice"; beatId: number; line: BeatLine }
   | { type: "play"; beatId: number; channel: BeatVoiceChannel }
   | { type: "cancelVoice"; beatId: number | null; reason: string }
   | { type: "post"; beatId: number; line: BeatLine }
-  | { type: "pin"; messageId: string; durationS: number }
+  | { type: "pin"; beatId: number; messageId: string; durationS: number }
   | { type: "unpin" }
   | { type: "announce"; question: string }
   | { type: "ack"; text: string }
@@ -296,13 +312,18 @@ export const BEAT_TRANSITIONS = [
   { from: "synthesizing", to: "cooldown", when: "suppressed" },
   { from: "preview", to: "speaking", when: "hold ended and main ready" },
   { from: "preview", to: "cooldown", when: "veto or main caption-only or quiet reading complete" },
-  { from: "speaking", to: "cooldown", when: "main ended or caption-only or veto" },
-  { from: "cooldown", to: "listening", when: "cooldown ended and dissent finished" },
+  { from: "speaking", to: "speaking", when: "main ended and dissent pending or playing" },
+  {
+    from: "speaking",
+    to: "cooldown",
+    when: "unit and output settled or main caption-only or veto",
+  },
+  { from: "cooldown", to: "listening", when: "cooldown ended" },
   { from: "listening", to: "held", when: "blocking gate" },
   { from: "synthesizing", to: "held", when: "blocking gate: abort" },
   { from: "preview", to: "held", when: "blocking gate: cancel" },
   { from: "speaking", to: "held", when: "blocking gate: cancel" },
-  { from: "cooldown", to: "held", when: "blocking gate: cancel any dissent" },
+  { from: "cooldown", to: "held", when: "blocking gate" },
   { from: "held", to: "listening", when: "every gate clear" },
   ...["listening", "synthesizing", "preview", "speaking", "cooldown", "held"].map((from) => ({
     from: from as BeatStep,
