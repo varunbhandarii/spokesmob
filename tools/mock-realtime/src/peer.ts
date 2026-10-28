@@ -10,6 +10,7 @@ export interface MockRequest {
   text?: string;
   responseId?: string;
 }
+let peerSequence = 0;
 const record = (value: unknown): Record<string, unknown> =>
   value !== null && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -24,6 +25,7 @@ export function createMockPeer(options: {
   echo?: (session: Record<string, unknown>) => Record<string, unknown>;
 }) {
   const clock = options.clock ?? { setTimeout, clearTimeout };
+  const peerId = ++peerSequence;
   let sequence = 0;
   let eventId = 0;
   let voice = "cedar";
@@ -62,7 +64,7 @@ export function createMockPeer(options: {
         const take = String(record(response.metadata).take ?? "");
         const instructions = String(response.instructions ?? "");
         const text = instructions.slice(instructions.lastIndexOf("<line>") + 6, -7);
-        const id = `response-${++sequence}`;
+        const id = `response-${peerId}-${++sequence}`;
         const behavior = options.nextBehavior();
         active = { id, take, behavior };
         options.requests?.push({ type: "response.create", take, text, responseId: id });
