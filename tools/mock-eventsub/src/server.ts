@@ -70,6 +70,10 @@ export async function createMockServer(options: MockServerOptions = {}) {
   });
   const inject = (frame: EventFrame) => {
     const type = frame.metadata.subscription_type ?? frame.payload.subscription?.type;
+    if (frame.metadata.message_type === "notification" && type === "stream.online")
+      services.setStreamLive(true);
+    if (frame.metadata.message_type === "notification" && type === "stream.offline")
+      services.setStreamLive(false);
     const revoked = new Set<string>();
     for (const session of sessions.values()) {
       const subscription = [...services.subscriptions.values()].find(

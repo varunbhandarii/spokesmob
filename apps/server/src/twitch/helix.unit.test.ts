@@ -44,6 +44,7 @@ async function fixture() {
   });
   await auth.start();
   auth.stop();
+  const limiter = new RateLimiter(systemClock);
   const client = new HelixClient({
     config,
     auth,
@@ -51,8 +52,9 @@ async function fixture() {
     channelId: mock.auth.userId,
     fetch: mock.fetch,
     clock: systemClock,
+    limiter,
   });
-  return { mock, client, auth };
+  return { mock, client, auth, limiter };
 }
 
 test("an idempotent request refreshes on unauthorized once and retries once", async () => {
@@ -64,6 +66,135 @@ test("an idempotent request refreshes on unauthorized once and retries once", as
   f.mock.failNext({ path: "/helix/users", status: 401 });
   f.mock.failNext({ path: "/helix/users", status: 401 });
   await expect(f.client.getUsers()).rejects.toMatchObject({ status: 401 });
+});
+
+test("Get Streams targets the resolved broadcaster and distinguishes live from offline", async () => {
+  const f = await fixture();
+  const acquire = vi.spyOn(f.limiter, "acquire");
+  expect(await f.client.getStreams()).toEqual([]);
+  f.mock.setStreamLive(true);
+  const streams = await f.client.getStreams();
+  expect(streams).toHaveLength(1);
+  expect(streams[0]).toMatchObject({ user_id: f.mock.user.id, type: "live", viewer_count: 1 });
+  f.mock.setStreamLive(false);
+  expect(await f.client.getStreams()).toEqual([]);
+  const calls = f.mock.calls.filter((call) => call.path === "/helix/streams");
+  expect(calls).toHaveLength(3);
+  expect(acquire.mock.calls).toEqual([["general"], ["general"], ["general"]]);
+  for (const call of calls)
+    expect(call).toMatchObject({
+      method: "GET",
+      query: { user_id: f.mock.user.id },
+      clientIdPresent: true,
+      authorizationPresent: true,
+    });
+});
+
+test("Get Streams rejects unresolved IDs before I/O and invalid or mismatched data without echoing it", async () => {
+  const f = await fixture();
+  f.client.setChannel("");
+  await expect(f.client.getStreams()).rejects.toThrow("resolved");
+  f.client.setChannel("invalid-id");
+  await expect(f.client.getStreams()).rejects.toThrow("digits");
+  expect(f.mock.calls.filter((call) => call.path === "/helix/streams")).toHaveLength(0);
+  f.client.setChannel(f.mock.user.id);
+  f.mock.setStreamLive(true);
+  const stream = (await f.client.getStreams())[0];
+  for (const body of [
+    {},
+    { data: [null] },
+    { data: [{ ...stream, user_id: "999" }] },
+    { data: [{ ...stream, viewer_count: -1 }] },
+    { data: [{ ...stream, type: "unexpected" }] },
+    { data: [{ ...stream, started_at: "invalid" }] },
+    { data: [stream, stream] },
+  ]) {
+    f.mock.failNext({ path: "/helix/streams", status: 200, body });
+    await expect(f.client.getStreams()).rejects.toThrow("Invalid Twitch stream response");
+  }
+  f.mock.failNext({
+    path: "/helix/streams",
+    status: 200,
+    body: { data: [{ ...stream, type: "" }] },
+  });
+  expect((await f.client.getStreams())[0]?.type).toBe("");
+});
+
+test("Get Streams refreshes once on 401 and limits 5xx retries with fake-clock backoff", async () => {
+  const f = await fixture();
+  f.mock.failNext({ path: "/helix/streams", status: 401 });
+  expect(await f.client.getStreams()).toEqual([]);
+  expect(f.mock.calls.filter((call) => call.path === "/helix/streams")).toHaveLength(2);
+  expect(f.mock.calls.filter((call) => call.body.grant_type === "refresh_token")).toHaveLength(1);
+  f.mock.failNext({ path: "/helix/streams", status: 401 });
+  f.mock.failNext({ path: "/helix/streams", status: 401 });
+  await expect(f.client.getStreams()).rejects.toMatchObject({ status: 401 });
+  f.mock.calls.length = 0;
+  for (let index = 0; index < 4; index++) f.mock.failNext({ path: "/helix/streams", status: 503 });
+  const failed = expect(f.client.getStreams()).rejects.toMatchObject({
+    status: 503,
+    endpoint: "/streams",
+  });
+  await vi.advanceTimersByTimeAsync(3500);
+  await failed;
+  const calls = f.mock.calls.filter((call) => call.path === "/helix/streams");
+  expect(calls.map((call) => call.at - (calls[0]?.at ?? 0))).toEqual([0, 500, 1500, 3500]);
+});
+
+test("Get Streams waits for exhausted rate reset once and surfaces a nonempty bucket or repeated exhaustion", async () => {
+  const f = await fixture();
+  f.mock.failNext({
+    path: "/helix/streams",
+    status: 429,
+    headers: { "Ratelimit-Remaining": "0", "Ratelimit-Reset": String((Date.now() + 2000) / 1000) },
+  });
+  const request = f.client.getStreams();
+  await vi.advanceTimersByTimeAsync(1999);
+  expect(f.mock.calls.filter((call) => call.path === "/helix/streams")).toHaveLength(1);
+  await vi.advanceTimersByTimeAsync(1);
+  await request;
+  expect(f.mock.calls.filter((call) => call.path === "/helix/streams")).toHaveLength(2);
+  f.mock.failNext({ path: "/helix/streams", status: 429, headers: { "Ratelimit-Remaining": "5" } });
+  await expect(f.client.getStreams()).rejects.toMatchObject({ status: 429 });
+  for (let index = 0; index < 2; index++) f.mock.failNext({ path: "/helix/streams", status: 429 });
+  const exhausted = expect(f.client.getStreams()).rejects.toMatchObject({ status: 429 });
+  await vi.advanceTimersByTimeAsync(1000);
+  await exhausted;
+});
+
+test("Get Streams logs only safe endpoint metadata and sanitized HTTP errors", async () => {
+  const f = await fixture();
+  const lines: string[] = [];
+  const client = new HelixClient({
+    config,
+    auth: f.auth,
+    channelId: f.mock.user.id,
+    fetch: f.mock.fetch,
+    clock: systemClock,
+    log: createLogger("debug", {
+      write: (line: string) => {
+        lines.push(line);
+      },
+    }),
+  });
+  f.mock.setStreamLive(true);
+  const live = (await f.client.getStreams())[0];
+  f.mock.failNext({
+    path: "/helix/streams",
+    status: 200,
+    body: { data: [{ ...live, title: "private-provider-value" }] },
+  });
+  await client.getStreams();
+  f.mock.failNext({
+    path: "/helix/streams",
+    status: 400,
+    body: { message: "private-provider-value" },
+  });
+  const error = await client.getStreams().catch((value: unknown) => value);
+  expect(String(error)).toBe("HelixError: Twitch request failed (400) at /streams");
+  expect(lines.some((line) => JSON.parse(line).endpoint === "/streams")).toBe(true);
+  for (const value of ["private-provider-value", f.mock.auth.accessToken, f.mock.auth.refreshToken])
+    expect(lines.join("")).not.toContain(value);
 });
 
 test("rate exhaustion waits for reset once and remaining capacity surfaces an error", async () => {

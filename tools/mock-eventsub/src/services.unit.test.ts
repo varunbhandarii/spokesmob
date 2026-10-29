@@ -1,6 +1,38 @@
 import { expect, test } from "vitest";
 import { createMockServices, mockScopes } from "./services.js";
 
+test("mock Get Streams needs valid headers but no extra scopes and filters live status by user ID", async () => {
+  const mock = createMockServices({ scopes: [] });
+  const url = `http://mock/helix/streams?user_id=${mock.user.id}`;
+  const headers = { "Client-Id": mock.clientId, Authorization: `Bearer ${mock.auth.accessToken}` };
+  expect((await mock.fetch(url)).status).toBe(401);
+  expect(
+    (await mock.fetch(url, { headers: { Authorization: headers.Authorization } })).status,
+  ).toBe(401);
+  expect(await (await mock.fetch(url, { headers })).json()).toEqual({ data: [], pagination: {} });
+  mock.setStreamLive(true);
+  expect((await (await mock.fetch(url, { headers })).json()) as unknown).toMatchObject({
+    data: [{ user_id: mock.user.id, type: "live" }],
+  });
+  expect(
+    await (await mock.fetch("http://mock/helix/streams?user_id=999", { headers })).json(),
+  ).toEqual({ data: [], pagination: {} });
+  for (const query of [
+    "user_id=bad",
+    "first=0",
+    "first=101",
+    "type=other",
+    Array(101).fill("user_id=1").join("&"),
+  ])
+    expect((await mock.fetch(`http://mock/helix/streams?${query}`, { headers })).status).toBe(400);
+  await mock.fetch("http://mock/control/stream", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ online: false }),
+  });
+  expect(await (await mock.fetch(url, { headers })).json()).toEqual({ data: [], pagination: {} });
+});
+
 test("mock auth scripts device states, requires the secret on refresh and redacts call records", async () => {
   const mock = createMockServices();
   const device = await mock.fetch("http://mock/oauth2/device", {

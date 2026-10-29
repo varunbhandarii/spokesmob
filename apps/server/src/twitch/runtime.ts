@@ -8,6 +8,7 @@ import type { Fetch } from "./device-flow.js";
 import type { EventSubFrame } from "./events.js";
 import { EventSubClient } from "./eventsub.js";
 import { HelixClient } from "./helix.js";
+import { StreamStatus } from "./online.js";
 import { createTokenStore, type TokenStore } from "./token-store.js";
 
 export async function createTwitchRuntime(options: {
@@ -21,6 +22,7 @@ export async function createTwitchRuntime(options: {
   const bus = new TwitchBus();
   let client: EventSubClient | undefined;
   let blocklist: ChannelBlocklist | undefined;
+  let online: StreamStatus | undefined;
   const injected = {
     ...(options.fetch ? { fetch: options.fetch } : {}),
     ...(options.clock ? { clock: options.clock } : {}),
@@ -41,6 +43,8 @@ export async function createTwitchRuntime(options: {
     const channel = (await helix.getUsers({ logins: [options.config.channel] }))[0];
     if (!channel) throw new Error("Cannot resolve TWITCH_CHANNEL");
     helix.setChannel(channel.id);
+    online = new StreamStatus({ helix, bus, channelId: channel.id, log: options.log });
+    await online.start();
     blocklist = new ChannelBlocklist({ helix, log: options.log, ...injected });
     await blocklist.start();
     client = new EventSubClient({
@@ -60,13 +64,16 @@ export async function createTwitchRuntime(options: {
       channel,
       bus,
       blocklist,
+      online,
       stop: async () => {
+        online?.stop();
         blocklist?.stop();
         auth.stop();
         await client?.stop();
       },
     };
   } catch (error) {
+    online?.stop();
     blocklist?.stop();
     auth.stop();
     throw error;

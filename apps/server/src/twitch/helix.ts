@@ -23,6 +23,24 @@ export interface User {
   login: string;
   display_name: string;
 }
+const streamSchema = z.object({
+  id: z.string().min(1),
+  user_id: z.string().regex(/^\d+$/),
+  user_login: z.string().min(1),
+  user_name: z.string().min(1),
+  game_id: z.string(),
+  game_name: z.string(),
+  type: z.enum(["live", ""]),
+  title: z.string(),
+  tags: z.array(z.string()),
+  viewer_count: z.number().int().nonnegative(),
+  started_at: z.iso.datetime({ offset: true }),
+  language: z.string(),
+  thumbnail_url: z.string(),
+  tag_ids: z.array(z.string()),
+  is_mature: z.boolean(),
+});
+export type Stream = z.infer<typeof streamSchema>;
 export interface ChatResult {
   messageId: string | null;
   sent: boolean;
@@ -132,6 +150,10 @@ export class HelixClient {
         throw new HelixError(0, path);
       }
       this.limiter.observe(response.headers);
+      this.options.log.debug(
+        { method, endpoint: path, status: response.status },
+        "Twitch request completed",
+      );
       const body: unknown =
         response.status === 204 ? undefined : await response.json().catch(() => undefined);
       if (response.ok) return body as T;
@@ -172,6 +194,36 @@ export class HelixClient {
     for (const id of ids) query.append("id", id);
     for (const login of logins) query.append("login", login);
     return (await this.request<Page<User>>("GET", "/users", { query, idempotent: true })).data;
+  }
+
+  async getStreams(): Promise<Stream[]> {
+    const broadcasterId = this.channel();
+    if (!/^\d+$/.test(broadcasterId))
+      throw new Error("Resolved Twitch channel ID must contain only digits");
+    const response = await this.request<unknown>("GET", "/streams", {
+      query: { user_id: broadcasterId },
+      kind: "general",
+      idempotent: true,
+    });
+    const parsed = z.object({ data: z.array(streamSchema).max(1) }).safeParse(response);
+    if (!parsed.success || parsed.data.data.some((stream) => stream.user_id !== broadcasterId)) {
+      this.options.log.warn(
+        { endpoint: "/streams", broadcasterId },
+        "Invalid Twitch stream response",
+      );
+      throw new Error("Invalid Twitch stream response");
+    }
+    const streams = parsed.data.data;
+    this.options.log.info(
+      {
+        endpoint: "/streams",
+        broadcasterId,
+        count: streams.length,
+        online: streams.some((stream) => stream.type === "live"),
+      },
+      "Twitch stream status checked",
+    );
+    return streams;
   }
 
   async sendChatMessage({

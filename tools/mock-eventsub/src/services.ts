@@ -50,6 +50,7 @@ export interface MockServiceOptions {
   clientId?: string;
   user?: { id: string; login: string; name: string };
   scopes?: readonly string[];
+  online?: boolean;
 }
 
 const secretNames = /^(?:access_?token|refresh_?token|client_?secret|device_?code|authorization)$/i;
@@ -103,6 +104,12 @@ export function createMockServices(options: MockServiceOptions = {}) {
   let refreshCount = 0;
   let pin: Record<string, unknown> | undefined;
   let dropCode: string | undefined;
+  let online = options.online ?? false;
+  let startedAt = new Date(now()).toISOString();
+  const setStreamLive = (value: boolean) => {
+    if (value && !online) startedAt = new Date(now()).toISOString();
+    online = value;
+  };
   let settings: Record<string, unknown> = {
     broadcaster_id: user.id,
     slow_mode: false,
@@ -227,6 +234,7 @@ export function createMockServices(options: MockServiceOptions = {}) {
       else if (action === "inject") controls.inject?.(body.frame);
       else if (action === "reconnect") controls.reconnect?.();
       else if (action === "close") controls.close?.(Number(body.code ?? 4000));
+      else if (action === "stream" && typeof body.online === "boolean") setStreamLive(body.online);
       return json({ ok: true });
     }
     if (!url.pathname.startsWith("/helix/")) return error(404, "Unknown route");
@@ -287,6 +295,46 @@ export function createMockServices(options: MockServiceOptions = {}) {
           202,
         );
       }
+    }
+    if (route === "/streams" && method === "GET") {
+      const ids = url.searchParams.getAll("user_id");
+      const first = Number(url.searchParams.get("first") ?? 20);
+      const type = url.searchParams.get("type") ?? "all";
+      if (
+        ids.length > 100 ||
+        ids.some((id) => !/^\d+$/.test(id)) ||
+        !Number.isInteger(first) ||
+        first < 1 ||
+        first > 100 ||
+        !["all", "live"].includes(type)
+      )
+        return error(400, "Invalid stream filter");
+      const matches = !ids.length || ids.includes(user.id);
+      return json({
+        data:
+          online && matches
+            ? [
+                {
+                  id: `stream-${user.id}`,
+                  user_id: user.id,
+                  user_login: user.login,
+                  user_name: user.name,
+                  game_id: "",
+                  game_name: "",
+                  type: "live",
+                  title: "Synthetic stream",
+                  tags: [],
+                  viewer_count: 1,
+                  started_at: startedAt,
+                  language: "en",
+                  thumbnail_url: "",
+                  tag_ids: [],
+                  is_mature: false,
+                },
+              ]
+            : [],
+        pagination: {},
+      });
     }
     if (route === "/users" && method === "GET")
       return json({
@@ -368,6 +416,7 @@ export function createMockServices(options: MockServiceOptions = {}) {
     dropNextChat: (code: string) => {
       dropCode = code;
     },
+    setStreamLive,
     setControls: (handlers: typeof controls) => {
       controls = handlers;
     },
