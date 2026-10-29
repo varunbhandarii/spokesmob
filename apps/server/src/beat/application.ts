@@ -13,6 +13,7 @@ import { createVoiceRuntime } from "../voice/runtime.js";
 import type { RealtimeFactory } from "../voice/transport.js";
 import { recordedModeration } from "./billing.js";
 import { CommandRouter } from "./commands.js";
+import { FakeVoice } from "./fakes.js";
 import { publishHealth } from "./health.js";
 import { ChatOutput } from "./output.js";
 import { BeatRunner } from "./runner.js";
@@ -27,6 +28,10 @@ export async function createBeatApplication(options: {
   clock?: Clock;
   paidModel?: boolean;
   paidVoice?: boolean;
+  stubVoice?: boolean;
+  headless?: boolean;
+  budgetLimitUsd?: number;
+  apiFailure?(source: "model" | "voice"): void;
 }) {
   const { config, log } = options;
   const twitch =
@@ -48,7 +53,12 @@ export async function createBeatApplication(options: {
       ...(options.clock ? { clock: options.clock } : {}),
     });
     const sessionId = randomUUID();
-    const ledger = new SpendLedger(store.costLedger, sessionId, config.beat.spendCapUsd);
+    const ledger = new SpendLedger(
+      store.costLedger,
+      sessionId,
+      config.beat.spendCapUsd,
+      options.budgetLimitUsd,
+    );
     const client =
       options.model && options.moderation
         ? null
@@ -87,6 +97,7 @@ export async function createBeatApplication(options: {
         runner.state.step !== "synthesizing",
     });
     const hub = voice.http.hub;
+    const fakeVoice = options.stubVoice ? new FakeVoice(options.clock) : null;
     const output = new ChatOutput(twitch.helix, log);
     runner = new BeatRunner({
       bus: twitch.bus,
@@ -95,15 +106,15 @@ export async function createBeatApplication(options: {
       ledger,
       settings: config.beat,
       sessionId,
-      voice: voice.manager,
+      voice: fakeVoice ?? voice.manager,
       output,
       model,
       moderation,
       blocklist: twitch.blocklist,
       clients: () => ({
-        audioConnected: hub.audioConnected,
-        audioActive: hub.audioActive,
-        overlayConnected: hub.hasOverlayClient,
+        audioConnected: options.headless && fakeVoice ? true : hub.audioConnected,
+        audioActive: options.headless && fakeVoice ? true : hub.audioActive,
+        overlayConnected: options.headless && fakeVoice ? true : hub.hasOverlayClient,
       }),
       overlay: (message) => hub.emitOverlay(message),
       control: (message) => hub.emitControl(message),
@@ -111,9 +122,12 @@ export async function createBeatApplication(options: {
       tier: config.openai.serviceTier,
       paidModel: options.paidModel ?? true,
       paidVoice: options.paidVoice ?? true,
+      simulated: !!fakeVoice,
+      ...(options.apiFailure ? { apiFailure: options.apiFailure } : {}),
       ...(options.clock ? { clock: options.clock } : {}),
     });
     const beat = runner;
+    if (fakeVoice) fakeVoice.onReport = (event) => beat.report(event);
     commands = new CommandRouter({
       runner: beat,
       store,
@@ -150,6 +164,7 @@ export async function createBeatApplication(options: {
     const runtimeStore = store;
     return {
       config,
+      sessionId,
       twitch,
       voice: runtimeVoice,
       runner: beat,

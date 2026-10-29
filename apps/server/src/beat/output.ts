@@ -9,6 +9,7 @@ export type OutputHelix = Pick<
 >;
 export class ChatOutput {
   private currentPin: string | null = null;
+  private pinRevision = 0;
   constructor(
     private readonly helix: OutputHelix,
     private readonly log: Pick<Logger, "warn">,
@@ -22,10 +23,20 @@ export class ChatOutput {
     return this.helix.sendChatMessage({ text });
   }
   async pin(messageId: string, seconds: number) {
+    const revision = this.pinRevision;
     await this.helix.pinMessage(messageId, seconds);
-    this.currentPin = messageId;
+    if (revision === this.pinRevision) this.currentPin = messageId;
+    else {
+      // A mute may finish unpinning while this earlier request is still in flight.
+      try {
+        await this.helix.unpinMessage(messageId);
+      } catch (error) {
+        if (!(error instanceof HelixError && error.status === 404)) throw error;
+      }
+    }
   }
   async unpin() {
+    this.pinRevision++;
     try {
       const id = this.currentPin ?? (await this.helix.getPin())?.message_id;
       if (id) await this.helix.unpinMessage(id);

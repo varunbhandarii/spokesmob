@@ -161,6 +161,20 @@ test("pruning history cannot erase the active session spend cap", () => {
   expect(vi.getTimerCount()).toBe(0);
 });
 
+test("a command cannot raise a run's fixed spend ceiling", () => {
+  const { db, costLedger } = fixture();
+  try {
+    const ledger = new SpendLedger(costLedger, "limited", 5, 0.01);
+    expect(ledger.totals().cap).toBe(0.01);
+    ledger.setCap(50);
+    expect(ledger.totals().cap).toBe(0.01);
+    expect(ledger.reserve("voice", 0, null)).not.toBeNull();
+    expect(ledger.reserve("voice", 0, null)).toBeNull();
+  } finally {
+    db.close();
+  }
+});
+
 test("production database paths default beside tokens and reject repository paths", () => {
   expect(databaseFile(join(tmpdir(), "spokesmob-example", "tokens.json"))).toMatch(
     /spokesmob\.db$/,

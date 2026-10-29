@@ -28,7 +28,8 @@
     "sim": "node --import tsx tools/crowd-sim/src/cli.ts",
     "consensus": "node --env-file-if-exists=.env --import tsx apps/server/src/cli/consensus.ts",
     "eval": "node --env-file-if-exists=.env --import tsx eval/src/run.ts",
-    "voice": "node --env-file-if-exists=.env --import tsx apps/server/src/cli/voice.ts"
+    "voice": "node --env-file-if-exists=.env --import tsx apps/server/src/cli/voice.ts",
+    "loop": "node --env-file-if-exists=.env --import tsx apps/server/src/cli/loop.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.3",

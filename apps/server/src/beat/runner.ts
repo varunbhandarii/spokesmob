@@ -62,6 +62,8 @@ export interface BeatRunnerOptions {
   tier?: "default" | "fast";
   paidModel: boolean;
   paidVoice: boolean;
+  simulated?: boolean;
+  apiFailure?(source: "model" | "voice"): void;
 }
 export class BeatRunner {
   state: BeatState;
@@ -87,6 +89,17 @@ export class BeatRunner {
   private particleNames: string[] = [];
   private intervals: ReturnType<typeof setInterval>[] = [];
   readonly records: BeatRecords;
+  readonly processingMs: number[] = [];
+  readonly collectionMs: number[] = [];
+  private closedBeats = 0;
+  get pendingBeats() {
+    return this.records.books.size
+      ? [...this.records.books.values()].filter((book) => !book.status).length
+      : 0;
+  }
+  get resolvedBeats() {
+    return this.closedBeats;
+  }
 
   constructor(private readonly options: BeatRunnerOptions) {
     this.clock = options.clock ?? systemClock;
@@ -116,12 +129,14 @@ export class BeatRunner {
       seed: options.seed ?? 17,
       log: options.log,
       windowOptions: () => ({ gaggedUsers: new Set(options.store.gags.list()) }),
+      onProcessing: (ms) => this.trackProcessing(ms),
     });
     this.records = new BeatRecords(
       options.store,
       options.sessionId,
       (row) => options.control?.({ type: "log", row }),
       (names) => this.safeNames(names),
+      options.simulated ?? false,
     );
   }
   view(): BeatView {
@@ -238,8 +253,11 @@ export class BeatRunner {
   }
   private sampleWindow() {
     if (!this.state.collection) return;
+    const started = performance.now();
     const snapshot = this.collector.snapshot();
     const window = assembleWindow(snapshot.messages, snapshot.windowOptions);
+    this.collectionMs.push(performance.now() - started);
+    if (this.collectionMs.length > 6000) this.collectionMs.shift();
     this.dispatch({
       type: "windowReady",
       windowId: this.state.collection.id,
@@ -256,6 +274,10 @@ export class BeatRunner {
           Math.max(0, this.clock.now() - (this.state.collection?.startAt ?? this.clock.now())),
         ),
       });
+  }
+  private trackProcessing(ms: number) {
+    this.processingMs.push(ms);
+    if (this.processingMs.length > 6000) this.processingMs.shift();
   }
   private flushParticles() {
     if (!this.particleNames.length || !this.state.collection) return;
@@ -519,6 +541,7 @@ export class BeatRunner {
         });
         break;
       case "log":
+        this.closedBeats++;
         this.records.write(
           effect.beat,
           this.state,
@@ -602,6 +625,7 @@ export class BeatRunner {
         );
         this.records.update(effect.beatId);
         this.publishCost();
+        if (generated.apiFailure) this.options.apiFailure?.("model");
         return generated;
       },
     };
@@ -622,6 +646,7 @@ export class BeatRunner {
         clock: this.clock,
         serviceTier: this.options.tier ?? "fast",
         moodContext: { raidActive: mood.raid_active, hypeLevel: mood.hype_level },
+        onProcessing: (ms) => this.trackProcessing(ms),
         onWindow: (_window, clusters) => {
           exemplars = new Map(
             clusters.map((cluster) => [cluster.key, cluster.exemplars.map((item) => item.text)]),
@@ -667,6 +692,12 @@ export class BeatRunner {
       if (take)
         this.task(async () => {
           const result = await take.ready;
+          if (
+            result.attempts.some(
+              (attempt) => attempt.reason === "transport" || attempt.reason === "stall",
+            )
+          )
+            this.options.apiFailure?.("voice");
           const book = this.records.books.get(beatId);
           if (book) {
             book.voices[take.result.channel] = result;

@@ -3,6 +3,30 @@ import { createLogger } from "../log.js";
 import { HelixError } from "../twitch/helix.js";
 import { ChatOutput, type OutputHelix } from "./output.js";
 
+test("a pin that completes after mute is removed without posting or pinning again", async () => {
+  let finish!: () => void;
+  const helix: OutputHelix = {
+    sendChatMessage: vi.fn(),
+    pinMessage: vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    ),
+    getPin: vi.fn(async () => null),
+    unpinMessage: vi.fn(async () => {}),
+    sendAnnouncement: vi.fn(),
+  };
+  const output = new ChatOutput(helix, createLogger("silent"));
+  const pending = output.pin("new-message", 60);
+  await output.unpin();
+  finish();
+  await pending;
+  expect(helix.unpinMessage).toHaveBeenCalledExactlyOnceWith("new-message");
+  expect(helix.pinMessage).toHaveBeenCalledTimes(1);
+  expect(helix.sendChatMessage).not.toHaveBeenCalled();
+});
+
 test("unpin can recover the existing pin after restart, tolerates expiry and never retries a failed write", async () => {
   const helix: OutputHelix = {
     sendChatMessage: vi.fn(async () => {

@@ -37,11 +37,13 @@ const wire = <T>(value: T): T =>
   ) as T;
 export class BeatRecords {
   readonly books = new Map<number, BeatBook>();
+  begun = 0;
   constructor(
     private readonly store: Repositories,
     private readonly sessionId: string,
     private readonly emit: (row: BeatLogRecord) => void,
     private readonly safeNames: (names: readonly string[]) => string[],
+    private readonly simulated = false,
   ) {}
   key(id: number): string {
     return `${this.sessionId}:${id}`;
@@ -49,6 +51,7 @@ export class BeatRecords {
   begin(beat: ActiveBeat, mode: BeatState["mode"]): BeatBook {
     let book = this.books.get(beat.id);
     if (!book) {
+      this.begun++;
       book = {
         id: beat.id,
         closedAt: beat.closedAt,
@@ -113,6 +116,7 @@ export class BeatRecords {
     );
     return beatLogRecordSchema.parse(
       wire({
+        ...(this.simulated ? { simulated: true } : {}),
         id: this.key(book.id),
         at: book.at,
         kind,

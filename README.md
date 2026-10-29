@@ -73,6 +73,16 @@ WebSocket clients declare one immutable role in hello. Only control clients may 
 
 ## Local Twitch mock
 
+`npm run loop -- --mock name-my-cat` starts the complete local loop, including mock Twitch authorization, EventSub and Helix. It shares the local overlay token and port with the normal server, so stop that server first. Mock Twitch credentials stay synthetic and never replace your saved Twitch token. Settings and history use a separate `mock-spokesmob.db` beside the token file.
+
+Open the OBS overlay and the control dock to release the audio-client gate. By default the consensus model is a stub and voice playback is simulated without PCM. Log rows say **Simulated**; their timing does not measure a model or real audio. The terminal shows mock send and pin requests without message content. Veto, mute, kill and all other gates still run.
+
+Add `--minutes 3 --report` for a finite run with outcome counts, window-processing p50/p95/max, latency stages, heap samples and cost. Stages overlap: voice preparation runs during the preview hold, so stage percentiles must not be added. `--headless` supplies a simulated client only when both providers are stubs; paid flags reject it. `--port 0` selects a temporary port for unattended local checks.
+
+`npm run loop -- --mock crowd --authors 300 --rate 60 --minutes 5 --report` runs the full load check outside the unit-test suite. A five-minute crowd uses 18,000 synthetic messages. Window-processing measurements include assembly and clustering during premoderation and synthesis; listening-only assembly is reported separately. Every begun beat must resolve or remain explicitly pending, and cancelled or suppressed outcomes are counted separately from dropped beats. Heap samples include garbage-collection variation.
+
+`--live-model` and `--live-voice` opt into paid OpenAI calls while Twitch stays mocked. Approve the displayed projection before adding `--yes`; `--max-cost-usd` sets a fixed run ceiling (default USD 0.10) that panel settings cannot raise. All paid calls retain reservations and unknown usage. A real API failure stops the mock run and reports it. Real end-to-end timing requires `--live-voice` and the active OBS audio owner's playback report. The default mock is free.
+
 `npm run mock -- name-my-cat` starts a local EventSub, Helix and authorization server. Other scenarios include `raid-arrival`, `hype-train`, `reconnect-midstream`, `keepalive-silence`, `revocation`, `notices` and `poll-and-redemption`. Use `--speed 5` (up to 20), `--loop`, or `--port 8081` as needed. A JSONL file path also works.
 
 Archived replay leaves the file untouched. The mock skips recorded session controls, adapts subscription and session IDs, and rebases envelope timestamps while preserving event spacing at the selected speed. Event content and first-pass message IDs stay unchanged; later loops get unique envelope IDs. Use `--literal-timestamps` to preserve archived timestamps and exercise stale-frame rejection.

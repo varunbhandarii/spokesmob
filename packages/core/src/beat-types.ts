@@ -201,6 +201,7 @@ export const voiceAttemptLogSchema = z.strictObject({
   costUsd: cost,
 });
 export const beatLogRecordSchema = z.strictObject({
+  simulated: z.boolean().optional(),
   id: z.string().min(1),
   at: z.number().nonnegative(),
   kind: z.enum(["consensus", "event"]),

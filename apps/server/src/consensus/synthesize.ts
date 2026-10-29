@@ -42,6 +42,7 @@ export interface SynthesisOptions {
   onWindow?: (window: Window, clusters: readonly Cluster[]) => void;
   onVerification?: (attempt: VerificationAttempt) => void;
   onFallback?: () => void;
+  onProcessing?(milliseconds: number): void;
   moodContext?: { raidActive?: boolean; hypeLevel?: number };
 }
 export async function synthesize(options: SynthesisOptions): Promise<SynthesisResult> {
@@ -51,7 +52,10 @@ export async function synthesize(options: SynthesisOptions): Promise<SynthesisRe
   const minVoices = options.minVoices ?? THRESHOLDS.MIN_VOICES;
   const windowOptions = options.windowOptions ?? { seed: 1 };
   const excluded = new Set(windowOptions.excludedBucketKeys);
+  let processing = 0;
+  let processingStarted = performance.now();
   let window = assembleWindow(options.messages, windowOptions);
+  processing += performance.now() - processingStarted;
   let clusters: Cluster[] = [];
   const usage: CallUsage[] = [];
   const result: SynthesisResult = {
@@ -81,6 +85,7 @@ export async function synthesize(options: SynthesisOptions): Promise<SynthesisRe
     costUsd: null,
   };
   const finish = (gate: SynthesisResult["gate"], reason: RuleCode | null): SynthesisResult => {
+    options.onProcessing?.(processing);
     usage.push(...options.moderation.drainUsage());
     result.gate = gate;
     result.reason = reason;
@@ -109,10 +114,12 @@ export async function synthesize(options: SynthesisOptions): Promise<SynthesisRe
   if (aborted()) return finish("aborted", "aborted");
   if (window.voices < minVoices) return finish("intake", "not_enough_voices");
   for (let round = 0; round <= 2; round++) {
+    processingStarted = performance.now();
     const clusterStart = clock.now();
     clusters = clusterWindow(window, {
       isBlocked: (text) => options.blocklist.check(text).blocked,
     });
+    processing += performance.now() - processingStarted;
     result.latency.clustering += clock.now() - clusterStart;
     const exemplars = clusters
       .slice(0, THRESHOLDS.TOP_CLUSTERS)

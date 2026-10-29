@@ -181,7 +181,7 @@ function renderLog() {
     });
     const outcome = document.createElement("span");
     outcome.className = "outcome";
-    outcome.textContent = codeLabel(row.status);
+    outcome.textContent = `${row.simulated ? "Simulated · " : ""}${codeLabel(row.status)}`;
     const duration = document.createElement("span");
     duration.textContent = row.e2eMs === null ? "e2e —" : `${row.e2eMs.toFixed(0)} ms`;
     meta.append(time, outcome, duration);

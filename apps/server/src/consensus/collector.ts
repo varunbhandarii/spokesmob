@@ -36,6 +36,7 @@ export class ConsensusCollector {
       seed?: number;
       log?: Pick<Logger, "warn">;
       windowOptions?: () => Partial<WindowOptions>;
+      onProcessing?(milliseconds: number): void;
     },
   ) {
     this.clock = options.clock ?? systemClock;
@@ -130,11 +131,13 @@ export class ConsensusCollector {
     if (!signal || signal.aborted || this.moderating) return;
     this.moderating = true;
     try {
+      const started = performance.now();
       const snapshot = this.snapshot();
       const window = assembleWindow(snapshot.messages, snapshot.windowOptions);
       const clusters = clusterWindow(window, {
         isBlocked: (text) => this.options.blocklist.check(text).blocked,
       });
+      this.options.onProcessing?.(performance.now() - started);
       const texts = clusters
         .slice(0, THRESHOLDS.TOP_CLUSTERS)
         .flatMap((cluster) => cluster.exemplars.map((exemplar) => exemplar.text))

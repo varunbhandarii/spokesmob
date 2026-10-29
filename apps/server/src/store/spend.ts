@@ -7,12 +7,13 @@ export class SpendLedger {
     private readonly repository: Repositories["costLedger"],
     private sessionId: string,
     private cap: number,
+    private readonly hardLimit = Number.POSITIVE_INFINITY,
   ) {
     this.setCap(cap);
   }
   setCap(cap: number) {
     if (!Number.isFinite(cap) || cap < 0) throw new RangeError("Spend cap must be nonnegative");
-    this.cap = cap;
+    this.cap = Math.min(cap, this.hardLimit);
   }
   reset(sessionId: string) {
     if (sessionId === this.sessionId) return;
