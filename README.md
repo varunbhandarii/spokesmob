@@ -96,6 +96,8 @@ Copy `.env.example` to `.env` and fill in your credentials locally. Keep credent
 | `TWITCH_AUTH_URL` | Development or testing only, leave unset; defaults to Twitch OAuth |
 | `TOKEN_FILE` | Development or testing only, leave unset; overrides the local token file |
 | `RECORDINGS_DIR` | Local chat recording folder; defaults beside the token file; keep it outside the repository |
+| `DB_FILE` | SQLite settings, gags, beat history and cost ledger; defaults to `spokesmob.db` beside the token file, outside the repository |
+| `LOG_RETENTION_DAYS` | Beat and cost history retention, from `0` to `30` days; defaults to `7`; cleanup runs at startup and hourly |
 | `SPEND_CAP_USD` | Per-stream spend cap; defaults to `5` USD |
 | `LOG_LEVEL` | Structured log verbosity; defaults to `info` |
 
