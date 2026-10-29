@@ -28,11 +28,17 @@ export const ledgerUsageSchema = z.union([
 ]);
 export type LedgerUsage = z.infer<typeof ledgerUsageSchema>;
 
-const safetySchema = z.strictObject({
-  muted: z.boolean(),
-  mutedUntil: z.number().nonnegative().nullable(),
-  killed: z.boolean(),
-});
+const safetySchema = z
+  .strictObject({
+    muted: z.boolean(),
+    mutedUntil: z.number().nonnegative().nullable(),
+    killed: z.boolean(),
+  })
+  .refine(
+    (value) =>
+      (!value.killed || (value.muted && value.mutedUntil === null)) &&
+      (value.muted || value.mutedUntil === null),
+  );
 export type SafetySettings = z.infer<typeof safetySchema>;
 function json<T>(raw: unknown, schema: z.ZodType<T>): T {
   try {
@@ -146,7 +152,7 @@ export function createRepositories(storage: Storage) {
     id: z.string().min(1),
     sessionId: z.string().min(1),
     at: z.number().nonnegative(),
-    source: z.enum(["consensus", "voice"]),
+    source: z.enum(["consensus", "voice", "moderation"]),
     beatId: z.string().nullable(),
     usd: z.number().nonnegative().nullable(),
     reservation: z.number().nonnegative(),
@@ -204,6 +210,9 @@ export function createRepositories(storage: Storage) {
       return total(
         storage.all("SELECT usd,reservation FROM cost_ledger WHERE session_id=?", sessionId),
       );
+    },
+    beatTotal(beatId: string) {
+      return total(storage.all("SELECT usd,reservation FROM cost_ledger WHERE beat_id=?", beatId));
     },
     hourly(now: number) {
       return total(

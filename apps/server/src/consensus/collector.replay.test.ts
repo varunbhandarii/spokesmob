@@ -64,6 +64,31 @@ function clusteredMessages(snapshot: CollectorSnapshot) {
   );
 }
 
+test("twenty consecutive atomic window rolls retain every message including boundary arrivals", async () => {
+  const f = fixture();
+  f.collector.open();
+  const expected: string[] = [];
+  const observed: string[] = [];
+  for (let index = 0; index < 20; index++) {
+    for (const suffix of ["one", "two"]) {
+      const id = `viewer-${index}-${suffix}`;
+      expected.push(id);
+      f.bus.emit(f.chat(id, `blue ${index}`));
+    }
+    await vi.advanceTimersByTimeAsync(8000);
+    const closed = f.collector.roll();
+    observed.push(...closed.messages.map((message) => message.id));
+    expect(f.collector.snapshot().windowOptions.startAt).toBe(closed.windowOptions.endAt);
+    if (index < 19) {
+      const id = `boundary-${index}`;
+      expected.push(id);
+      f.bus.emit(f.chat(id, "boundary"));
+    }
+  }
+  expect(observed).toEqual(expected);
+  expect(new Set(observed).size).toBe(59);
+});
+
 test("moderator replay excludes deleted and cleared messages before clustering and premoderation", async () => {
   const f = fixture();
   f.collector.open();

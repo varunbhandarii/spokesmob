@@ -1,5 +1,11 @@
 import { expect, test } from "vitest";
-import { loadConfig, loadOpenAIConfig, loadVoiceConfig, requireOpenAIKey } from "./config.js";
+import {
+  loadBeatSettings,
+  loadConfig,
+  loadOpenAIConfig,
+  loadVoiceConfig,
+  requireOpenAIKey,
+} from "./config.js";
 
 const environment = {
   TWITCH_CLIENT_ID: "demo-client",
@@ -90,8 +96,18 @@ test("legacy selection fails clearly and invalid settings never expose values", 
   ).toThrow("Invalid or missing configuration: MAIN_VOICE, PORT, SPEND_CAP_USD");
   for (const PORT of ["0", "1.5", "NaN", ""])
     expect(() => loadVoiceConfig({ PORT })).toThrow("PORT");
-  for (const SPEND_CAP_USD of ["-1", "0", "Infinity", ""])
+  for (const SPEND_CAP_USD of ["-1", "Infinity", ""])
     expect(() => loadVoiceConfig({ SPEND_CAP_USD })).toThrow("SPEND_CAP_USD");
+});
+
+test("loop environment settings seed validated defaults without exposing invalid values", () => {
+  expect(loadBeatSettings({ WINDOW_S: "10", POST_LINES: "off", SPEND_CAP_USD: "0" })).toMatchObject(
+    { windowS: 10, postLines: "off", spendCapUsd: 0 },
+  );
+  expect(loadVoiceConfig({ SPEND_CAP_USD: "0" }).spendCapUsd).toBe(0);
+  expect(() => loadBeatSettings({ BEAT_MODE: "private-invalid", HOLD_MS: "400" })).toThrow(
+    "BEAT_MODE, HOLD_MS",
+  );
 });
 
 test("realtime overrides are limited to loopback mocks", () => {

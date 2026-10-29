@@ -125,6 +125,7 @@ export function buildInput(
   clusters: readonly Cluster[],
   question: string | null,
   retryReason?: RuleCode,
+  moodContext: { raidActive?: boolean; hypeLevel?: number } = {},
 ): BuiltInput {
   const selected = clusters.slice(0, THRESHOLDS.TOP_CLUSTERS);
   const mapping = new Map(
@@ -134,7 +135,7 @@ export function buildInput(
     question,
     voices: window.voices,
     share_bands: { most: ">= 50%", a_lot: ">= 25% and < 50%", some: "< 25%" },
-    mood_signals: moodSignals(window),
+    mood_signals: moodSignals(window, moodContext),
     clusters: selected.map((cluster, index) => ({
       id: CLUSTER_IDS[index] as string,
       authors: cluster.authorCount,

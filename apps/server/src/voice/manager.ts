@@ -57,7 +57,7 @@ export class VoiceManager {
       transport: VoiceTransport;
       clock?: Clock;
       log?: Pick<Logger, "info">;
-      allowAttempt?: () => boolean;
+      allowAttempt?: (take: number, attempt: number, channel: VoiceChannel) => boolean;
       onUsage?: (
         take: number,
         attempt: number,
@@ -242,7 +242,11 @@ export class VoiceManager {
       attempt <= T.MAX_ATTEMPTS && !state.controller.signal.aborted;
       attempt++
     ) {
-      if (this.options.allowAttempt && !this.options.allowAttempt()) break;
+      if (
+        this.options.allowAttempt &&
+        !this.options.allowAttempt(result.take, attempt, result.channel)
+      )
+        break;
       const key = `${result.take}:${attempt}`;
       const generated = await slot.session.run({
         take: key,

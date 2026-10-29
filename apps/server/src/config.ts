@@ -1,6 +1,11 @@
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { z } from "zod";
+import {
+  type BeatSettings,
+  beatSettingsPatchSchema,
+  resolveBeatSettings,
+} from "../../../packages/core/src/beat-settings.js";
 
 const openaiEnvironmentSchema = z.object({
   OPENAI_API_KEY: z
@@ -25,7 +30,10 @@ const voiceEnvironmentSchema = z.object({
     .regex(/^[a-z][a-z0-9_-]{0,63}$/)
     .default("sage"),
   PORT: z.coerce.number().int().min(1).max(65535).default(4040),
-  SPEND_CAP_USD: z.coerce.number().finite().positive().default(5),
+  SPEND_CAP_USD: z.preprocess(
+    (value) => (typeof value === "string" && !value.trim() ? Number.NaN : value),
+    z.coerce.number().finite().nonnegative().default(5),
+  ),
   OPENAI_REALTIME_URL: z
     .url()
     .refine((value) => {
@@ -88,6 +96,8 @@ export interface Config {
   logLevel: z.infer<typeof environmentSchema>["LOG_LEVEL"];
   openai: OpenAIConfig;
   voice: VoiceConfig;
+  beat: BeatSettings;
+  databaseFile?: string;
 }
 
 function configError(issues: readonly { path: PropertyKey[] }[]): Error {
@@ -108,6 +118,37 @@ export function loadOpenAIConfig(environment: NodeJS.ProcessEnv = process.env): 
 export function requireOpenAIKey(config: OpenAIConfig): string {
   if (!config.apiKey) throw new Error("OPENAI_API_KEY is required for OpenAI requests");
   return config.apiKey;
+}
+
+export function loadBeatSettings(environment: NodeJS.ProcessEnv = process.env): BeatSettings {
+  const keys = {
+    mode: "BEAT_MODE",
+    windowS: "WINDOW_S",
+    minVoices: "MIN_VOICES",
+    holdMs: "HOLD_MS",
+    cooldownS: "COOLDOWN_S",
+    pinS: "PIN_S",
+    postLines: "POST_LINES",
+    spendCapUsd: "SPEND_CAP_USD",
+    muteDefaultMin: "MUTE_DEFAULT_MIN",
+    logRetentionDays: "LOG_RETENTION_DAYS",
+  } as const;
+  const seed: Record<string, unknown> = {};
+  for (const [key, name] of Object.entries(keys)) {
+    if (environment[name] !== undefined)
+      seed[key] =
+        key === "mode" || key === "postLines"
+          ? environment[name]
+          : environment[name]?.trim()
+            ? Number(environment[name])
+            : Number.NaN;
+  }
+  const parsed = beatSettingsPatchSchema.safeParse(seed);
+  if (!parsed.success)
+    throw configError(
+      parsed.error.issues.map((issue) => ({ path: [keys[issue.path[0] as keyof typeof keys]] })),
+    );
+  return resolveBeatSettings(parsed.data);
 }
 
 export function loadVoiceConfig(environment: NodeJS.ProcessEnv = process.env): VoiceConfig {
@@ -156,5 +197,7 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): Config
     logLevel: value.LOG_LEVEL,
     openai: loadOpenAIConfig(environment),
     voice: loadVoiceConfig(environment),
+    beat: loadBeatSettings(environment),
+    ...(environment.DB_FILE ? { databaseFile: environment.DB_FILE } : {}),
   };
 }

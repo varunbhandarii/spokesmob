@@ -15,7 +15,7 @@ npm test
 npm run lint
 ```
 
-The workspace contains the server, overlay, control page, shared logic, development tools, and evaluation runner. The Twitch listener and overlay audio checks are available; the automatic speaking loop and control page are still under development.
+The workspace contains the server, overlay, control page, shared logic, development tools, and evaluation runner. The Twitch listener, automatic beat loop and overlay audio checks are available; the control page is being integrated.
 
 The [shared beat and overlay contracts](packages/core/README.md) define cycle steps, settings, client roles and message schemas for the loop and control integration.
 
@@ -23,7 +23,11 @@ Run `npm run setup` to sign in to Twitch. Open the activation URL printed by the
 
 Tokens are saved atomically outside the repository: `%LOCALAPPDATA%\Spokesmob\tokens.json` on Windows, or `~/.config/spokesmob/tokens.json` elsewhere. To sign out, stop the application and delete that file (or the file selected by `TOKEN_FILE`). Keep the file private.
 
-After setup, `npm start` listens to Twitch events and serves the overlay audio page locally. One server instance holds a lock beside the token file. It requests chat, chat notices, incoming raids, Hype Train, stream status, poll results and reward redemptions. Reconnects preserve subscriptions when Twitch supplies a handover URL; dropped connections create a fresh session and subscriptions. Voice commands let you check playback; Twitch events do not yet trigger automatic speech.
+After setup, `npm start` listens to Twitch events, serves the overlay locally and runs the beat when the stream is live and an active audio source is connected. One server instance holds a lock beside the token file. It requests chat, chat notices, incoming raids, Hype Train, stream status, poll results and reward redemptions. Reconnects preserve subscriptions when Twitch supplies a handover URL; dropped connections create a fresh session and subscriptions.
+
+Chat collection continues while a beat is being verified or spoken. The next window opens atomically when the previous one closes; underfilled windows keep a rolling 30 s view. The verified line and dissent prepare together during preview, then play in order. Veto, mute, kill or a lost safety condition cancels both takes and prevents output. After the whole spoken unit ends, the loop posts once and pins only a confirmed send, then cools down. Main caption-only, suppressed and vetoed units are not posted. Quiet mode posts after its preview plus 3 s of caption reading without generating voice. Event templates never post a second chat notice.
+
+Settings, mute/kill, gags, beat records and per-call cost reservations use local SQLite beside the token file. Timed mute survives restart until its saved expiry; kill persists until explicit unmute. History cleanup does not reset the active session's spend accounting. Raising the cap can release a capped loop; missing usage keeps its reservation.
 
 EventSub also provides typed message deletions, user-message clears and full chat clears through the existing chat-read authorization. Use `npm run mock -- moderator-actions` to replay these actions locally.
 
@@ -85,9 +89,16 @@ Copy `.env.example` to `.env` and fill in your credentials locally. Keep credent
 | `TWITCH_CLIENT_SECRET` | Twitch application client secret |
 | `TWITCH_CHANNEL` | Broadcaster login, in lowercase |
 | `TWITCH_BOT_LOGIN` | Optional separate bot login |
-| `OPENAI_API_KEY` | OpenAI project API key; required only for commands that call OpenAI |
+| `OPENAI_API_KEY` | OpenAI project API key; required for the automatic loop and commands that call OpenAI |
 | `CONSENSUS_SERVICE_TIER` | `fast` (selected default); `default` is available as an explicit override |
 | `MIN_VOICES` | Minimum distinct authors for a line; integer from 1 to 10, defaults to `2` |
+| `BEAT_MODE` | Initial mode: `auto`, `demand` or `quiet`; defaults to `auto` |
+| `WINDOW_S` | Initial collection window, `5`–`20` seconds; defaults to `8`, adapts up to `30` |
+| `HOLD_MS` | Preview hold, `500`–`3000` milliseconds; defaults to `1000` |
+| `COOLDOWN_S` | Delay after the spoken unit and output settle, `0`–`10` seconds; defaults to `2` |
+| `PIN_S` | Confirmed-post pin duration, `30`–`1800` seconds; defaults to `60` |
+| `POST_LINES` | `every` (default) or `off`; saved control settings override these environment seeds |
+| `MUTE_DEFAULT_MIN` | Default timed mute, `1`–`60` minutes; defaults to `5` |
 | `VOICE_PROVIDER` | `realtime`; legacy is unavailable in this version |
 | `MAIN_VOICE` | Main voice; defaults to `cedar` |
 | `WHISPER_VOICE` | Dissent voice; defaults to `sage` |

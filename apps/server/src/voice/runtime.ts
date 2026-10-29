@@ -2,7 +2,7 @@ import { OpenAI } from "openai";
 import type { Logger } from "pino";
 import { type Blocklist, createBlocklist } from "../../../../packages/core/src/blocklist.js";
 import { verifyTemplated } from "../../../../packages/core/src/verify.js";
-import { sleep, systemClock } from "../clock.js";
+import { type Clock, sleep, systemClock } from "../clock.js";
 import type { OpenAIConfig, VoiceConfig } from "../config.js";
 import { OpenAIModerationPort } from "../consensus/model.js";
 import type { ModerationPort } from "../consensus/ports.js";
@@ -20,7 +20,11 @@ export async function createVoiceRuntime(options: {
   factory?: RealtimeFactory;
   moderation?: ModerationPort;
   overlayRoot?: string;
+  allowAttempt?: NonNullable<ConstructorParameters<typeof VoiceManager>[0]["allowAttempt"]>;
+  onUsage?: NonNullable<ConstructorParameters<typeof VoiceManager>[0]["onUsage"]>;
+  clock?: Clock;
 }) {
+  const clock = options.clock ?? systemClock;
   const { token } = await loadOverlayToken(options.tokenFile);
   const http = await createHttpServer({
     token,
@@ -36,6 +40,9 @@ export async function createVoiceRuntime(options: {
     factory,
     transport: http.hub,
     log: options.log,
+    ...(options.allowAttempt ? { allowAttempt: options.allowAttempt } : {}),
+    ...(options.onUsage ? { onUsage: options.onUsage } : {}),
+    clock,
   });
   const blocklist = options.blocklist ?? createBlocklist();
   const moderation =
@@ -86,12 +93,12 @@ export async function createVoiceRuntime(options: {
           send({ status: "rejected", reason: verified.failures[0] });
           return;
         }
-        const start = Date.now();
+        const start = clock.now();
         const take = manager.prepare(line, command.dissent ? "dissent" : "main");
-        await sleep(systemClock, 1000);
+        await sleep(clock, 1000);
         const result = await take.ready;
         if (result.status !== "verified") {
-          send({ ...result, readyMs: Date.now() - start });
+          send({ ...result, readyMs: clock.now() - start });
           return;
         }
         let playbackStartedAt: number | null = null;
@@ -101,19 +108,19 @@ export async function createVoiceRuntime(options: {
         const unobserve = http.hub.observe((event) => {
           if (event.take !== take.id) return;
           if (event.type === "started") {
-            playbackStartedAt = Date.now();
+            playbackStartedAt = clock.now();
             if (command.mode === "kill_test")
-              killTimer = setTimeout(() => {
-                killedAt = Date.now();
+              killTimer = clock.setTimeout(() => {
+                killedAt = clock.now();
                 manager.cancelAll();
               }, 1000);
           } else if (event.type === "stopped" && killedAt !== null)
-            silenceMs = Date.now() - killedAt;
+            silenceMs = clock.now() - killedAt;
         });
         try {
           await take.play();
           await take.ended;
-          if (command.mode === "kill_test") await sleep(systemClock, 250);
+          if (command.mode === "kill_test") await sleep(clock, 250);
           send({
             ...result,
             readyMs: (result.verifiedAtMs ?? start) - start,
@@ -121,7 +128,7 @@ export async function createVoiceRuntime(options: {
             silenceMs,
           });
         } finally {
-          if (killTimer) clearTimeout(killTimer);
+          if (killTimer) clock.clearTimeout(killTimer);
           unobserve();
         }
       } else {

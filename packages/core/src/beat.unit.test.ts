@@ -513,6 +513,12 @@ test("mute expiry uses the current timer identity and kill persists until explic
   expect(tick(extended, "mute", 122000).state.muted).toBe(false);
   const killed = reduce(extended, { type: "kill" }, 3000).state;
   expect(killed.timers.mute).toBeUndefined();
+  const softMute = reduce(killed, { type: "mute", minutes: 1 }, 4000);
+  expect(softMute.effects).toEqual([]);
+  expect(softMute.state.gates.killed).toBe(true);
+  expect(softMute.state.mutedUntil).toBe(null);
+  const paused = reduce(killed, { type: "off" }, 5000).state;
+  expect(reduce(paused, { type: "on" }, 6000).state.heldBy).toContain("killed");
   expect(reduce(killed, { type: "unmute" }, 500000).state.step).toBe("listening");
 });
 

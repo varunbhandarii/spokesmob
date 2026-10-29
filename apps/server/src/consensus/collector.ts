@@ -35,21 +35,22 @@ export class ConsensusCollector {
       clock?: Clock;
       seed?: number;
       log?: Pick<Logger, "warn">;
+      windowOptions?: () => Partial<WindowOptions>;
     },
   ) {
     this.clock = options.clock ?? systemClock;
     this.unsubscribe = options.bus.onEvent((event) => this.receive(event));
   }
 
-  open(): void {
+  open(startAt = this.clock.now()): void {
     if (this.stopped) throw new Error("Cannot open a stopped chat collector");
     this.reset();
-    this.startAt = this.clock.now();
+    this.startAt = startAt;
     this.controller = new AbortController();
     this.timer = this.clock.setInterval(() => void this.premoderate(), 2000);
   }
 
-  snapshot(): CollectorSnapshot {
+  snapshot(overrides: Partial<WindowOptions> = {}): CollectorSnapshot {
     return {
       messages: structuredClone(this.messages),
       windowOptions: {
@@ -59,6 +60,8 @@ export class ConsensusCollector {
         endAt: this.clock.now(),
         ...(this.startAt === undefined ? {} : { startAt: this.startAt }),
         ...(this.clearBefore === undefined ? {} : { clearBefore: this.clearBefore }),
+        ...this.options.windowOptions?.(),
+        ...overrides,
       },
     };
   }
@@ -67,6 +70,20 @@ export class ConsensusCollector {
     const result = this.snapshot();
     this.reset();
     return result;
+  }
+
+  roll(at = this.clock.now()): CollectorSnapshot {
+    const closed = this.snapshot({ endAt: at });
+    this.open(at);
+    return closed;
+  }
+
+  slide(startAt: number): void {
+    if (this.startAt === undefined) return;
+    this.startAt = Math.max(this.startAt, startAt);
+    this.messages = this.messages.filter((message) => message.at >= (this.startAt ?? startAt));
+    const retained = new Set(this.messages.map((message) => message.id));
+    this.deletedIds = new Set([...this.deletedIds].filter((id) => retained.has(id)));
   }
 
   stop(): void {

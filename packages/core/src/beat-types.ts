@@ -109,6 +109,7 @@ export interface ActiveBeat {
   output: "idle" | "sending" | "pinning";
   outcome: "spoken" | "caption_only" | null;
   reason: string | null;
+  question: string | null;
 }
 export interface BeatGates {
   enabled: boolean;
@@ -216,6 +217,7 @@ export const beatLogRecordSchema = z.strictObject({
   citedNames: z.array(displayNameSchema).max(40),
   latency: z.strictObject({
     assemblyMs: ms,
+    clusteringMs: ms.optional(),
     moderationMs: ms,
     modelMs: ms,
     verifierMs: ms,
@@ -252,6 +254,7 @@ export type BeatEvent =
   | { type: "question"; question: string | null }
   | { type: "layout"; layout: Layout }
   | { type: "notice"; notice: EventNotice }
+  | { type: "invalidate"; reason: string }
   | { type: "pinDone"; beatId: number }
   | {
       type: "postDone";

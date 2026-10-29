@@ -41,6 +41,24 @@ export class OverlayHub implements VoiceTransport {
   private commandListener: ((event: VoiceCommand, reply: (data: unknown) => void) => void) | null =
     null;
   private readonly playbackListeners = new Set<(event: PlaybackReport) => void>();
+  private readonly clientListeners = new Set<() => void>();
+  onClients(listener: () => void) {
+    this.clientListeners.add(listener);
+    return () => {
+      this.clientListeners.delete(listener);
+    };
+  }
+  private clientsChanged() {
+    for (const listener of this.clientListeners) listener();
+  }
+  get hasOverlayClient() {
+    return [...this.clients].some(
+      (client) => client.hello && client.socket.readyState === WebSocket.OPEN,
+    );
+  }
+  emitOverlay(message: unknown) {
+    this.broadcast(message);
+  }
   onReport(listener: (event: PlaybackReport) => void) {
     this.reportListener = listener;
   }
@@ -53,6 +71,12 @@ export class OverlayHub implements VoiceTransport {
   }
   get hasAudioClient() {
     return !!this.owner?.active && this.owner.socket.readyState === WebSocket.OPEN;
+  }
+  get audioConnected() {
+    return this.owner?.socket.readyState === WebSocket.OPEN;
+  }
+  get audioActive() {
+    return this.owner?.active ?? false;
   }
   attach(socket: WebSocket) {
     const client: Client = { socket, audio: false, active: true, hello: false };
@@ -91,12 +115,14 @@ export class OverlayHub implements VoiceTransport {
           audio: client.audio,
           state: { prepared: [...this.prepared].map(([take, data]) => ({ take, ...data })) },
         });
+        this.clientsChanged();
       } else if (event.type === "voice_command") {
         this.commandListener?.(event, send);
       } else if (client === this.owner && client.hello) {
         if (event.type === "active") {
           client.active = event.active;
           if (!event.active) this.send(client, { type: "stop", take: "all" });
+          this.clientsChanged();
         } else {
           this.reportListener?.(event);
           for (const listener of this.playbackListeners) listener(event);
@@ -106,6 +132,7 @@ export class OverlayHub implements VoiceTransport {
     socket.on("close", () => {
       if (this.owner === client) this.owner = null;
       this.clients.delete(client);
+      this.clientsChanged();
     });
   }
   private send(client: Client, data: unknown) {

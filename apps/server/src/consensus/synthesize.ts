@@ -42,6 +42,7 @@ export interface SynthesisOptions {
   onWindow?: (window: Window, clusters: readonly Cluster[]) => void;
   onVerification?: (attempt: VerificationAttempt) => void;
   onFallback?: () => void;
+  moodContext?: { raidActive?: boolean; hypeLevel?: number };
 }
 export async function synthesize(options: SynthesisOptions): Promise<SynthesisResult> {
   const clock = options.clock ?? systemClock;
@@ -214,6 +215,7 @@ export async function synthesize(options: SynthesisOptions): Promise<SynthesisRe
       clusters,
       options.question ?? null,
       attempt ? reason : undefined,
+      options.moodContext,
     );
     result.attempts++;
     let generated: ModelResult;
@@ -258,7 +260,13 @@ export async function synthesize(options: SynthesisOptions): Promise<SynthesisRe
     minVoices,
   });
   if ("reason" in fallback) return finish("verification", fallback.reason);
-  const built = buildInput(window, clusters, options.question ?? null);
+  const built = buildInput(
+    window,
+    clusters,
+    options.question ?? null,
+    undefined,
+    options.moodContext,
+  );
   const fallbackContext = {
     ...context(built.mapping, { status: "ok", flagged: false }),
     previousLine: null,

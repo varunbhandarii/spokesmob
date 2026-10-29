@@ -254,6 +254,7 @@ export function reduce(input: BeatState, event: BeatEvent, now: number): BeatRed
     output: "idle",
     outcome: null,
     reason: null,
+    question: state.question,
   });
   const eligible = (speak = false) => {
     if (state.step !== "listening" || state.heldBy.length || !state.collection) return;
@@ -350,6 +351,7 @@ export function reduce(input: BeatState, event: BeatEvent, now: number): BeatRed
     }
     case "mute":
     case "kill": {
+      if (event.type === "mute" && state.gates.killed) break;
       if (event.type === "kill" && state.muted && state.gates.killed && state.mutedUntil === null)
         break;
       mark();
@@ -470,7 +472,7 @@ export function reduce(input: BeatState, event: BeatEvent, now: number): BeatRed
           voices: result.voices,
           mood: result.mood,
           question: state.question,
-          answersQuestion: result.answersQuestion,
+          answersQuestion: result.answersQuestion && state.current.question === state.question,
           templated: false,
           citedNames: result.citedNames,
           citedExemplars: event.citedExemplars,
@@ -567,6 +569,13 @@ export function reduce(input: BeatState, event: BeatEvent, now: number): BeatRed
       mark();
       effects.push({ type: "emit", name: "veto", beatId: state.current.id });
       cancel("veto", "vetoed");
+      cooldown();
+      break;
+    }
+    case "invalidate": {
+      if (!state.current || !isActive(state) || state.current.output !== "idle") break;
+      mark();
+      cancel(event.reason, "blocked");
       cooldown();
       break;
     }

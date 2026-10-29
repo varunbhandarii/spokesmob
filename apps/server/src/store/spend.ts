@@ -40,10 +40,10 @@ export class SpendLedger {
     );
   }
   reserve(
-    source: "consensus" | "voice",
+    source: "consensus" | "voice" | "moderation",
     now: number,
     beatId: string | null,
-    amount = source === "consensus" ? 0.0005 : 0.0085,
+    amount = source === "consensus" ? 0.0005 : source === "voice" ? 0.0085 : 0,
   ): string | null {
     if (!this.canReserve(amount)) return null;
     const id = `${this.sessionId}:${++this.sequence}`;

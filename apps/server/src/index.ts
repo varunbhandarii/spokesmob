@@ -1,32 +1,20 @@
 import { pathToFileURL } from "node:url";
+import { createBeatApplication } from "./beat/application.js";
 import { loadConfig } from "./config.js";
 import { acquireInstanceLock } from "./instance-lock.js";
 import { createLogger } from "./log.js";
-import { createTwitchRuntime } from "./twitch/runtime.js";
-import { createVoiceRuntime } from "./voice/runtime.js";
 
 export async function startServer(): Promise<void> {
   const config = loadConfig();
   const log = createLogger(config.logLevel);
   const release = await acquireInstanceLock(config.tokenFile);
   try {
-    const runtime = await createTwitchRuntime({ config, log });
-    const voice = await createVoiceRuntime({
-      tokenFile: config.tokenFile,
-      voice: config.voice,
-      openai: config.openai,
-      log,
-      blocklist: runtime.blocklist,
-    }).catch(async (error: unknown) => {
-      await runtime.stop();
-      throw error;
-    });
+    const application = await createBeatApplication({ config, log });
     let overlayPath: string;
     try {
-      overlayPath = await voice.start();
+      overlayPath = await application.start();
     } catch (error) {
-      await voice.close();
-      await runtime.stop();
+      await application.close();
       throw error;
     }
     console.log(`Overlay URL saved to ${overlayPath}`);
@@ -34,8 +22,7 @@ export async function startServer(): Promise<void> {
     const stop = async () => {
       if (stopping) return;
       stopping = true;
-      await voice.close();
-      await runtime.stop();
+      await application.close();
       await release();
     };
     process.once("SIGINT", () => {
@@ -47,13 +34,12 @@ export async function startServer(): Promise<void> {
     process.once("beforeExit", () => {
       void stop();
     });
-    runtime.bus.onHealth((event) => {
+    application.twitch.bus.onHealth((event) => {
       if (event.kind === "auth" && event.state === "auth_required") {
         process.exitCode = 1;
         void stop();
       }
     });
-    runtime.client.start();
   } catch (error) {
     await release();
     throw error;
