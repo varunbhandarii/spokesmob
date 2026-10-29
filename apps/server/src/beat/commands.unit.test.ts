@@ -1,8 +1,13 @@
+import { once } from "node:events";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { WebSocket } from "ws";
 import { resolveBeatSettings } from "../../../../packages/core/src/beat-settings.js";
 import { createBlocklist } from "../../../../packages/core/src/blocklist.js";
+import type { ControlAction } from "../../../../packages/core/src/overlay-protocol.js";
+import { type Clock, systemClock } from "../clock.js";
 import { clearModeration, FakeModerationPort } from "../consensus/fakes.js";
 import { StubConsensusModel } from "../consensus/stub-model.js";
+import { createHttpServer } from "../http/server.js";
 import { createLogger } from "../log.js";
 import { openStorage } from "../store/db.js";
 import { migrate } from "../store/migrations.js";
@@ -26,7 +31,7 @@ afterEach(async () => {
   vi.restoreAllMocks();
   vi.useRealTimers();
 });
-function fixture(moderation = new FakeModerationPort()) {
+function fixture(moderation = new FakeModerationPort(), clock?: Clock) {
   const db = openStorage(":memory:");
   migrate(db);
   const store = createRepositories(db);
@@ -72,6 +77,7 @@ function fixture(moderation = new FakeModerationPort()) {
     log: createLogger("silent"),
     paidModel: false,
     paidVoice: false,
+    ...(clock ? { clock } : {}),
   });
   const commands = new CommandRouter({
     runner,
@@ -82,6 +88,7 @@ function fixture(moderation = new FakeModerationPort()) {
     blocklist,
     bus,
     log: createLogger("silent"),
+    ...(clock ? { clock } : {}),
   });
   voice.onReport = (event) => runner.report(event);
   runner.start();
@@ -179,6 +186,68 @@ test("mute and kill cancel synchronously, unpin once and persist; off makes no m
   const mutedPosts = f.sent.filter((text) => text === "Spokesmob muted").length;
   await f.commands.execute({ action: "off" });
   expect(f.sent.filter((text) => text === "Spokesmob muted")).toHaveLength(mutedPosts);
+});
+
+test("control-socket Unmute clears a five-minute timed mute immediately without advancing the clock", async () => {
+  // The socket uses local I/O; the beat clock remains fixed, so expiry cannot explain the result.
+  vi.useRealTimers();
+  const clock: Clock = { ...systemClock, now: () => 1000 };
+  const f = fixture(new FakeModerationPort(), clock);
+  const http = await createHttpServer({ token: "synthetic-control", port: 0 });
+  http.hub.setSnapshot(() => f.runner.view());
+  http.hub.onAction((command) => f.commands.execute(command));
+  const unsubscribe = f.runner.onState((view) => http.hub.emitControl({ type: "state", ...view }));
+  let socket: WebSocket | undefined;
+  try {
+    const origin = await http.listen();
+    socket = new WebSocket(`${origin.replace("http", "ws")}/ws?token=synthetic-control`, {
+      origin,
+    });
+    const snapshots: unknown[] = [];
+    socket.on("message", (raw) => {
+      const value = JSON.parse(raw.toString());
+      if (value.type === "state") snapshots.push(value);
+    });
+    await once(socket, "open");
+    const hello = once(socket, "message");
+    socket.send(JSON.stringify({ type: "hello", role: "control" }));
+    await hello;
+    const command = (action: ControlAction, request: string) =>
+      new Promise<unknown>((resolve, reject) => {
+        const current = socket as WebSocket;
+        const timer = setTimeout(() => {
+          current.off("message", receive);
+          reject(new Error("Control result did not arrive"));
+        }, 2000);
+        function receive(raw: { toString(): string }) {
+          const value = JSON.parse(raw.toString());
+          if (value.type !== "result" || value.request !== request) return;
+          clearTimeout(timer);
+          current.off("message", receive);
+          resolve(value);
+        }
+        current.on("message", receive);
+        current.send(JSON.stringify({ type: "command", request, command: action }));
+      });
+    expect(await command({ action: "mute", minutes: 5 }, "mute-test")).toMatchObject({ ok: true });
+    expect(f.runner.view()).toMatchObject({ step: "held", muted: true, mutedUntil: 301000 });
+    expect(await command({ action: "unmute" }, "unmute-test")).toMatchObject({ ok: true });
+    expect(clock.now()).toBe(1000);
+    expect(f.runner.view()).toMatchObject({
+      step: "listening",
+      muted: false,
+      mutedUntil: null,
+      heldBy: [],
+    });
+    expect(f.runner.state.timers.mute).toBeUndefined();
+    expect(f.store.settings.getSafety()).toEqual({ muted: false, mutedUntil: null, killed: false });
+    expect(snapshots.at(-1)).toMatchObject({ type: "state", muted: false, mutedUntil: null });
+    expect(f.sent.filter((text) => text === "Spokesmob unmuted")).toHaveLength(1);
+  } finally {
+    socket?.terminate();
+    unsubscribe();
+    await http.close();
+  }
 });
 test("gags use a fragment ID, invalidate an in-flight vote and persist until explicitly removed", async () => {
   const f = fixture();

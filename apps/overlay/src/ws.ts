@@ -82,7 +82,7 @@ export function connectOverlay(options: {
       socket = null;
       options.disconnect();
       options.state("disconnected");
-      timer = clock.setTimeout(open, Math.min(30000, 1000 * 2 ** Math.min(retry++, 5)));
+      timer = clock.setTimeout(open, Math.min(5000, 1000 * 2 ** Math.min(retry++, 3)));
     };
   };
   open();

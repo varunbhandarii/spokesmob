@@ -222,10 +222,11 @@ test.each(["listening", "synthesizing", "preview", "speaking", "cooldown"] as co
   },
 );
 
-test("hold and voice readiness are independent gates and stale or early timers do nothing", () => {
+test("hold and voice readiness are independent gates; early timers rearm and stale timers do nothing", () => {
   const state = preview({}, false);
   const early = tick(state, "hold", 9000);
-  expect(early.effects).toEqual([]);
+  expect(early.state).toBe(state);
+  expect(early.effects).toEqual([{ type: "setTimer", timer: state.timers.hold }]);
   const held = tick(state, "hold", 9100);
   expect(held.state.step).toBe("preview");
   const ready = reduce(
@@ -244,6 +245,19 @@ test("hold and voice readiness are independent gates and stale or early timers d
   ).toEqual([]);
   expect(reduce(ready.state, { type: "tick", timer: "hold", id: -1 }, 9502).effects).toEqual([]);
 });
+
+test.each(["window", "hold", "reading", "cooldown", "mute", "mood"] as const)(
+  "an early %s tick preserves state and rearms the same pending timer",
+  (kind) => {
+    const pending = { id: 123, kind, at: 10000 };
+    const state = { ...start(), timers: { [kind]: pending } };
+    const early = reduce(state, { type: "tick", timer: kind, id: pending.id }, 9999);
+    expect(early.state).toBe(state);
+    expect(early.effects).toEqual([{ type: "setTimer", timer: pending }]);
+    expect(early.state.timers[kind]).toEqual(pending);
+    expect(reduce(state, { type: "tick", timer: kind, id: -1 }, 9999).effects).toEqual([]);
+  },
+);
 
 test.each([false, true])(
   "main caption-only never posts; dissent caption-only still allows the spoken main (%s)",

@@ -25,7 +25,7 @@ import type {
 } from "../../../../packages/core/src/overlay-protocol.js";
 import { verifyTemplated } from "../../../../packages/core/src/verify.js";
 import { assembleWindow } from "../../../../packages/core/src/window.js";
-import { type Clock, systemClock } from "../clock.js";
+import { atDeadline, type Clock, systemClock } from "../clock.js";
 import { type CollectorSnapshot, ConsensusCollector } from "../consensus/collector.js";
 import { fakeModelResult } from "../consensus/fakes.js";
 import { ModerationGate } from "../consensus/moderation.js";
@@ -75,7 +75,7 @@ export class BeatRunner {
   private readonly takes = new Map<number, { main?: VoiceTake; dissent?: VoiceTake }>();
   private readonly takeBeats = new Map<number, number>();
   private readonly tickets = new Map<string, string>();
-  private readonly timers = new Map<string, ReturnType<typeof setTimeout>>();
+  private readonly timers = new Map<string, () => void>();
   private readonly tasks = new Set<Promise<void>>();
   private readonly events: BeatEvent[] = [];
   private readonly cleanup: (() => void)[] = [];
@@ -366,15 +366,14 @@ export class BeatRunner {
         break;
       case "setTimer": {
         const previous = this.timers.get(effect.timer.kind);
-        if (previous) this.clock.clearTimeout(previous);
-        const timer = this.clock.setTimeout(
-          () => {
-            this.timers.delete(effect.timer.kind);
-            this.dispatch({ type: "tick", timer: effect.timer.kind, id: effect.timer.id });
-          },
-          Math.max(0, effect.timer.at - this.clock.now()),
-        );
-        this.timers.set(effect.timer.kind, timer);
+        previous?.();
+        const cancel = atDeadline(this.clock, effect.timer.at, () => {
+          if (this.timers.get(effect.timer.kind) !== cancel) return;
+          this.timers.delete(effect.timer.kind);
+          if (this.stopped || this.state.timers[effect.timer.kind]?.id !== effect.timer.id) return;
+          this.dispatch({ type: "tick", timer: effect.timer.kind, id: effect.timer.id });
+        });
+        this.timers.set(effect.timer.kind, cancel);
         break;
       }
       case "synthesize":
@@ -764,7 +763,7 @@ export class BeatRunner {
     this.stopped = true;
     for (const cleanup of this.cleanup.splice(0)) cleanup();
     for (const interval of this.intervals) this.clock.clearInterval(interval);
-    for (const timer of this.timers.values()) this.clock.clearTimeout(timer);
+    for (const cancel of this.timers.values()) cancel();
     this.timers.clear();
     this.collector.stop();
     await Promise.allSettled([...this.tasks]);

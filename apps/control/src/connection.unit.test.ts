@@ -44,6 +44,8 @@ test("control handshake declares no audio and waits for the authorized snapshot 
   expect(connection.command({ action: "kill" })).toBe(null);
   socket.receive({ type: "hello", role: "control", audio: false, state: view });
   expect(connection.command({ action: "kill" })).toMatch(/^control-/);
+  expect(connection.command({ action: "unmute" })).toMatch(/^control-/);
+  expect(socket.sent.at(-1)).toMatchObject({ type: "command", command: { action: "unmute" } });
   expect(connection.tone()).toMatch(/^control-/);
   expect(socket.sent.at(-1)).toMatchObject({ type: "voice_command", mode: "tone" });
   socket.receive({ type: "prepare", take: 1, channel: "main", text: "Synthetic" });

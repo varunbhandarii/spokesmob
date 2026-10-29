@@ -3,6 +3,7 @@ import { resolveBeatSettings } from "../../../../packages/core/src/beat-settings
 import { createBlocklist } from "../../../../packages/core/src/blocklist.js";
 import type { OverlayMessage } from "../../../../packages/core/src/overlay-protocol.js";
 import { serverOverlayMessageSchema } from "../../../../packages/core/src/overlay-protocol.js";
+import { type Clock, systemClock } from "../clock.js";
 import { FakeConsensusModel, FakeModerationPort, fakeModelResult } from "../consensus/fakes.js";
 import { StubConsensusModel } from "../consensus/stub-model.js";
 import { createLogger } from "../log.js";
@@ -34,6 +35,8 @@ function fixture(
     uncertain?: boolean;
     cap?: number;
     paidModel?: boolean;
+    clock?: Clock;
+    windowS?: number;
   } = {},
 ) {
   const db = openStorage(":memory:");
@@ -75,6 +78,7 @@ function fixture(
     settings: resolveBeatSettings({
       mode: options.quiet ? "quiet" : "auto",
       spendCapUsd: options.cap ?? 5,
+      ...(options.windowS === undefined ? {} : { windowS: options.windowS }),
     }),
     sessionId: "sample",
     voice,
@@ -101,6 +105,7 @@ function fixture(
     log: createLogger("silent"),
     paidModel: options.paidModel ?? false,
     paidVoice: false,
+    ...(options.clock ? { clock: options.clock } : {}),
   });
   voice.onReport = (event) => runner.report(event);
   runner.start();
@@ -148,6 +153,79 @@ test("the shell completes one verified unit, posts once, pins and records actual
     latency: { holdMs: 1000, voiceReadyMs: 300, preRollMs: 100 },
   });
   expect(f.overlay.some((message) => message.type === "line")).toBe(true);
+});
+
+test("window, hold and cooldown advance when every timeout wakes one millisecond early", async () => {
+  const earlyAt: number[] = [];
+  const clock: Clock = {
+    ...systemClock,
+    setTimeout: (callback, ms) =>
+      setTimeout(
+        () => {
+          if (ms > 1) earlyAt.push(Date.now());
+          callback();
+        },
+        Math.max(1, ms - 1),
+      ),
+  };
+  // Keep the window deadline between collector polls so a poll cannot mask a lost tick.
+  const f = fixture({ clock, windowS: 5.125 });
+  const dispatch = vi.spyOn(f.runner, "dispatch");
+  f.chat("one", "blue");
+  f.chat("two", "blue");
+  const window = f.runner.state.timers.window;
+  expect(window?.at).toBe(5125);
+  await vi.advanceTimersByTimeAsync(5124);
+  expect(f.runner.state.step).toBe("listening");
+  expect(f.runner.state.timers.window).toEqual(window);
+  expect(
+    dispatch.mock.calls.some(([event]) => event.type === "tick" && event.id === window?.id),
+  ).toBe(false);
+  await vi.advanceTimersByTimeAsync(1);
+  expect(f.runner.state.step).toBe("preview");
+  const hold = f.runner.state.timers.hold;
+  expect(hold?.at).toBe(6125);
+  f.chat("three", "green");
+  f.chat("four", "green");
+  await vi.advanceTimersByTimeAsync(999);
+  expect(f.runner.state.step).toBe("preview");
+  expect(f.voice.played).toEqual([]);
+  expect(
+    dispatch.mock.calls.some(([event]) => event.type === "tick" && event.id === hold?.id),
+  ).toBe(false);
+  await vi.advanceTimersByTimeAsync(1);
+  expect(f.runner.state.step).toBe("speaking");
+  await vi.advanceTimersByTimeAsync(1100);
+  expect(f.runner.state.step).toBe("cooldown");
+  const cooldown = f.runner.state.timers.cooldown;
+  expect(cooldown?.at).toBe(9225);
+  await vi.advanceTimersByTimeAsync(1999);
+  expect(f.runner.state.step).toBe("cooldown");
+  expect(
+    dispatch.mock.calls.some(([event]) => event.type === "tick" && event.id === cooldown?.id),
+  ).toBe(false);
+  await vi.advanceTimersByTimeAsync(1);
+  expect(f.runner.state.step).toBe("listening");
+  await vi.advanceTimersByTimeAsync(1025);
+  expect(f.runner.state.step).toBe("preview");
+  expect(earlyAt).toEqual(expect.arrayContaining([5124, 6124, 9224]));
+  expect(f.calls.map((call) => call.action)).toEqual(["send", "pin"]);
+});
+
+test("a timed mute never expires early and cannot get stuck after an early wake", async () => {
+  const clock: Clock = {
+    ...systemClock,
+    setTimeout: (callback, ms) => setTimeout(callback, Math.max(1, ms - 1)),
+  };
+  const f = fixture({ clock });
+  f.runner.dispatch({ type: "mute", minutes: 1 });
+  await vi.advanceTimersByTimeAsync(59999);
+  expect(f.runner.view().muted).toBe(true);
+  expect(f.store.settings.getSafety().muted).toBe(true);
+  await vi.advanceTimersByTimeAsync(1);
+  expect(f.runner.view().muted).toBe(false);
+  expect(f.runner.view().mutedUntil).toBeNull();
+  expect(f.store.settings.getSafety().muted).toBe(false);
 });
 test("a veto during the dissent cancels both takes with no post and no pin", async () => {
   const f = fixture({ dissent: true });

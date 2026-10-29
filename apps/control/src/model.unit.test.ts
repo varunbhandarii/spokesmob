@@ -60,6 +60,13 @@ test("speak requires an unblocked demand window while veto remains available dur
   expect(canSendAction({ action: "veto" }, { ...view, step: "cooldown" }, true)).toBe(false);
   expect(canSendAction({ action: "kill" }, view, false)).toBe(false);
   expect(canSendAction({ action: "kill" }, null, true)).toBe(false);
+  expect(
+    canSendAction(
+      { action: "unmute" },
+      { ...view, step: "held", muted: true, mutedUntil: 300000, heldBy: ["muted"] },
+      true,
+    ),
+  ).toBe(true);
   expect(heldLabels({ ...view, heldBy: ["offline", "overlay_inactive"] })).toEqual([
     "Stream is offline",
     "OBS audio source is inactive",

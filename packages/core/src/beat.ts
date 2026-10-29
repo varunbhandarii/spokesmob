@@ -416,7 +416,9 @@ export function reduce(input: BeatState, event: BeatEvent, now: number): BeatRed
     }
     case "tick": {
       const pending = state.timers[event.timer];
-      if (!pending || pending.id !== event.id || now < pending.at) break;
+      if (!pending || pending.id !== event.id) break;
+      if (now < pending.at)
+        return { state: input, effects: [{ type: "setTimer", timer: pending }] };
       mark();
       dropTimer(event.timer);
       if (event.timer === "window") {

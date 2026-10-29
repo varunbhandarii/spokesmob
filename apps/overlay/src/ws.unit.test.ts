@@ -80,3 +80,30 @@ test("messages preserve order and disconnected generations discard queued events
   await Promise.resolve();
   expect(received).toHaveLength(2);
 });
+
+test("repeated localhost reconnects remain capped at five seconds", async () => {
+  vi.useFakeTimers();
+  const sockets: FakeSocket[] = [];
+  const connection = connectOverlay({
+    location: { protocol: "http:", host: "127.0.0.1:4040", search: "?token=synthetic" },
+    audio: true,
+    obs: true,
+    state: () => {},
+    disconnect: () => {},
+    message: () => {},
+    socket: () => {
+      const socket = new FakeSocket();
+      sockets.push(socket);
+      return socket;
+    },
+  });
+  for (const delay of [1000, 2000, 4000, 5000, 5000, 5000]) {
+    const count = sockets.length;
+    sockets.at(-1)?.close();
+    await vi.advanceTimersByTimeAsync(delay - 1);
+    expect(sockets).toHaveLength(count);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(sockets).toHaveLength(count + 1);
+  }
+  connection.close();
+});

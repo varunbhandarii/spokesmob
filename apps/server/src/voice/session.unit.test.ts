@@ -2,6 +2,7 @@ import { afterEach, expect, test, vi } from "vitest";
 import { createMockPeer } from "../../../../tools/mock-realtime/src/peer.js";
 import { type Behavior, SYNTHETIC_USAGE } from "../../../../tools/mock-realtime/src/script.js";
 import { createRealtimeMock } from "../../../../tools/mock-realtime/src/server.js";
+import { type Clock, systemClock } from "../clock.js";
 import { parseVoiceUsage, RealtimeSession, voiceInstructions } from "./session.js";
 import { type RealtimeFactory, type RealtimeListeners, realtimeFactory } from "./transport.js";
 
@@ -14,6 +15,7 @@ afterEach(() => {
 function fixture(
   behaviors: Behavior[] = ["normal"],
   echo?: (session: Record<string, unknown>) => Record<string, unknown>,
+  clock?: Clock,
 ) {
   const queue = [...behaviors];
   const peers: ReturnType<typeof createMockPeer>[] = [];
@@ -46,6 +48,7 @@ function fixture(
     factory,
     seed: 42,
     onUsage: (take, value) => usage.push({ take, value }),
+    ...(clock ? { clock } : {}),
   });
   sessions.push(session);
   return { session, peers, events, callbacks, usage };
@@ -142,6 +145,27 @@ test("silent PCM remains raw until final usable-audio validation and missing usa
   const second = f.session.run({ take: "unknown", line });
   await vi.advanceTimersByTimeAsync(200);
   expect(await second).toMatchObject({ reason: null, usage: null });
+});
+
+test("voice deadline polling keeps checking after a poll one millisecond before expiry", async () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(0);
+  const clock = { ...systemClock, now: () => Math.max(0, Date.now() - 2) };
+  const f = fixture(["no_audio"], undefined, clock);
+  let complete = false;
+  const pending = f.session.run({ take: "early-poll", line }).then((result) => {
+    complete = true;
+    return result;
+  });
+  await vi.advanceTimersByTimeAsync(3001);
+  expect(clock.now()).toBe(2999);
+  expect(complete).toBe(false);
+  await vi.advanceTimersByTimeAsync(25);
+  expect(await pending).toMatchObject({
+    reason: "stall",
+    detail: "first_audio",
+    pcm: new Uint8Array(),
+  });
 });
 test("cancel ignores late PCM and stale response IDs without contaminating the next take", async () => {
   vi.useFakeTimers();
