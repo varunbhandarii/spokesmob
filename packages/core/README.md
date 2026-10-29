@@ -1,6 +1,6 @@
 # Shared beat contracts
 
-[beat-types.ts](src/beat-types.ts) defines the beat state, events, effects and declared transitions. [overlay-protocol.ts](src/overlay-protocol.ts) defines the JSON schemas for both WebSocket directions and each client role. [beat-settings.ts](src/beat-settings.ts) defines validated settings and their defaults. These modules perform no I/O and read no clock. The reducer receives time as an argument; timers are effects carrying an ID and deadline.
+[beat.ts](src/beat.ts) implements `reduce(state, event, now)` and returns the next state and data effects. [beat-types.ts](src/beat-types.ts) defines its state, events, effects and declared transitions. [overlay-protocol.ts](src/overlay-protocol.ts) defines the JSON schemas for both WebSocket directions and each client role. [beat-settings.ts](src/beat-settings.ts) defines validated settings and their defaults. These modules perform no I/O and read no clock. Timers are effects carrying an ID and deadline.
 
 ## Cycle
 

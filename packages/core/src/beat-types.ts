@@ -108,6 +108,7 @@ export interface ActiveBeat {
   mainEndedAt: number | null;
   output: "idle" | "sending" | "pinning";
   outcome: "spoken" | "caption_only" | null;
+  reason: string | null;
 }
 export interface BeatGates {
   enabled: boolean;
