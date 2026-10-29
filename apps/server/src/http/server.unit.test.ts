@@ -43,7 +43,7 @@ async function server() {
     );
     await once(socket, "open");
     const hello = once(socket, "message");
-    socket.send(JSON.stringify({ type: "hello", audio, obs: audio }));
+    socket.send(JSON.stringify({ type: "hello", role: "overlay", audio, obs: audio }));
     await hello;
     return { socket, frames };
   }
@@ -114,7 +114,7 @@ test("newest audio client wins, silent previews receive no PCM and hello resync 
   await new Promise((resolve) => setTimeout(resolve, 5));
   expect(reports).toHaveLength(1);
   const before = second.frames.filter((frame) => frame.binary).length;
-  second.socket.send(JSON.stringify({ type: "hello", audio: true, obs: true }));
+  second.socket.send(JSON.stringify({ type: "hello", role: "overlay", audio: true, obs: true }));
   await new Promise((resolve) => setTimeout(resolve, 5));
   expect(second.frames.filter((frame) => frame.binary)).toHaveLength(before);
 });
@@ -126,4 +126,75 @@ test("shutdown closes a connected overlay instead of waiting for its browser tab
   await f.close();
   await closed;
   expect(client.socket.readyState).toBe(WebSocket.CLOSED);
+});
+
+test("socket roles enforce commands, private feeds, audio ownership and playback reports", async () => {
+  const f = await server();
+  const overlay = await f.connect(true);
+  const silent = await f.connect(false);
+  const control = new WebSocket(`${f.url}/ws?token=synthetic-token`, { origin: f.origin });
+  const frames: { binary: boolean; data: Buffer }[] = [];
+  control.on("message", (data, binary) =>
+    frames.push({ binary, data: Buffer.from(data as Buffer) }),
+  );
+  await once(control, "open");
+  const actions: unknown[] = [];
+  const checks: unknown[] = [];
+  const reports: unknown[] = [];
+  f.hub.onAction(async (action) => {
+    actions.push(action);
+    return { ok: true, reason: null };
+  });
+  f.hub.onCommand((command) => checks.push(command));
+  f.hub.onReport((report) => reports.push(report));
+  const command = { type: "command", request: "test-veto", command: { action: "veto" } };
+  const voice = { type: "voice_command", request: "test-tone", mode: "tone" };
+  control.send(JSON.stringify(command));
+  control.send(JSON.stringify(voice));
+  const hello = once(control, "message");
+  control.send(JSON.stringify({ type: "hello", role: "control" }));
+  const [welcome] = await hello;
+  expect(JSON.parse(String(welcome))).toMatchObject({
+    role: "control",
+    audio: false,
+    state: { step: "off" },
+  });
+  expect(actions).toEqual([]);
+  expect(checks).toEqual([]);
+  overlay.socket.send(JSON.stringify(command));
+  silent.socket.send(JSON.stringify(voice));
+  // An established overlay cannot turn itself into a control socket.
+  overlay.socket.send(JSON.stringify({ type: "hello", role: "control" }));
+  overlay.socket.send(JSON.stringify(command));
+  control.send(JSON.stringify({ type: "hello", role: "overlay", audio: true, obs: true }));
+  control.send(JSON.stringify({ type: "active", active: false }));
+  control.send(JSON.stringify({ type: "ended", take: 5 }));
+  control.send(JSON.stringify(command));
+  control.send(JSON.stringify(voice));
+  f.hub.prepare(5, "main", "A verified synthetic line");
+  f.hub.play(5, "main", new Uint8Array(48000), 1000);
+  f.hub.emitControl({ type: "cost", usdSession: 0, usdHour: 0, cap: 5 });
+  await until(
+    () =>
+      actions.length === 1 &&
+      checks.length === 1 &&
+      frames.some((frame) => frame.data.toString().includes('"type":"cost"')) &&
+      overlay.frames.some((frame) => frame.binary),
+  );
+  expect(f.hub.hasAudioClient).toBe(true);
+  expect(actions).toEqual([{ action: "veto" }]);
+  expect(reports).toEqual([]);
+  expect(
+    frames.some(
+      (frame) => frame.binary || /"type":"(?:prepare|play|stop)"/u.test(frame.data.toString()),
+    ),
+  ).toBe(false);
+  expect(overlay.frames.some((frame) => frame.data.toString().includes('"type":"cost"'))).toBe(
+    false,
+  );
+  f.hub.stop("all");
+  overlay.socket.send(JSON.stringify({ type: "active", active: false }));
+  await until(() => !f.hub.hasAudioClient);
+  expect(f.hub.audioConnected).toBe(true);
+  expect(f.hub.hasOverlayClient).toBe(true);
 });

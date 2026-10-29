@@ -187,6 +187,16 @@ export class BeatRunner {
   refreshClients() {
     this.dispatch({ type: "gate", changes: this.options.clients() });
   }
+  invalidateGag(userId: string) {
+    this.particleNames = [];
+    this.options.overlay({ type: "particles_clear" });
+    const source = this.state.current
+      ? this.records.books.get(this.state.current.id)?.snapshot?.messages
+      : undefined;
+    if (source?.some((message) => message.authorId === userId))
+      this.dispatch({ type: "invalidate", reason: "gagged_user" });
+    this.sampleWindow();
+  }
   publishCost() {
     const total = this.options.ledger.totals();
     this.options.control?.({

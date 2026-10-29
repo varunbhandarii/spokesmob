@@ -12,6 +12,8 @@ import { createTwitchRuntime, type TwitchRuntime } from "../twitch/runtime.js";
 import { createVoiceRuntime } from "../voice/runtime.js";
 import type { RealtimeFactory } from "../voice/transport.js";
 import { recordedModeration } from "./billing.js";
+import { CommandRouter } from "./commands.js";
+import { publishHealth } from "./health.js";
 import { ChatOutput } from "./output.js";
 import { BeatRunner } from "./runner.js";
 
@@ -37,6 +39,7 @@ export async function createBeatApplication(options: {
   let store: ReturnType<typeof openApplicationStore> | undefined;
   let voice: Awaited<ReturnType<typeof createVoiceRuntime>> | undefined;
   let runner: BeatRunner | undefined;
+  let commands: CommandRouter | undefined;
   try {
     store = openApplicationStore({
       tokenFile: config.tokenFile,
@@ -75,8 +78,16 @@ export async function createBeatApplication(options: {
       ...(options.clock ? { clock: options.clock } : {}),
       allowAttempt: (take, attempt) => runner?.allowVoiceAttempt(take, attempt) ?? false,
       onUsage: (take, attempt, usage, cost) => runner?.voiceUsage(take, attempt, usage, cost),
+      checkAllowed: () =>
+        !!runner &&
+        !runner.state.muted &&
+        !runner.state.gates.killed &&
+        runner.state.step !== "preview" &&
+        runner.state.step !== "speaking" &&
+        runner.state.step !== "synthesizing",
     });
     const hub = voice.http.hub;
+    const output = new ChatOutput(twitch.helix, log);
     runner = new BeatRunner({
       bus: twitch.bus,
       online: twitch.online,
@@ -85,7 +96,7 @@ export async function createBeatApplication(options: {
       settings: config.beat,
       sessionId,
       voice: voice.manager,
-      output: new ChatOutput(twitch.helix, log),
+      output,
       model,
       moderation,
       blocklist: twitch.blocklist,
@@ -95,6 +106,7 @@ export async function createBeatApplication(options: {
         overlayConnected: hub.hasOverlayClient,
       }),
       overlay: (message) => hub.emitOverlay(message),
+      control: (message) => hub.emitControl(message),
       log,
       tier: config.openai.serviceTier,
       paidModel: options.paidModel ?? true,
@@ -102,8 +114,38 @@ export async function createBeatApplication(options: {
       ...(options.clock ? { clock: options.clock } : {}),
     });
     const beat = runner;
+    commands = new CommandRouter({
+      runner: beat,
+      store,
+      ledger,
+      output,
+      moderation,
+      blocklist: twitch.blocklist,
+      bus: twitch.bus,
+      log,
+      retention: () => store?.prune(),
+      ...(options.clock ? { clock: options.clock } : {}),
+    });
+    const router = commands;
+    voice.http.setControl({
+      state: () => ({ state: beat.view(), settings: beat.state.settings }),
+      logs: (limit, before) => store?.beatLog.recent(limit, before) ?? [],
+      execute: (command) => router.execute(command),
+    });
+    hub.setSnapshot(() => beat.view());
+    hub.onAction((command) => router.execute(command));
     const unobserve = hub.observe((event) => beat.report(event));
-    const unclients = hub.onClients(() => beat.refreshClients());
+    const unclients = hub.onClients(() => {
+      beat.refreshClients();
+      beat.publishCost();
+    });
+    const stopHealth = publishHealth({
+      bus: twitch.bus,
+      hub,
+      voice: voice.manager,
+      store,
+      clock: options.clock ?? systemClock,
+    });
     const runtimeVoice = voice;
     const runtimeStore = store;
     return {
@@ -113,6 +155,7 @@ export async function createBeatApplication(options: {
       runner: beat,
       store: runtimeStore,
       ledger,
+      commands: router,
       async start() {
         const path = await runtimeVoice.start();
         beat.start();
@@ -120,6 +163,8 @@ export async function createBeatApplication(options: {
         return path;
       },
       async close() {
+        router.stop();
+        stopHealth();
         unclients();
         unobserve();
         await beat.stop();
@@ -129,6 +174,7 @@ export async function createBeatApplication(options: {
       },
     };
   } catch (error) {
+    commands?.stop();
     await runner?.stop();
     await voice?.close();
     await twitch.stop();

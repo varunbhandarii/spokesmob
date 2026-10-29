@@ -50,7 +50,7 @@ export function connectOverlay(options: {
     next.onopen = () => {
       if (current !== generation || closed) return;
       options.state("connected");
-      send({ type: "hello", audio: options.audio, obs: options.obs });
+      send({ type: "hello", role: "overlay", audio: options.audio, obs: options.obs });
       send({ type: "active", active: options.active?.() ?? true });
     };
     next.onmessage = (event) => {

@@ -3,6 +3,8 @@ import staticFiles from "@fastify/static";
 import websocket from "@fastify/websocket";
 import Fastify from "fastify";
 import type { Logger } from "pino";
+import { localAccess } from "./access.js";
+import { type ControlApi, registerControlApi } from "./api.js";
 import { tokenMatches } from "./overlay-token.js";
 import { OverlayHub } from "./ws-hub.js";
 
@@ -11,6 +13,7 @@ export async function createHttpServer(options: {
   port: number;
   log?: Pick<Logger, "info">;
   overlayRoot?: string;
+  controlRoot?: string;
   hub?: OverlayHub;
 }) {
   // Request URLs carry a credential; automatic request/error logging stays disabled.
@@ -20,12 +23,10 @@ export async function createHttpServer(options: {
     const address = app.server.address();
     return address && typeof address !== "string" ? address.port : options.port;
   };
-  const validHost = (host: string | undefined) =>
-    host === `127.0.0.1:${port()}` || host === `localhost:${port()}`;
-  const validOrigin = (origin: string | undefined) =>
-    origin === `http://127.0.0.1:${port()}` || origin === `http://localhost:${port()}`;
+  const access = localAccess(options.token, port);
+  let control: ControlApi | null = null;
   app.addHook("onRequest", async (request, reply) => {
-    if (!validHost(request.headers.host)) {
+    if (!access.host(request.headers.host)) {
       options.log?.info({ reason: "host" }, "Local request rejected");
       return reply.code(403).send({ error: "Forbidden" });
     }
@@ -38,6 +39,13 @@ export async function createHttpServer(options: {
     prefix: "/overlay/",
     redirect: true,
   });
+  await app.register(staticFiles, {
+    root: options.controlRoot ?? fileURLToPath(new URL("../../../control/dist/", import.meta.url)),
+    prefix: "/control/",
+    redirect: true,
+    decorateReply: false,
+  });
+  registerControlApi(app, access, () => control);
   app.get("/healthz", async () => ({ ok: true, audioClient: hub.hasAudioClient }));
   app.get(
     "/ws",
@@ -45,7 +53,7 @@ export async function createHttpServer(options: {
       websocket: true,
       preValidation: async (request, reply) => {
         const token = (request.query as { token?: unknown }).token;
-        const reason = !validOrigin(request.headers.origin)
+        const reason = !access.origin(request.headers.origin)
           ? "origin"
           : !tokenMatches(options.token, token)
             ? "authorization"
@@ -58,13 +66,19 @@ export async function createHttpServer(options: {
     },
     (socket) => hub.attach(socket),
   );
-  app.setErrorHandler((_error, _request, reply) => {
-    void reply.code(500).send({ error: "Local request failed" });
+  app.setErrorHandler((error, _request, reply) => {
+    const code =
+      error && typeof error === "object" && "statusCode" in error ? error.statusCode : null;
+    const status = code === 400 || code === 413 ? code : 500;
+    void reply.code(status).send({ error: "Local request failed" });
   });
   app.addHook("onClose", async () => hub.close());
   return {
     app,
     hub,
+    setControl(api: ControlApi) {
+      control = api;
+    },
     listen: () => app.listen({ host: "127.0.0.1", port: options.port }),
     close: () => {
       hub.close();

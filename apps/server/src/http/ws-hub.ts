@@ -1,19 +1,17 @@
 import { WebSocket } from "ws";
-import { z } from "zod";
+import { createBeatState } from "../../../../packages/core/src/beat.js";
+import { type BeatView, beatViewSchema } from "../../../../packages/core/src/beat-types.js";
 import {
-  playbackReportSchema,
-  voiceCheckCommandSchema,
+  type ControlAction,
+  type ControlMessage,
+  clientMessageSchema,
+  type OverlayMessage,
+  type VoiceCheckCommand,
 } from "../../../../packages/core/src/overlay-protocol.js";
 import type { PlaybackReport, VoiceTransport } from "../voice/manager.js";
 import type { VoiceChannel } from "../voice/types.js";
 
-const messageSchema = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("hello"), audio: z.boolean(), obs: z.boolean() }),
-  z.object({ type: z.literal("active"), active: z.boolean() }),
-  ...playbackReportSchema.options,
-  voiceCheckCommandSchema,
-]);
-export type VoiceCommand = Extract<z.infer<typeof messageSchema>, { type: "voice_command" }>;
+export type VoiceCommand = VoiceCheckCommand;
 export function encodeAudioFrame(
   channel: VoiceChannel,
   takeId: number,
@@ -31,7 +29,7 @@ interface Client {
   socket: WebSocket;
   audio: boolean;
   active: boolean;
-  hello: boolean;
+  role: "overlay" | "control" | null;
 }
 export class OverlayHub implements VoiceTransport {
   private readonly clients = new Set<Client>();
@@ -42,6 +40,16 @@ export class OverlayHub implements VoiceTransport {
     null;
   private readonly playbackListeners = new Set<(event: PlaybackReport) => void>();
   private readonly clientListeners = new Set<() => void>();
+  private snapshot = (): BeatView => beatViewSchema.strip().parse(createBeatState());
+  private actionListener:
+    | ((action: ControlAction) => Promise<{ ok: boolean; reason: string | null }>)
+    | null = null;
+  setSnapshot(snapshot: () => BeatView) {
+    this.snapshot = snapshot;
+  }
+  onAction(listener: NonNullable<OverlayHub["actionListener"]>) {
+    this.actionListener = listener;
+  }
   onClients(listener: () => void) {
     this.clientListeners.add(listener);
     return () => {
@@ -53,11 +61,14 @@ export class OverlayHub implements VoiceTransport {
   }
   get hasOverlayClient() {
     return [...this.clients].some(
-      (client) => client.hello && client.socket.readyState === WebSocket.OPEN,
+      (client) => client.role === "overlay" && client.socket.readyState === WebSocket.OPEN,
     );
   }
-  emitOverlay(message: unknown) {
-    this.broadcast(message);
+  emitOverlay(message: OverlayMessage) {
+    this.broadcast(message, "overlay");
+  }
+  emitControl(message: ControlMessage) {
+    this.broadcast(message, "control");
   }
   onReport(listener: (event: PlaybackReport) => void) {
     this.reportListener = listener;
@@ -79,7 +90,7 @@ export class OverlayHub implements VoiceTransport {
     return this.owner?.active ?? false;
   }
   attach(socket: WebSocket) {
-    const client: Client = { socket, audio: false, active: true, hello: false };
+    const client: Client = { socket, audio: false, active: true, role: null };
     this.clients.add(client);
     const send = (data: unknown) => {
       if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(data));
@@ -92,33 +103,45 @@ export class OverlayHub implements VoiceTransport {
       } catch {
         return;
       }
-      const parsed = messageSchema.safeParse(decoded);
+      const parsed = clientMessageSchema.safeParse(decoded);
       if (!parsed.success) return;
       const event = parsed.data;
       if (event.type === "hello") {
-        client.hello = true;
-        if (event.audio) {
+        // A socket's role and audio ownership are fixed by its first handshake.
+        if (client.role) return;
+        client.role = event.role;
+        if (event.role === "overlay" && event.audio) {
           if (this.owner && this.owner !== client) {
             this.send(this.owner, { type: "stop", take: "all" });
             this.owner.audio = false;
-            this.send(this.owner, { type: "hello", audio: false, state: {} });
+            this.send(this.owner, {
+              type: "hello",
+              role: "overlay",
+              audio: false,
+              state: this.snapshot(),
+            });
           }
           this.owner = client;
           client.audio = true;
           client.active = true;
-        } else if (this.owner === client) {
-          this.owner = null;
-          client.audio = false;
         }
         send({
           type: "hello",
+          role: client.role,
           audio: client.audio,
-          state: { prepared: [...this.prepared].map(([take, data]) => ({ take, ...data })) },
+          state: this.snapshot(),
         });
         this.clientsChanged();
       } else if (event.type === "voice_command") {
-        this.commandListener?.(event, send);
-      } else if (client === this.owner && client.hello) {
+        if (client.role === "control") this.commandListener?.(event, send);
+      } else if (event.type === "command") {
+        if (client.role !== "control" || !this.actionListener) return;
+        void this.actionListener(event.command).then(
+          (result) => send({ type: "result", request: event.request, ...result }),
+          () =>
+            send({ type: "result", request: event.request, ok: false, reason: "action_failed" }),
+        );
+      } else if (client === this.owner && client.role === "overlay") {
         if (event.type === "active") {
           client.active = event.active;
           if (!event.active) this.send(client, { type: "stop", take: "all" });
@@ -138,8 +161,8 @@ export class OverlayHub implements VoiceTransport {
   private send(client: Client, data: unknown) {
     if (client.socket.readyState === WebSocket.OPEN) client.socket.send(JSON.stringify(data));
   }
-  private broadcast(data: unknown) {
-    for (const client of this.clients) if (client.hello) this.send(client, data);
+  private broadcast(data: unknown, role: "overlay" | "control") {
+    for (const client of this.clients) if (client.role === role) this.send(client, data);
   }
   prepare(take: number, channel: VoiceChannel, text: string) {
     this.prepared.set(take, { channel, text });
@@ -147,7 +170,7 @@ export class OverlayHub implements VoiceTransport {
       const oldest = this.prepared.keys().next().value;
       if (oldest !== undefined) this.prepared.delete(oldest);
     }
-    this.broadcast({ type: "prepare", take, channel, text });
+    this.broadcast({ type: "prepare", take, channel, text }, "overlay");
   }
   play(take: number, channel: VoiceChannel, pcm: Uint8Array, durationMs: number) {
     const owner = this.owner;
@@ -164,7 +187,7 @@ export class OverlayHub implements VoiceTransport {
   stop(take: number | "all") {
     if (take === "all") this.prepared.clear();
     else this.prepared.delete(take);
-    this.broadcast({ type: "stop", take });
+    this.broadcast({ type: "stop", take }, "overlay");
   }
   close() {
     this.stop("all");

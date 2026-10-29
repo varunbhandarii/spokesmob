@@ -1,5 +1,8 @@
 import type { AudioControl } from "../../../packages/core/src/overlay-protocol.js";
-import { audioControlSchema } from "../../../packages/core/src/overlay-protocol.js";
+import {
+  audioControlSchema,
+  overlayHelloReplySchema,
+} from "../../../packages/core/src/overlay-protocol.js";
 
 export type {
   AudioChannel,
@@ -21,9 +24,8 @@ export function audioAllowed(obs: boolean, search: string): boolean {
 }
 export function parseControl(value: unknown): ServerControl | null {
   if (!value || typeof value !== "object") return null;
-  const message = value as Record<string, unknown>;
-  if (message.type === "hello" && typeof message.audio === "boolean")
-    return { type: "hello", audio: message.audio, state: message.state };
+  const hello = overlayHelloReplySchema.safeParse(value);
+  if (hello.success) return hello.data;
   const parsed = audioControlSchema.safeParse(value);
   return parsed.success ? parsed.data : null;
 }

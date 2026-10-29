@@ -70,24 +70,28 @@ async function sendCommand(
       clearTimeout(timer);
       socket.close();
     };
-    socket.on("open", () =>
-      socket.send(
-        JSON.stringify({
-          type: "voice_command",
-          request,
-          mode,
-          ...(text ? { text } : {}),
-          ...(dissent ? { dissent } : {}),
-        }),
-      ),
-    );
+    let welcomed = false;
+    socket.on("open", () => socket.send(JSON.stringify({ type: "hello", role: "control" })));
     socket.on("message", (data) => {
       try {
         const response = JSON.parse(data.toString()) as {
           type?: string;
           request?: string;
           data?: unknown;
+          role?: string;
         };
+        if (response.type === "hello" && response.role === "control" && !welcomed) {
+          welcomed = true;
+          socket.send(
+            JSON.stringify({
+              type: "voice_command",
+              request,
+              mode,
+              ...(text ? { text } : {}),
+              ...(dissent ? { dissent } : {}),
+            }),
+          );
+        }
         if (response.type === "voice_result" && response.request === request) {
           finish();
           resolve(response.data);
@@ -106,8 +110,9 @@ export async function voiceCheck(
   args = process.argv.slice(2),
   output: (line: string) => void = console.log,
 ) {
-  const { values } = parseArgs({
+  const { values, positionals } = parseArgs({
     args,
+    allowPositionals: true,
     options: {
       tone: { type: "boolean" },
       say: { type: "string" },
@@ -129,11 +134,18 @@ export async function voiceCheck(
     values["copy-url"],
   ].filter(Boolean).length;
   if (modes !== 1) throw new Error("Select one voice check mode");
+  if (
+    positionals.length &&
+    (!values["copy-url"] || positionals.length !== 1 || positionals[0] !== "control")
+  )
+    throw new Error("Unsupported voice argument");
   const voice = loadVoiceConfig();
   const tokenFile = process.env.TOKEN_FILE ?? defaultTokenFile();
   if (values["copy-url"]) {
-    await copyOverlayUrl((await overlayUrl(tokenFile)).toString());
-    output("Overlay URL copied to clipboard.");
+    const url = await overlayUrl(tokenFile);
+    if (positionals[0] === "control") url.pathname = "/control/";
+    await copyOverlayUrl(url.toString());
+    output(`${positionals[0] === "control" ? "Control" : "Overlay"} URL copied to clipboard.`);
     return;
   }
   if (values.tone) {

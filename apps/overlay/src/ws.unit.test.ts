@@ -39,7 +39,7 @@ test("socket reconnects with bounded backoff and repeats the hello handshake", a
   });
   sockets[0]?.onopen?.();
   expect(sockets[0]?.sent).toEqual([
-    { type: "hello", audio: true, obs: true },
+    { type: "hello", role: "overlay", audio: true, obs: true },
     { type: "active", active: true },
   ]);
   sockets[0]?.close();

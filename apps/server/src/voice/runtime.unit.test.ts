@@ -60,11 +60,14 @@ test("the free tone follows the verified take/socket path without opening an API
     });
     await once(overlay, "open");
     const hello = once(overlay, "message");
-    overlay.send(JSON.stringify({ type: "hello", audio: true, obs: true }));
+    overlay.send(JSON.stringify({ type: "hello", role: "overlay", audio: true, obs: true }));
     await hello;
     const control = new WebSocket(endpoint, { origin: url.origin });
     sockets.push(control);
     await once(control, "open");
+    const welcome = once(control, "message");
+    control.send(JSON.stringify({ type: "hello", role: "control" }));
+    await welcome;
     const response = once(control, "message");
     control.send(JSON.stringify({ type: "voice_command", request: "test-tone", mode: "tone" }));
     const [raw] = await response;

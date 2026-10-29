@@ -15,7 +15,7 @@ npm test
 npm run lint
 ```
 
-The workspace contains the server, overlay, control page, shared logic, development tools, and evaluation runner. The Twitch listener, automatic beat loop and overlay audio checks are available; the control page is being integrated.
+The workspace contains the server, overlay, control page, shared logic, development tools, and evaluation runner. The Twitch listener, automatic beat loop, authenticated controls and overlay audio checks are available.
 
 The [shared beat and overlay contracts](packages/core/README.md) define cycle steps, settings, client roles and message schemas for the loop and control integration.
 
@@ -42,6 +42,28 @@ Check authorization with `npm run twitch:check -- --status`, or capture typed ev
 Twitch writes use a shared rate limiter. Chat messages and announcements never retry automatically, and identical chat messages are suppressed locally for 30 seconds. Pinning is a separate request after a confirmed send with no drop reason. An empty send result is treated as not sent and is never pinned or retried.
 
 The typed [Get Streams](https://dev.twitch.tv/docs/api/reference/#get-streams) read queries the resolved broadcaster by `user_id` through the general-rate guard, without extra permissions. Empty results and entries without `type: "live"` do not establish online status; malformed or mismatched responses fail closed. The mock supports live/offline state with the same response contract.
+
+## Commands and local API
+
+Only the broadcaster badge or moderator badge authorizes chat commands, including the broadcaster's own messages. Other accounts are ignored silently. Commands never count as votes.
+
+| Command | Action |
+| --- | --- |
+| `!mob on` / `!mob off` | Resume or pause beats; off does not post a muted message |
+| `!mob mode auto\|demand\|quiet` | Change the saved mode |
+| `!mob speak` / `!mob veto` | Close an On-demand window or cancel the current spoken unit |
+| `!mob mute [minutes]` | Mute for 1?60 minutes, defaulting to 5 |
+| `!mob unmute` / `!mob kill` | Clear a mute or kill until explicit unmute |
+| `!mob gag @user` / `!mob ungag @user` | Exclude or restore a user resolved from Twitch's mention fragment |
+| `!ask <question>` / `!mob clear` | Set a moderated question of at most 100 characters, or clear it |
+
+State changes acknowledge once through the chat guard. Gag acknowledgments never repeat the name. Questions reject URLs and mentions, pass the blocklist and per-item moderation, then announce in purple. Clear cancels a pending question change too.
+
+HTTP controls use the same handlers: `POST /api/on`, `off`, `speak`, `veto`, `mute`, `unmute`, `kill`, `mode`, `question`, `clear` and `settings`. Bodies are strict JSON: empty `{}` for simple actions, `{"minutes":5}`, `{"mode":"demand"}`, `{"question":"Name my cat"}` or `{"changes":{"holdMs":1000}}`. Send the local token through `Authorization: Bearer <token>` or the token query parameter; never publish a credential-bearing URL. POST requires the local Origin, and all requests require the local Host. Foreign origins are rejected.
+
+`GET /api/state` returns `{state,settings}`. `GET /api/log?limit=200` returns newest-first records with cited names omitted. Add `names=1` to include them, and `before=<last-row-id>` for the next page. Request and error logs omit URLs and credentials.
+
+WebSocket clients declare one immutable role in hello. Only control clients may send commands or voice checks. They receive state, health, cost and log updates with no audio. Overlays receive visuals and verified audio, with playback reports accepted only from the current audio owner.
 
 ## Local Twitch mock
 

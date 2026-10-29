@@ -22,6 +22,7 @@ export async function createVoiceRuntime(options: {
   overlayRoot?: string;
   allowAttempt?: NonNullable<ConstructorParameters<typeof VoiceManager>[0]["allowAttempt"]>;
   onUsage?: NonNullable<ConstructorParameters<typeof VoiceManager>[0]["onUsage"]>;
+  checkAllowed?(): boolean;
   clock?: Clock;
 }) {
   const clock = options.clock ?? systemClock;
@@ -56,6 +57,10 @@ export async function createVoiceRuntime(options: {
     const send = (data: unknown) => reply({ type: "voice_result", request: command.request, data });
     if (busy) {
       send({ status: "rejected", reason: "voice_check_busy" });
+      return;
+    }
+    if (options.checkAllowed && !options.checkAllowed()) {
+      send({ status: "rejected", reason: "beat_in_progress" });
       return;
     }
     busy = true;

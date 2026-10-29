@@ -1,4 +1,6 @@
 import { expect, test } from "vitest";
+import { createBeatState } from "../../../packages/core/src/beat.js";
+import { beatViewSchema } from "../../../packages/core/src/beat-types.js";
 import { audioAllowed, decodeAudioFrame, parseControl } from "./protocol.js";
 
 test("ordinary tabs stay silent unless the explicit audio flag is set", () => {
@@ -23,7 +25,14 @@ test("the binary header uses network-order IDs and little-endian PCM", () => {
   expect(decodeAudioFrame(buffer)).toBe(null);
 });
 test("control messages reject invalid IDs and durations", () => {
-  expect(parseControl({ type: "hello", audio: false, state: {} })).toMatchObject({
+  expect(
+    parseControl({
+      type: "hello",
+      role: "overlay",
+      audio: false,
+      state: beatViewSchema.strip().parse(createBeatState()),
+    }),
+  ).toMatchObject({
     type: "hello",
     audio: false,
   });
