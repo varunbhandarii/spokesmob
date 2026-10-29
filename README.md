@@ -45,6 +45,12 @@ The typed [Get Streams](https://dev.twitch.tv/docs/api/reference/#get-streams) r
 
 ## Commands and local API
 
+Run `npm run build` before starting the server. Copy the dock URL with `npm run voice -- --copy-url control`, then paste it into OBS **Docks → Custom Browser Docks**. Keep its token private. The [control dock guide](apps/control/README.md) covers its layout, shortcuts, resync and log export. The same page works in a browser.
+
+The dock shows step and blocking conditions, mode, question, health, cost, latency and beat history. Veto cancels either take; Mute and Kill stop both. Focus the dock to use V, S, M, K and U for Veto, Speak now, Mute, Kill and Unmute. Editing a field suppresses shortcuts. **Test while offline** is a visible, session-only exception to the live-stream gate and resets at restart.
+
+The layout selector changes the shared overlay layout. A valid explicit `layout` query parameter pins that browser source instead. Ordinary control tabs never claim audio ownership.
+
 Only the broadcaster badge or moderator badge authorizes chat commands, including the broadcaster's own messages. Other accounts are ignored silently. Commands never count as votes.
 
 | Command | Action |

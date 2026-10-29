@@ -14,7 +14,7 @@
   ],
   "scripts": {
     "typecheck": "tsc -b",
-    "build": "npm run build --workspace apps/overlay",
+    "build": "npm run build --workspace apps/overlay --workspace apps/control",
     "lint": "biome check .",
     "format": "biome format --write .",
     "test": "vitest run",

@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="referrer" content="no-referrer" />
+    <title>Spokesmob controls</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <div class="brand"><span class="brand-mark" aria-hidden="true">s</span><div><h1>spokesmob</h1><p>YOUR CHAT, ONE VOICE</p></div></div>
+      <span id="connection" class="connection" role="status">connecting</span>
+    </header>
+    <div id="notice" class="notice" role="status" hidden></div>
+    <div id="offline-warning" class="warning" role="status" hidden>Offline test is on. The mob can speak while your stream is offline. This resets when the server restarts.</div>
+    <main class="workspace">
+      <section class="card state-card" aria-labelledby="state-title">
+        <div class="card-heading"><h2 id="state-title">The mob</h2><span id="online" class="badge">waiting</span></div>
+        <div class="step-row"><strong id="beat-step">waiting</strong><span id="mood" class="muted-text"></span></div>
+        <ul id="held-by" class="held-by"><li>Waiting for server state</li></ul>
+        <dl class="stats"><div><dt>Session</dt><dd id="cost-session">—</dd></div><div><dt>Cap</dt><dd id="cost-cap">—</dd></div><div><dt>Latest e2e</dt><dd id="latest-e2e">—</dd></div></dl>
+        <progress id="cost-progress" max="100" value="0" aria-label="Session spend toward cap"></progress>
+        <p class="small muted-text">Last hour <span id="cost-hour">—</span></p>
+        <div class="button-row loop-buttons"><button type="button" data-action="on">Turn on</button><button type="button" data-action="off">Turn off</button></div>
+        <ul id="health" class="health" aria-label="Connection health"></ul>
+      </section>
+      <section class="card actions-card" aria-labelledby="actions-title">
+        <div class="card-heading"><h2 id="actions-title">Live controls</h2><span class="small muted-text">Shortcuts while focused</span></div>
+        <fieldset class="mode-buttons"><legend class="sr-only">Beat mode</legend><button type="button" data-mode="auto">Auto</button><button type="button" data-mode="demand">On-demand</button><button type="button" data-mode="quiet">Quiet</button></fieldset>
+        <div class="primary-actions">
+          <button type="button" data-action="veto" class="veto"><strong>Veto</strong><kbd>V</kbd></button>
+          <button type="button" data-action="speak" class="speak"><strong>Speak now</strong><kbd>S</kbd></button>
+          <button type="button" data-action="mute"><strong>Mute 5 min</strong><kbd>M</kbd></button>
+          <button type="button" data-action="unmute"><strong>Unmute</strong><kbd>U</kbd></button>
+          <button type="button" data-action="kill" class="kill"><span><strong>Kill audio</strong><small>Stops and stays muted</small></span><kbd>K</kbd></button>
+        </div>
+        <button type="button" id="test-tone" class="tone">Test tone <span class="small">free · 1 second</span></button>
+        <label class="switch-label"><input id="test-offline" type="checkbox" /> <span>Test while offline<small>Session only · resets at restart</small></span></label>
+      </section>
+      <section class="card question-card" aria-labelledby="question-title">
+        <div class="card-heading"><h2 id="question-title">Ask the mob</h2></div>
+        <p id="current-question" class="current-question">No active question</p>
+        <form id="question-form"><label for="question-input" class="sr-only">Question</label><textarea id="question-input" rows="2" maxlength="100" placeholder="Name my cat?"></textarea><div class="button-row"><button type="submit" class="accent">Ask &amp; announce</button><button type="button" data-action="clear">Clear</button></div></form>
+      </section>
+      <section class="card log-card" aria-labelledby="log-title">
+        <div class="card-heading"><h2 id="log-title">Beat log</h2><button type="button" id="export-log" class="text-button">Export log</button></div>
+        <p class="small muted-text">Newest 200 shown. Export includes retained history.</p>
+        <div id="beat-log" class="beat-log"><p class="empty-state">Completed beats will appear here.</p></div>
+      </section>
+      <section class="card settings-card" aria-labelledby="settings-title">
+        <details><summary><h2 id="settings-title">Settings</h2><span class="small muted-text">Timing, output &amp; budget</span></summary>
+          <label class="setting-row">Overlay layout<select id="layout"><option value="wide">Wide</option><option value="stage">Stage</option><option value="compact">Compact</option></select></label>
+          <p class="small muted-text">An overlay with its own layout URL setting keeps that layout.</p>
+          <form id="settings-form"><div id="settings-fields" class="settings-fields"></div><label class="setting-row">Post lines<select name="postLines"><option value="every">Every completed line</option><option value="off">Off</option></select></label><button type="submit" class="accent">Save settings</button><p id="settings-draft" class="small muted-text" hidden>Unsaved changes</p></form>
+        </details>
+      </section>
+    </main>
+    <footer>AI-generated voice · Control dock only, no audio output</footer>
+    <script type="module" src="/src/index.ts"></script>
+  </body>
+</html>
