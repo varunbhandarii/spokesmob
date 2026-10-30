@@ -4,7 +4,13 @@ import { createBlocklist } from "../../../../packages/core/src/blocklist.js";
 import type { OverlayMessage } from "../../../../packages/core/src/overlay-protocol.js";
 import { serverOverlayMessageSchema } from "../../../../packages/core/src/overlay-protocol.js";
 import { type Clock, systemClock } from "../clock.js";
-import { FakeConsensusModel, FakeModerationPort, fakeModelResult } from "../consensus/fakes.js";
+import {
+  clearModeration,
+  FakeConsensusModel,
+  FakeModerationPort,
+  fakeModelResult,
+} from "../consensus/fakes.js";
+import type { ModerationPort } from "../consensus/ports.js";
 import { StubConsensusModel } from "../consensus/stub-model.js";
 import { createLogger } from "../log.js";
 import { openStorage } from "../store/db.js";
@@ -38,6 +44,7 @@ function fixture(
     clock?: Clock;
     windowS?: number;
     alternate?: boolean;
+    moderation?: ModerationPort;
   } = {},
 ) {
   const db = openStorage(":memory:");
@@ -109,7 +116,7 @@ function fixture(
             }),
           ])
         : new StubConsensusModel(),
-    moderation: new FakeModerationPort(),
+    moderation: options.moderation ?? new FakeModerationPort(),
     blocklist: createBlocklist(),
     clients: () => ({ audioConnected: true, audioActive: true, overlayConnected: true }),
     overlay: (message) => {
@@ -167,6 +174,32 @@ test("the shell completes one verified unit, posts once, pins and records actual
     latency: { holdMs: 1000, voiceReadyMs: 300, preRollMs: 100 },
   });
   expect(f.overlay.some((message) => message.type === "line")).toBe(true);
+});
+
+test("window close while provisional moderation is pending still completes without a control action", async () => {
+  let requests = 0;
+  const f = fixture({
+    windowS: 5,
+    moderation: {
+      async moderate(texts) {
+        requests++;
+        if (requests === 1) return new Promise(() => undefined);
+        return { results: texts.map(clearModeration), usage: null, costUsd: 0 };
+      },
+    },
+  });
+  f.chat("one", "blue");
+  f.chat("two", "blue");
+  await vi.advanceTimersByTimeAsync(2000);
+  expect(requests).toBe(1);
+  await vi.advanceTimersByTimeAsync(6000);
+  expect(f.store.beatLog.recent(1)[0]).toMatchObject({
+    status: "spoken",
+    gate: null,
+    reason: null,
+  });
+  expect(f.calls.map((call) => call.action)).toEqual(["send", "pin"]);
+  expect(requests).toBe(2);
 });
 
 test("the selected alternate reaches the caption, voice, chat post and confirmed pin", async () => {

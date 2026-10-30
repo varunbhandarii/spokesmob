@@ -69,7 +69,16 @@ export class ModerationGate {
       // Every promise has a handler even when a caller aborts before awaiting it.
       void promise.catch(() => undefined);
     }
-    await Promise.all(unique.map((text) => this.pending.get(hash(text))));
+    try {
+      await Promise.all(unique.map((text) => this.pending.get(hash(text))));
+    } catch (error) {
+      if (signal?.aborted) throw new ModerationFailure("aborted");
+      // A window handoff can cancel the caller that owned shared provisional work.
+      // A still-active caller needs a fresh checked result, not that caller's abort.
+      if (error instanceof ModerationFailure && error.reason === "aborted")
+        return this.resolve(texts, signal);
+      throw error;
+    }
     if (signal?.aborted) throw new ModerationFailure("aborted");
     const mapped = new Map<string, ModerationResult>();
     for (const text of unique) {

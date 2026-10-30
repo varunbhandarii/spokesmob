@@ -36,6 +36,70 @@ test("concurrent collection and close share in-flight moderation without duplica
   await Promise.all([early, close]);
   expect(port.requests).toHaveLength(1);
 });
+
+test("an aborted provisional owner cannot abort fresh callers sharing its pending result", async () => {
+  const port = new FakeModerationPort((texts, call) =>
+    call === 1 ? new Promise(() => undefined) : texts.map(clearModeration),
+  );
+  const gate = new ModerationGate({ port });
+  const owner = new AbortController();
+  const current = new AbortController();
+  const abandoned = expect(gate.premoderate(["Gary"], owner.signal)).rejects.toMatchObject({
+    reason: "aborted",
+  });
+  const first = gate.resolve(["Gary"], current.signal);
+  const second = gate.resolve(["Gary"], current.signal);
+  owner.abort();
+  await abandoned;
+  const results = await Promise.all([first, second]);
+  expect(current.signal.aborted).toBe(false);
+  expect(results.every((result) => result.get("Gary")?.flagged === false)).toBe(true);
+  expect(port.requests).toHaveLength(2);
+});
+
+test("replacement moderation still rejects malformed mapping after the provisional owner aborts", async () => {
+  const port = new FakeModerationPort((_, call) =>
+    call === 1 ? new Promise(() => undefined) : [],
+  );
+  const gate = new ModerationGate({ port });
+  const owner = new AbortController();
+  const abandoned = expect(gate.premoderate(["Gary"], owner.signal)).rejects.toMatchObject({
+    reason: "aborted",
+  });
+  const current = expect(gate.resolve(["Gary"])).rejects.toMatchObject({
+    reason: "moderation_mapping",
+  });
+  owner.abort();
+  await Promise.all([abandoned, current]);
+  expect(port.requests).toHaveLength(2);
+  expect(gate.cacheSize).toBe(0);
+});
+
+test("the active caller can still cancel its replacement moderation", async () => {
+  let started!: () => void;
+  const replacement = new Promise<void>((resolve) => {
+    started = resolve;
+  });
+  const port = new FakeModerationPort((_, call) => {
+    if (call === 2) started();
+    return new Promise(() => undefined);
+  });
+  const gate = new ModerationGate({ port });
+  const owner = new AbortController();
+  const current = new AbortController();
+  const abandoned = expect(gate.premoderate(["Gary"], owner.signal)).rejects.toMatchObject({
+    reason: "aborted",
+  });
+  const cancelled = expect(gate.resolve(["Gary"], current.signal)).rejects.toMatchObject({
+    reason: "aborted",
+  });
+  owner.abort();
+  await replacement;
+  current.abort();
+  await Promise.all([abandoned, cancelled]);
+  expect(port.requests).toHaveLength(2);
+  expect(gate.cacheSize).toBe(0);
+});
 test("cache is bounded and requests contain at most 36 items", async () => {
   const port = new FakeModerationPort();
   const gate = new ModerationGate({ port });
