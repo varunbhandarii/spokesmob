@@ -51,6 +51,6 @@
     "cited_must_include_any": ["blue"],
     "pct_range": [100, 100],
     "answers_question": true,
-    "alternate_required": true
+    "fresh_first_call": true
   }
 }

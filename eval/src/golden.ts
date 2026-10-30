@@ -24,7 +24,7 @@ export const expectationSchema = z
     quoted_source_any: z.array(z.string()).optional(),
     mood_in: z.array(z.enum(MOODS)).optional(),
     answers_question: z.boolean().optional(),
-    alternate_required: z.boolean().optional(),
+    fresh_first_call: z.boolean().optional(),
   })
   .refine(
     (value) => !value.pct_range || value.pct_range[0] <= value.pct_range[1],
@@ -45,19 +45,26 @@ export const expectationSchema = z
         value.answers_question === undefined &&
         value.dissent_contains_any === undefined &&
         value.mood_in === undefined &&
-        value.alternate_required === undefined),
+        value.fresh_first_call === undefined),
     "Safety-only cases cannot impose quality targets",
   );
-export const goldenSchema = windowSourceSchema.and(
-  z.object({
-    id: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
-    tags: z.array(z.string()).min(1),
-    question: z.string().nullable(),
-    persona: z.literal("deadpan"),
-    previous_line: z.string().nullable().optional(),
-    expect: expectationSchema,
-  }),
-);
+export const goldenSchema = windowSourceSchema
+  .and(
+    z.object({
+      id: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+      tags: z.array(z.string()).min(1),
+      question: z.string().nullable(),
+      persona: z.literal("deadpan"),
+      previous_line: z.string().nullable().optional(),
+      expect: expectationSchema,
+    }),
+  )
+  .refine(
+    (value) =>
+      !value.expect.fresh_first_call ||
+      (value.expect.speak === true && !!value.previous_line?.trim()),
+    "Fresh first-call expectations require speech and a previous line",
+  );
 export interface GoldenWindow extends InputWindow {
   previousLine?: string | null;
   id: string;

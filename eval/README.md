@@ -4,15 +4,15 @@ The golden set contains the original 20 synthetic windows plus three repeated-wo
 
 The strict model schema requires seven fields, including `alternate_line` as a string or null. The alternate uses the same main citations. The main candidate is checked first; only a sole near-duplicate failure enables full verification of the alternate. The existing inline moderation result covers the whole returned JSON, including both main candidates and dissent. A missing, errored or flagged result fails closed; no additional moderation request is added. Regeneration remains limited to one attempt after both candidates fail.
 
-Repeated-wording cases use `previous_line` as the mob's own earlier output, never as chat evidence. `alternate_required` requires an alternate selection in one model call without fallback. The three new cases have ten distinct authors unanimously proposing Gary, blue or tea, with the natural previous wording "Most of chat wants …". Expected support is 100%, with the normal tolerance, and no dissent. The offline stub deliberately repeats the prior line to exercise selection; this validates wiring, not live model behavior. Paid acceptance requires all 100 original samples and all 15 new samples to pass quality before another live-loop measurement.
+Repeated-wording cases use `previous_line` as the mob's own earlier output, never as chat evidence. `fresh_first_call` requires speech from the first model call without fallback, and the selected text must pass the unchanged near-duplicate rule against the previous line. Either the main candidate or the alternate can satisfy this outcome. The three new cases have ten distinct authors unanimously proposing Gary, blue or tea, with the natural previous wording "Most of chat wants …". Expected support is 100%, with the normal tolerance, and no dissent. The offline stub deliberately repeats the prior line to exercise selection; this validates wiring, not live model behavior. Paid acceptance requires all 100 original samples and all 15 new samples to pass quality before another live-loop measurement.
 
-| Window                 | Voices / supporting authors | Previous spoken line     | Required result                                          |
-| ---------------------- | --------------------------- | ------------------------ | -------------------------------------------------------- |
-| repeated-gary-phrasing | 10 / 10                     | Most of chat wants Gary. | Alternate selected in one call; Gary cited; 100% support |
-| repeated-blue-phrasing | 10 / 10                     | Most of chat wants blue. | Alternate selected in one call; blue cited; 100% support |
-| repeated-tea-phrasing  | 10 / 10                     | Most of chat wants tea.  | Alternate selected in one call; tea cited; 100% support  |
+| Window                 | Voices / supporting authors | Previous spoken line     | Required result                                    |
+| ---------------------- | --------------------------- | ------------------------ | -------------------------------------------------- |
+| repeated-gary-phrasing | 10 / 10                     | Most of chat wants Gary. | Fresh speech in one call; Gary cited; 100% support |
+| repeated-blue-phrasing | 10 / 10                     | Most of chat wants blue. | Fresh speech in one call; blue cited; 100% support |
+| repeated-tea-phrasing  | 10 / 10                     | Most of chat wants tea.  | Fresh speech in one call; tea cited; 100% support  |
 
-These labels await human review before the paid run. The original twenty windows and their expectations are unchanged.
+Human review approved these outcome labels. The original twenty windows and their expectations are unchanged.
 
 `npm run eval -- --offline` checks harness wiring through the real consensus pipeline with a stub model and fake moderation. It costs nothing and explicitly reports that its output is unmoderated and unsuitable for streaming. Stub pass rates do not establish model quality or safety.
 

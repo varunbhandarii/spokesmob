@@ -99,6 +99,33 @@ test("all hard assertions accept a supported, moderated baseline", () => {
   const f = fixture();
   expect(assertSample(f.golden, f.result, f.ctx)).toEqual([]);
 });
+
+test("fresh first-call outcomes accept main or alternate and reject repeats, regeneration and fallback", () => {
+  const f = fixture();
+  const golden = {
+    ...f.golden,
+    previousLine: f.result.line,
+    expect: { ...f.golden.expect, fresh_first_call: true },
+  };
+  const fresh = { ...f.result, line: "Most of chat says Gary." };
+  for (const selectedCandidate of ["line", "alternate_line"] as const) {
+    expect(assertSample(golden, { ...fresh, selectedCandidate }, f.ctx)).toEqual([]);
+  }
+  expect(assertSample(golden, f.result, f.ctx)).toContainEqual({
+    assertion: "A1",
+    code: "near_duplicate",
+  });
+  for (const result of [
+    { ...fresh, attempts: 2 },
+    { ...fresh, fallback: true },
+    { ...fresh, status: "suppressed" as const, line: null, dissent: null },
+  ]) {
+    expect(assertSample(golden, result, f.ctx)).toContainEqual({
+      assertion: "A1",
+      code: "first_call_spoken",
+    });
+  }
+});
 test("status and suppression reasons must both match", () => {
   const f = fixture();
   const suppressed = {

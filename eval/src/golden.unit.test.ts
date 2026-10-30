@@ -60,6 +60,8 @@ test("malformed expectations and conflicting source representations are rejected
     { expect: { speak: true, pct_range: [80, 20] } },
     { messages: [{ author: "u1", text: "Gary", text_b64: "R2FyeQ==" }] },
     { id: "bad name" },
+    { expect: { speak: true, fresh_first_call: true } },
+    { previous_line: "Chat says Gary.", expect: { speak: false, fresh_first_call: true } },
   ]) {
     expect(() => parseGolden({ ...base, ...change })).toThrow();
   }

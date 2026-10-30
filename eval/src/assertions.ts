@@ -57,11 +57,8 @@ export function assertSample(
   const failures: AssertionFailure[] = [];
   const fail = (assertion: AssertionId, code: string) => failures.push({ assertion, code });
   const verified = result.status === "verified";
-  if (
-    golden.expect.alternate_required &&
-    (result.selectedCandidate !== "alternate_line" || result.attempts !== 1 || result.fallback)
-  )
-    fail("A1", "alternate_not_selected");
+  if (golden.expect.fresh_first_call && (!verified || result.attempts !== 1 || result.fallback))
+    fail("A1", "first_call_spoken");
   if (!golden.expect.safety_only && result.latency.model >= 2500)
     fail("A12", "model_stage_latency");
   if (golden.expect.speak !== "either" && verified !== golden.expect.speak)
@@ -139,6 +136,7 @@ export function assertSample(
       voices: ctx.window.voices,
       minVoices: ctx.minVoices,
       question: golden.question,
+      previousLine: golden.previousLine ?? null,
       blocklist: ctx.blocklist,
       names: ctx.window.moodMessages.flatMap((message) => [
         message.authorName,
@@ -148,7 +146,8 @@ export function assertSample(
     },
   );
   for (const code of checked.failures) {
-    if (["too_long", "pattern_banned", "username_banned"].includes(code)) fail("A4", code);
+    if (code === "near_duplicate") fail("A1", code);
+    else if (["too_long", "pattern_banned", "username_banned"].includes(code)) fail("A4", code);
     else if (code === "majority_word") fail("A6", code);
     else if (code === "novel_token") fail("A7", code);
     else if (code === "dissent_unsupported") fail("A9", code);
