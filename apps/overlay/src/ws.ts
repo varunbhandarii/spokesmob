@@ -24,7 +24,10 @@ export function connectOverlay(options: {
     clearTimeout(timer: ReturnType<typeof setTimeout>): void;
   };
 }): OverlayConnection {
-  const clock = options.clock ?? { setTimeout, clearTimeout };
+  const clock = options.clock ?? {
+    setTimeout: (callback: () => void, milliseconds: number) => setTimeout(callback, milliseconds),
+    clearTimeout: (timer: ReturnType<typeof setTimeout>) => clearTimeout(timer),
+  };
   const token = new URLSearchParams(options.location.search).get("token");
   if (!token) throw new Error("Overlay authorization is unavailable");
   const endpoint = new URL(

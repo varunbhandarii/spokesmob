@@ -33,7 +33,10 @@ export function connectControl(options: {
     `${options.location.protocol === "https:" ? "wss:" : "ws:"}//${options.location.host}/ws`,
   );
   endpoint.searchParams.set("token", token);
-  const clock = options.clock ?? { setTimeout, clearTimeout };
+  const clock = options.clock ?? {
+    setTimeout: (callback: () => void, milliseconds: number) => setTimeout(callback, milliseconds),
+    clearTimeout: (timer: ReturnType<typeof setTimeout>) => clearTimeout(timer),
+  };
   let socket: ControlSocket | null = null;
   let timer: ReturnType<typeof setTimeout> | null = null;
   let handshake: ReturnType<typeof setTimeout> | null = null;
@@ -88,7 +91,7 @@ export function connectControl(options: {
       if (handshake) clock.clearTimeout(handshake);
       handshake = null;
       options.state("disconnected");
-      timer = clock.setTimeout(open, Math.min(30000, 1000 * 2 ** Math.min(retries++, 5)));
+      timer = clock.setTimeout(open, Math.min(5000, 1000 * 2 ** Math.min(retries++, 3)));
     };
   };
   open();

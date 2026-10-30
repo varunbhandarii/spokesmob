@@ -22,6 +22,24 @@ test("API uses the bearer header and exposes only validated snapshots and log pa
   expect(init?.headers).toEqual({ Authorization: "Bearer synthetic" });
 });
 
+test("the default browser fetch is called without a substitute receiver", async () => {
+  const request = vi.spyOn(globalThis, "fetch").mockImplementation(function (this: unknown) {
+    if (this !== undefined) throw new TypeError("Illegal invocation");
+    return Promise.resolve(
+      new Response(JSON.stringify({ state: view, settings: DEFAULT_BEAT_SETTINGS })),
+    );
+  });
+  try {
+    const api = createControlApi({
+      location: { protocol: "http:", host: "127.0.0.1:4040", search: "?token=synthetic" },
+    });
+    expect((await api.state()).state).toEqual(view);
+    expect(request).toHaveBeenCalledOnce();
+  } finally {
+    request.mockRestore();
+  }
+});
+
 test("retained-log export follows older cursors and can stop at a full record for copying", async () => {
   const first = Array.from({ length: 200 }, (_, index) => row(500 - index));
   const last = [row(300), row(299)];

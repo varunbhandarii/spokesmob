@@ -1,7 +1,10 @@
 import { afterEach, expect, test, vi } from "vitest";
 import { connectOverlay, type OverlaySocket } from "./ws.js";
 
-afterEach(() => vi.useRealTimers());
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.useRealTimers();
+});
 class FakeSocket implements OverlaySocket {
   binaryType = "";
   readyState = 1;
@@ -18,6 +21,59 @@ class FakeSocket implements OverlaySocket {
     this.onclose?.();
   }
 }
+test("the default browser clock reconnects and cancels retries without rebinding host timers", async () => {
+  vi.useFakeTimers();
+  const schedule = globalThis.setTimeout;
+  const cancel = globalThis.clearTimeout;
+  const scheduled = vi.spyOn(globalThis, "setTimeout").mockImplementation(function (
+    this: unknown,
+    callback,
+    milliseconds,
+  ) {
+    if (this !== undefined) throw new TypeError("Illegal invocation");
+    return schedule(callback, milliseconds);
+  });
+  const cancelled = vi.spyOn(globalThis, "clearTimeout").mockImplementation(function (
+    this: unknown,
+    timer,
+  ) {
+    if (this !== undefined) throw new TypeError("Illegal invocation");
+    cancel(timer);
+  });
+  const sockets: FakeSocket[] = [];
+  const connection = connectOverlay({
+    location: { protocol: "http:", host: "127.0.0.1:4040", search: "?token=synthetic" },
+    audio: true,
+    obs: true,
+    state: () => {},
+    disconnect: () => {},
+    message: () => {},
+    socket: () => {
+      const socket = new FakeSocket();
+      sockets.push(socket);
+      return socket;
+    },
+  });
+  sockets[0]?.onopen?.();
+  expect(() => sockets[0]?.close()).not.toThrow();
+  expect(scheduled).toHaveBeenLastCalledWith(expect.any(Function), 1000);
+  await vi.advanceTimersByTimeAsync(999);
+  expect(sockets).toHaveLength(1);
+  await vi.advanceTimersByTimeAsync(1);
+  expect(sockets).toHaveLength(2);
+  sockets[1]?.onopen?.();
+  expect(sockets[1]?.sent).toContainEqual({
+    type: "hello",
+    role: "overlay",
+    audio: true,
+    obs: true,
+  });
+  sockets[1]?.close();
+  expect(() => connection.close()).not.toThrow();
+  expect(cancelled).toHaveBeenCalled();
+  await vi.advanceTimersByTimeAsync(10000);
+  expect(sockets).toHaveLength(2);
+});
 test("socket reconnects with bounded backoff and repeats the hello handshake", async () => {
   vi.useFakeTimers();
   const sockets: FakeSocket[] = [];

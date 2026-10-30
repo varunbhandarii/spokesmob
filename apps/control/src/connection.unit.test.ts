@@ -27,8 +27,83 @@ class FakeSocket implements ControlSocket {
     this.onclose?.call(this as unknown as WebSocket, {} as CloseEvent);
   }
 }
-afterEach(() => vi.useRealTimers());
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.useRealTimers();
+});
 const location = { protocol: "http:", host: "127.0.0.1:4040", search: "?token=synthetic" };
+
+test("the default browser clock arms hello and reconnect deadlines without rebinding host timers", async () => {
+  vi.useFakeTimers();
+  const schedule = globalThis.setTimeout;
+  const cancel = globalThis.clearTimeout;
+  const scheduled = vi.spyOn(globalThis, "setTimeout").mockImplementation(function (
+    this: unknown,
+    callback,
+    milliseconds,
+  ) {
+    if (this !== undefined) throw new TypeError("Illegal invocation");
+    return schedule(callback, milliseconds);
+  });
+  const cancelled = vi.spyOn(globalThis, "clearTimeout").mockImplementation(function (
+    this: unknown,
+    timer,
+  ) {
+    if (this !== undefined) throw new TypeError("Illegal invocation");
+    cancel(timer);
+  });
+  const sockets: FakeSocket[] = [];
+  const connection = connectControl({
+    location,
+    state: () => {},
+    message: () => {},
+    socket: () => {
+      const socket = new FakeSocket();
+      sockets.push(socket);
+      return socket;
+    },
+  });
+  expect(() => sockets[0]?.open()).not.toThrow();
+  expect(scheduled).toHaveBeenLastCalledWith(expect.any(Function), 5000);
+  sockets[0]?.receive({ type: "hello", role: "control", audio: false, state: view });
+  expect(cancelled).toHaveBeenCalled();
+  expect(() => sockets[0]?.close()).not.toThrow();
+  expect(scheduled).toHaveBeenLastCalledWith(expect.any(Function), 1000);
+  await vi.advanceTimersByTimeAsync(999);
+  expect(sockets).toHaveLength(1);
+  await vi.advanceTimersByTimeAsync(1);
+  expect(sockets).toHaveLength(2);
+  sockets[1]?.open();
+  expect(scheduled).toHaveBeenLastCalledWith(expect.any(Function), 5000);
+  sockets[1]?.close();
+  expect(() => connection.close()).not.toThrow();
+  await vi.advanceTimersByTimeAsync(10000);
+  expect(sockets).toHaveLength(2);
+});
+
+test("the control panel keeps retrying localhost at a maximum five-second delay", async () => {
+  vi.useFakeTimers();
+  const sockets: FakeSocket[] = [];
+  const connection = connectControl({
+    location,
+    message: () => {},
+    state: () => {},
+    socket: () => {
+      const socket = new FakeSocket();
+      sockets.push(socket);
+      return socket;
+    },
+  });
+  for (const delay of [1000, 2000, 4000, 5000, 5000, 5000]) {
+    const count = sockets.length;
+    sockets.at(-1)?.close();
+    await vi.advanceTimersByTimeAsync(delay - 1);
+    expect(sockets).toHaveLength(count);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(sockets).toHaveLength(count + 1);
+  }
+  connection.close();
+});
 test("control handshake declares no audio and waits for the authorized snapshot before commands", () => {
   vi.useFakeTimers();
   const socket = new FakeSocket();
