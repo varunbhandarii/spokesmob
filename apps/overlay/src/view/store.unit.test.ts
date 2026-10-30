@@ -147,3 +147,46 @@ test("control previews are rejected and query layout pins over state changes", (
     }),
   ).toBe(false);
 });
+
+test("word timing follows played samples and ended audio lingers before clearing", () => {
+  let now = 0;
+  const store = createViewStore(null, () => now);
+  store.receive({
+    type: "hello",
+    role: "overlay",
+    audio: true,
+    channel: "synthetic_channel",
+    state: sceneState,
+  });
+  store.receive(sceneLine);
+  store.receive({ type: "prepare", take: 1, channel: "main", text: sceneLine.text });
+  store.receive({ type: "play", take: 1, durationMs: 5000 });
+  now = 1000;
+  expect(store.view().caption).toBeNull();
+  store.playback({ type: "started", take: 1 });
+  now = 2100;
+  expect(store.view().caption?.highlighted).toBe(1);
+  store.playback({ type: "played", take: 1, samples: 24000 * 3 });
+  expect(store.view().caption?.highlighted).toBe(3);
+  now = 2200;
+  expect(store.view().caption?.positionMs).toBe(3100);
+  store.playback({ type: "ended", take: 1 });
+  now = 4699;
+  expect(store.view().caption).not.toBeNull();
+  now = 4700;
+  expect(store.view().caption).toBeNull();
+});
+
+test("raid banner expires after six seconds while hype remains in state", () => {
+  let now = 0;
+  const store = createViewStore(null, () => now);
+  store.receive({ type: "event", kind: "raid", name: "LanternFox", viewers: 42 });
+  store.receive({ type: "state", ...sceneState, hype: { level: 3, shared: true } });
+  now = 5999;
+  expect(store.view()).toMatchObject({
+    raid: { name: "LanternFox" },
+    state: { hype: { level: 3 } },
+  });
+  now = 6000;
+  expect(store.view().raid).toBeNull();
+});

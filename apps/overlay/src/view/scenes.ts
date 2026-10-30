@@ -154,7 +154,7 @@ export const CAPTURE_AT: Record<Scene, number> = {
   listening: 200,
   thinking: 300,
   preview: 700,
-  speaking: 1500,
+  speaking: 1800,
   dissent: 4100,
   "captions-only": 1500,
   "caption-fallback": 1500,

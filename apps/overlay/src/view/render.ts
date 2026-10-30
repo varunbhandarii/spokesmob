@@ -1,48 +1,95 @@
 import { createFace } from "../face/index.js";
 import { LAYOUTS, type Zone } from "./layout.js";
 import { createFrameLoop, type FrameClock } from "./loop.js";
+import { createChannelQr } from "./qr.js";
 import type { ViewStore } from "./store.js";
+import { captionWords, countUp, dissentCopy } from "./text.js";
 import "./view.css";
 
 const place = (node: HTMLElement, zone: Zone) => {
-  node.style.left = `${zone.x}px`;
-  node.style.top = `${zone.y}px`;
-  node.style.width = `${zone.width}px`;
-  node.style.height = `${zone.height}px`;
-  if (zone.fontSize) node.style.fontSize = `${zone.fontSize}px`;
+  node.style.left = `${String(zone.x)}px`;
+  node.style.top = `${String(zone.y)}px`;
+  node.style.width = `${String(zone.width)}px`;
+  node.style.height = `${String(zone.height)}px`;
+  if (zone.fontSize) node.style.fontSize = `${String(zone.fontSize)}px`;
 };
 const write = (node: HTMLElement, text: string) => {
-  if (node.textContent !== text) node.textContent = text;
+  if (node.textContent === text) return false;
+  node.textContent = text;
+  return true;
 };
+export function fitPlate(node: HTMLElement, zone: Zone, lines = 3) {
+  const start = zone.fontSize;
+  let size = start;
+  node.style.fontSize = `${String(size)}px`;
+  // Font metrics and line wrapping are measured only when text/layout changes.
+  while (
+    size > 12 &&
+    (node.scrollWidth > zone.width + 1 ||
+      node.scrollHeight > zone.height + 1 ||
+      node.scrollHeight > size * 1.2 * lines + 25)
+  ) {
+    size--;
+    node.style.fontSize = `${String(size)}px`;
+  }
+  node.dataset.fittedSize = String(size);
+}
 export function createRenderer(options: {
   root: HTMLElement;
   store: ViewStore;
   clock?: FrameClock;
   sample?: () => number;
   seed?: number;
+  harness?: boolean;
   beforeDraw?: (nowMs: number) => void;
 }) {
   const { root, store } = options;
   root.classList.add("overlay-view");
-  const make = (className: string) => {
+  const make = (className: string, parent: HTMLElement = root) => {
     const node = document.createElement("div");
     node.className = className;
-    root.append(node);
+    parent.append(node);
     return node;
+  };
+  const slot = (className: string) => {
+    const host = make("text-slot");
+    const plate = make(`${className} plate`, host);
+    return { host, plate };
   };
   const bar = make("bottom-bar");
   const faceHost = make("face-host");
-  const caption = make("caption plate");
-  const meter = make("agreement plate");
-  const dissent = make("dissent plate");
-  const counter = make("counter plate");
-  const question = make("question plate");
-  const badge = make("ai-badge plate");
-  const qr = make("qr-placeholder plate");
-  const stateTag = make("state-tag plate");
+  const caption = slot("caption");
+  const lead = make("caption-lead", caption.plate);
+  const wordsHost = make("caption-words", caption.plate);
+  const compactAside = document.createElement("span");
+  compactAside.className = "compact-dissent";
+  const meter = slot("agreement");
+  const dissent = slot("dissent");
+  const counter = slot("counter");
+  const counterNumber = make("counter-number", counter.plate);
+  const counterLabel = make("counter-label", counter.plate);
+  const question = slot("question");
+  const badge = slot("ai-badge");
+  const join = slot("join-hint");
+  const bubble = slot("preview-bubble");
+  const raid = slot("raid-banner");
+  const hype = slot("hype-chip");
+  const stateTag = slot("state-tag");
+  const qr = make("channel-qr");
+  const qrLabel = make("qr-label", qr);
   const face = createFace({ seed: options.seed ?? 1729, size: 512 });
   faceHost.append(face.element);
+  write(badge.plate, "AI voice");
+  write(bubble.plate, "\u2026");
+  let qrChannel = "";
   let layout = "";
+  let captionKey = "";
+  let wordNodes: HTMLSpanElement[] = [];
+  let fitted = false;
+  let alive = true;
+  void document.fonts.ready.then(() => {
+    if (alive) fitted = false;
+  });
   const loop = createFrameLoop((now) => {
     options.beforeDraw?.(now);
     if (options.sample) store.sample(options.sample());
@@ -50,56 +97,145 @@ export function createRenderer(options: {
     const zones = LAYOUTS[view.layout];
     root.dataset.layout = view.layout;
     root.dataset.pose = view.pose;
-    if (layout !== view.layout) {
+    const changedLayout = layout !== view.layout;
+    if (changedLayout) {
       layout = view.layout;
+      fitted = false;
+      place(faceHost, zones.face);
       for (const [node, zone] of [
-        [faceHost, zones.face],
-        [caption, zones.caption],
-        [meter, zones.meter],
-        [dissent, zones.dissent],
-        [counter, zones.counter],
-        [question, zones.question],
-        [badge, zones.badge],
+        [caption.host, zones.caption],
+        [meter.host, zones.meter],
+        [dissent.host, zones.dissent],
+        [counter.host, zones.counter],
+        [question.host, zones.question],
+        [badge.host, zones.badge],
       ] as const)
         place(node, zone);
       if (zones.qr) place(qr, zones.qr);
       if (zones.bar) place(bar, zones.bar);
       bar.hidden = !zones.bar;
       qr.hidden = !zones.qr;
-      stateTag.style.left = `${view.layout === "stage" ? zones.face.x + zones.face.width + 16 : zones.face.x}px`;
-      stateTag.style.top = `${view.layout === "stage" ? zones.face.y : zones.face.y - 40}px`;
+      place(bubble.host, {
+        x: zones.face.x + zones.face.width - 18,
+        y: zones.face.y + 40,
+        width: 100,
+        height: 70,
+        fontSize: 48,
+      });
+      place(stateTag.host, {
+        x: view.layout === "stage" ? zones.face.x + zones.face.width + 16 : zones.face.x,
+        y: view.layout === "stage" ? zones.face.y : Math.max(zones.margin, zones.face.y - 55),
+        width: view.layout === "stage" ? 280 : Math.max(220, zones.face.width),
+        height: 48,
+        fontSize: view.layout === "compact" ? 18 : 22,
+      });
+      place(
+        join.host,
+        view.layout === "stage"
+          ? {
+              x: zones.counter.x,
+              y: zones.counter.y + zones.counter.height + 12,
+              width: zones.counter.width,
+              height: 60,
+              fontSize: 28,
+            }
+          : zones.caption,
+      );
+      place(raid.host, { x: 360, y: 184, width: 1200, height: 96, fontSize: 42 });
+      place(hype.host, { x: 1460, y: 48, width: 396, height: 80, fontSize: 28 });
     }
-    const line = view.caption?.line;
-    const dissentText =
-      view.caption?.dissent && line?.dissent && line.dissentPct !== null
-        ? `${line.dissentPct}% say ${line.dissent}`
-        : "";
+    if (qrChannel !== view.channel) {
+      qrChannel = view.channel;
+      qr.querySelector("svg")?.remove();
+      qr.prepend(createChannelQr(view.channel));
+      qr.dataset.url = `https://twitch.tv/${view.channel}`;
+      write(qrLabel, `twitch.tv/${view.channel}`);
+    }
+    const visible = view.caption;
+    const line = visible?.line;
+    const aside = visible?.dissent
+      ? dissentCopy(line?.dissentPct ?? null, line?.dissent ?? null)
+      : "";
+    const meanwhile = !!line && !!view.state.question && !line.answersQuestion;
+    const key = line ? `${line.text}|${aside}|${String(meanwhile)}|${layout}` : "";
+    if (key !== captionKey) {
+      captionKey = key;
+      fitted = false;
+      wordsHost.replaceChildren();
+      wordNodes = captionWords(line?.text ?? "").map((word) => {
+        const span = document.createElement("span");
+        span.className = "caption-word";
+        span.textContent = word;
+        wordsHost.append(span);
+        return span;
+      });
+      if (layout === "compact" && aside) {
+        compactAside.textContent = ` \u00b7 ${aside}`;
+        wordsHost.append(compactAside);
+      }
+      write(lead, meanwhile ? "Meanwhile, chat says" : "");
+      lead.hidden = !meanwhile;
+    }
+    caption.host.hidden = !line;
+    for (let i = 0; i < wordNodes.length; i++)
+      wordNodes[i]?.classList.toggle("is-current", i === visible?.highlighted);
+    const pct = countUp(line?.pct ?? 0, visible?.ageMs ?? 0);
+    const voices = countUp(line?.voices ?? 0, visible?.ageMs ?? 0);
+    const meterChanged = write(meter.plate, `${String(pct)}% of ${String(voices)} voices`);
+    meter.host.hidden = !line || line.voices === 0;
+    meter.plate.dataset.pct = String(line?.pct ?? 0);
+    const dissentChanged = write(dissent.plate, aside);
+    dissent.host.hidden = !aside || layout === "compact";
+    write(counterNumber, String(view.voices));
+    write(counterLabel, view.voices === 1 ? "voice" : "voices");
+    const questionChanged = write(question.plate, view.state.question ?? "");
+    question.host.hidden = !view.state.question;
+    write(join.plate, "Type in chat to join");
+    join.host.hidden =
+      view.state.step !== "listening" ||
+      view.pose !== "idle" ||
+      (layout !== "stage" && view.voices >= 2);
     write(
-      caption,
-      line ? line.text + (view.layout === "compact" && dissentText ? ` · ${dissentText}` : "") : "",
-    );
-    caption.hidden = !line;
-    write(meter, line ? `${line.pct}% of ${line.voices}` : "");
-    meter.hidden = !line || line.voices === 0;
-    write(dissent, dissentText);
-    dissent.hidden = !dissentText || view.layout === "compact";
-    write(counter, view.layout === "stage" ? String(view.voices) : `${view.voices} voices`);
-    write(question, view.state.question ?? "");
-    question.hidden = !view.state.question;
-    write(badge, "AI voice");
-    write(qr, `QR space\n280 x 280\ntwitch.tv/${view.channel}`);
-    write(
-      stateTag,
+      stateTag.plate,
       view.pose === "muted"
         ? "Muted"
         : view.pose === "asleep"
           ? "The mob is resting"
-          : "Temporary face",
+          : options.harness
+            ? "Temporary face"
+            : "",
     );
+    stateTag.host.hidden = !stateTag.plate.textContent;
+    bubble.host.hidden = view.pose !== "inhale";
+    write(
+      raid.plate,
+      view.raid ? `${view.raid.name} raided with ${String(view.raid.viewers)} viewers` : "",
+    );
+    raid.host.hidden = !view.raid;
+    write(
+      hype.plate,
+      view.state.hype
+        ? "Hype Train \u00b7 level " +
+            String(view.state.hype.level) +
+            (view.state.hype.shared ? " \u00b7 shared" : "")
+        : "",
+    );
+    hype.host.hidden = !view.state.hype;
+    if (!fitted) {
+      if (line) fitPlate(caption.plate, zones.caption);
+      fitPlate(counter.plate, zones.counter);
+      fitPlate(question.plate, zones.question, 2);
+      fitPlate(dissent.plate, zones.dissent, 2);
+      fitted = true;
+    } else {
+      if (questionChanged) fitPlate(question.plate, zones.question, 2);
+      if (dissentChanged) fitPlate(dissent.plate, zones.dissent, 2);
+    }
+    if (meterChanged || changedLayout) fitPlate(meter.plate, zones.meter, 2);
     face.setPose(view.pose);
     face.setMood(view.state.mood);
     face.setHype(view.state.hype?.level ?? null);
-    // The placeholder demonstrates the interface; the selected rig gets the audio envelope later.
+    // The selected rig gets the audio envelope in its integration task.
     face.setMouth(
       view.pose === "speaking" ? 0.65 : view.pose === "aside" ? 0.4 : 0,
       view.pose === "speaking" || view.pose === "aside" ? "open" : "closed",
@@ -113,6 +249,7 @@ export function createRenderer(options: {
       loop.setActive(value);
     },
     destroy() {
+      alive = false;
       loop.destroy();
       face.destroy();
       root.replaceChildren();

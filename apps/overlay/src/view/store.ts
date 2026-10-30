@@ -13,11 +13,31 @@ import {
   serverOverlayMessageSchema,
 } from "../../../../packages/core/src/overlay-protocol.js";
 import type { FacePose } from "../face/types.js";
+import { captionLingerMs, highlightedWord } from "./text.js";
 
 export interface VisibleCaption {
   line: LineMessage;
   source: "started" | "reveal";
   dissent: boolean;
+  ageMs: number;
+  durationMs: number;
+  positionMs: number;
+  highlighted: number;
+}
+interface CaptionData {
+  line: LineMessage;
+  source: "started" | "reveal";
+  dissent: boolean;
+  shownAt: number;
+  until: number | null;
+}
+interface PreparedTake {
+  channel: AudioChannel;
+  text: string;
+  durationMs: number;
+  positionMs: number;
+  reportedAt: number;
+  playing: boolean;
 }
 export interface OverlayView {
   state: BeatView;
@@ -31,6 +51,7 @@ export interface OverlayView {
   rms: number;
   audioChannel: AudioChannel | null;
   newestName: string | null;
+  raid: { name: string; viewers: number } | null;
 }
 const initial: BeatView = {
   step: "off",
@@ -46,20 +67,25 @@ const initial: BeatView = {
   mood: null,
   hype: null,
 };
-export function createViewStore(queryLayout: string | null = null) {
+export function createViewStore(
+  queryLayout: string | null = null,
+  now: () => number = () => performance.now(),
+) {
   let state = { ...initial };
   let channel = "spokesmob";
   let pose: FacePose = "asleep";
   let active = true;
   let pending: LineMessage | null = null;
-  let caption: VisibleCaption | null = null;
+  let caption: CaptionData | null = null;
   let playing: number | null = null;
   let audioChannel: AudioChannel | null = null;
   let voices = 0;
   let messages = 0;
   let rms = 0;
   let newestName: string | null = null;
-  const prepared = new Map<number, { channel: AudioChannel; text: string }>();
+  let raid: { name: string; viewers: number; until: number } | null = null;
+  const revealed = new Set<number>();
+  const prepared = new Map<number, PreparedTake>();
   const cancelled = new Set<number>();
   let stoppedThrough = -1;
   let highestSeen = -1;
@@ -108,6 +134,8 @@ export function createViewStore(queryLayout: string | null = null) {
       switch (event.type) {
         case "hello":
           cancelled.clear();
+          revealed.clear();
+          raid = null;
           prepared.clear();
           clear();
           stoppedThrough = -1;
@@ -151,6 +179,7 @@ export function createViewStore(queryLayout: string | null = null) {
             newestLineTake = event.take;
             clearedByStop = false;
             for (const id of cancelled) if (id < newestLineTake) cancelled.delete(id);
+            for (const id of revealed) if (id < newestLineTake) revealed.delete(id);
             pending = event;
             caption = null;
             playing = null;
@@ -160,15 +189,44 @@ export function createViewStore(queryLayout: string | null = null) {
           break;
         case "prepare":
           if (!stopped(event.take)) {
-            prepared.set(event.take, { channel: event.channel, text: event.text });
+            prepared.set(event.take, {
+              channel: event.channel,
+              text: event.text,
+              durationMs: 0,
+              positionMs: 0,
+              reportedAt: now(),
+              playing: false,
+            });
             while (prepared.size > 32) prepared.delete(prepared.keys().next().value as number);
           }
           break;
+        case "play": {
+          const take = prepared.get(event.take);
+          if (take && !stopped(event.take)) take.durationMs = event.durationMs;
+          break;
+        }
         case "reveal":
-          if (pending?.take === event.take && !stopped(event.take) && !held() && !state.muted) {
-            caption = { line: pending, source: "reveal", dissent: false };
+          if (
+            pending?.take === event.take &&
+            !revealed.has(event.take) &&
+            !stopped(event.take) &&
+            !held() &&
+            !state.muted
+          ) {
+            revealed.add(event.take);
+            caption = {
+              line: pending,
+              source: "reveal",
+              dissent: false,
+              shownAt: now(),
+              until: now() + captionLingerMs(pending.text),
+            };
             pose = "reading";
           }
+          break;
+        case "event":
+          if (event.kind === "raid")
+            raid = { name: event.name, viewers: event.viewers, until: now() + 6000 };
           break;
         case "stop":
           stop(event.take);
@@ -202,6 +260,9 @@ export function createViewStore(queryLayout: string | null = null) {
       if (event.type === "started" && take && !held() && !state.muted) {
         playing = event.take;
         audioChannel = take.channel;
+        take.playing = true;
+        take.positionMs = 0;
+        take.reportedAt = now();
         if (take.channel === "main") {
           if (!pending || pending.take !== event.take || pending.text !== take.text)
             pending = {
@@ -220,13 +281,30 @@ export function createViewStore(queryLayout: string | null = null) {
               holdMs: 1000,
               quiet: false,
             };
-          caption = { line: pending, source: "started", dissent: false };
+          caption = {
+            line: pending,
+            source: "started",
+            dissent: false,
+            shownAt: now(),
+            until: null,
+          };
           pose = "speaking";
         } else {
-          if (caption) caption.dissent = true;
+          if (caption) {
+            caption.dissent = true;
+            caption.until = null;
+          }
           pose = "aside";
         }
+      } else if (event.type === "played" && take && playing === event.take) {
+        take.positionMs = event.samples / 24;
+        take.reportedAt = now();
       } else if (event.type === "ended" && playing === event.take) {
+        if (take) {
+          take.playing = false;
+          take.positionMs = take.durationMs;
+        }
+        if (caption) caption.until = now() + captionLingerMs(caption.line.text);
         playing = null;
         audioChannel = null;
         rms = 0;
@@ -245,6 +323,29 @@ export function createViewStore(queryLayout: string | null = null) {
       rms = Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 0;
     },
     view(): OverlayView {
+      const at = now();
+      if (caption?.until !== null && caption && at >= caption.until) caption = null;
+      const main = caption ? prepared.get(caption.line.take) : undefined;
+      const positionMs = main
+        ? Math.min(
+            main.durationMs,
+            main.positionMs + (main.playing ? Math.max(0, at - main.reportedAt) : 0),
+          )
+        : 0;
+      const visible: VisibleCaption | null = caption
+        ? {
+            line: caption.line,
+            source: caption.source,
+            dissent: caption.dissent,
+            ageMs: Math.max(0, at - caption.shownAt),
+            positionMs,
+            durationMs: main?.durationMs ?? 0,
+            highlighted:
+              caption.source === "started"
+                ? highlightedWord(caption.line.text, positionMs, main?.durationMs ?? 0)
+                : -1,
+          }
+        : null;
       const blocked =
         state.muted || state.heldBy.includes("muted") || state.heldBy.includes("killed");
       return {
@@ -252,13 +353,14 @@ export function createViewStore(queryLayout: string | null = null) {
         layout: resolveOverlayLayout(queryLayout, state.layout),
         channel,
         pose: blocked ? "muted" : held() ? "asleep" : pose,
-        caption: blocked || held() ? null : caption,
+        caption: blocked || held() ? null : visible,
         voices,
         messages,
         active,
         rms,
         audioChannel,
         newestName,
+        raid: raid && at < raid.until ? { name: raid.name, viewers: raid.viewers } : null,
       };
     },
   };

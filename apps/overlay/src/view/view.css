@@ -1,3 +1,6 @@
+@import "@fontsource-variable/atkinson-hyperlegible-next";
+@import "@fontsource-variable/atkinson-hyperlegible-next/wght-italic.css";
+
 html,
 body {
   margin: 0;
@@ -7,8 +10,9 @@ body {
   background: transparent;
 }
 body {
-  color: #fff;
-  font-family: system-ui, sans-serif;
+  color: white;
+  font-family: "Atkinson Hyperlegible Next Variable", sans-serif;
+  font-synthesis: none;
 }
 .overlay-view {
   position: relative;
@@ -23,68 +27,120 @@ body {
 .overlay-view [hidden] {
   display: none;
 }
+.text-slot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
 .plate {
+  width: fit-content;
+  max-width: 100%;
+  box-sizing: border-box;
   background: rgb(15 20 22 / 85%);
   border-radius: 14px;
   padding: 8px 16px;
+  text-align: center;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+  -webkit-text-stroke: 2px #0f1416;
+  paint-order: stroke fill;
 }
 .face-host svg {
   width: 100%;
   height: 100%;
 }
 .caption {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  line-height: 1.15;
+  padding: 12px 20px;
 }
-.agreement,
-.counter,
-.question,
-.ai-badge {
-  text-align: center;
+.caption-lead {
+  font-size: 0.55em;
+  margin-bottom: 6px;
+}
+.caption-words {
+  display: inline;
+}
+.caption-word {
+  opacity: 0.82;
+}
+.caption-word.is-current {
+  opacity: 1;
+  text-decoration: underline;
+  text-decoration-color: #d5ef9c;
+  text-underline-offset: 0.12em;
+}
+.dissent,
+.compact-dissent {
+  font-style: italic;
+  opacity: 0.85;
 }
 .counter {
   display: flex;
   align-items: center;
   justify-content: center;
-  line-height: 1;
-  padding: 0;
+  gap: 8px;
+  line-height: 1.2;
+  padding: 2px 8px;
 }
-.dissent {
-  font-style: italic;
-  text-align: center;
+.counter-number,
+.counter-label {
+  line-height: 1.2;
+}
+[data-layout="stage"] .counter {
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 20px;
+}
+[data-layout="stage"] .counter-label {
+  font-size: 28px;
 }
 .ai-badge {
   white-space: nowrap;
-  padding: 2px 8px;
-  color: #d5ef9c;
+  padding: 3px 8px;
+  font-size: 18px;
+}
+.preview-bubble {
+  border-radius: 32px;
+  min-width: 78px;
+  padding: 0 14px 12px;
+}
+.state-tag {
+  font-size: 22px;
+}
+.join-hint {
+  font-size: 28px;
+}
+.hype-chip {
+  color: #f5df8b;
 }
 .bottom-bar {
   background: rgb(15 20 22 / 85%);
   border: 1px solid #58635b;
   border-radius: 24px;
 }
-.qr-placeholder {
-  white-space: pre-line;
-  display: grid;
-  place-content: center;
+.channel-qr {
   text-align: center;
-  border: 2px dashed #d5ef9c;
 }
-.state-tag {
-  font-size: 18px;
-  color: #d5ef9c;
+.channel-qr svg {
+  display: block;
+  width: 280px;
+  height: 280px;
+  background: white;
+}
+.qr-label {
+  font-size: 20px;
+  line-height: 1.3;
+  padding-top: 8px;
+  color: white;
+  overflow-wrap: anywhere;
 }
 #status {
   position: fixed;
   right: 20px;
   top: 18px;
-  color: #fff;
+  color: white;
   background: #17191ddd;
   font:
-    16px system-ui,
+    16px "Atkinson Hyperlegible Next Variable",
     sans-serif;
   padding: 8px 12px;
   border-radius: 8px;

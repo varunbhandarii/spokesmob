@@ -30,7 +30,7 @@ export function createFace(options: { seed: number; size: number }): FaceRig {
     viewBox: "0 0 512 512",
     width: options.size,
     height: options.size,
-    "aria-label": "Temporary circular face",
+    "aria-label": "Spokesmob face",
     role: "img",
   });
   element.classList.add("placeholder-face");

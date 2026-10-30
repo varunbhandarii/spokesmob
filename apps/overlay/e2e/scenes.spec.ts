@@ -34,7 +34,7 @@ for (const layout of ["wide", "stage", "compact"])
       else
         await expect(page.locator(".caption")).toHaveText(
           scene === "dissent" && layout === "compact"
-            ? "Most of chat wants Gary. · 18% say Some prefer Milo."
+            ? "Most of chat wants Gary. · 18% · Some prefer Milo."
             : "Most of chat wants Gary.",
         );
       if (scene === "veto")
