@@ -20,6 +20,7 @@ import {
   spendView,
   updateSettingsDraft,
 } from "./model.js";
+import { createPreviewCard } from "./preview-card.js";
 
 function element<T extends HTMLElement>(id: string): T {
   const value = document.getElementById(id);
@@ -79,6 +80,9 @@ function dispatch(action: ControlAction): string | null {
   if (!request) notify("The control connection is unavailable. No command was queued.", true);
   return request;
 }
+const previewCard = createPreviewCard(element("preview-card"), () => {
+  dispatch({ action: "veto" });
+});
 const BUTTON_ACTIONS: Record<string, ControlAction> = {
   on: { action: "on" },
   off: { action: "off" },
@@ -214,6 +218,7 @@ function renderLog() {
   }
 }
 function render() {
+  previewCard.update(model, connected);
   const state = model.state;
   element("beat-step").textContent = state?.step ?? "waiting";
   const online = element("online");
@@ -374,7 +379,7 @@ try {
       render();
     },
     message: (message) => {
-      model = receiveControl(model, message);
+      model = receiveControl(model, message, performance.now());
       if (message.type === "hello" || message.type === "state") stateVersion++;
       if (message.type === "hello") void resync(true);
       if (message.type === "result") {
@@ -401,4 +406,7 @@ try {
 } catch {
   notify("Open the control URL copied by the local server to authorize this dock.", true);
 }
-window.addEventListener("pagehide", () => connection?.close());
+window.addEventListener("pagehide", () => {
+  connection?.close();
+  previewCard.destroy();
+});

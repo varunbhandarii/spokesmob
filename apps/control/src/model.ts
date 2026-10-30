@@ -3,11 +3,14 @@ import { DEFAULT_BEAT_SETTINGS } from "../../../packages/core/src/beat-settings.
 import type { BeatLogRecord, BeatView, HeldReason } from "../../../packages/core/src/beat-types.js";
 import type { ControlAction, ControlMessage } from "../../../packages/core/src/overlay-protocol.js";
 
+import { createPreviewState, type PreviewState, receivePreview } from "./preview.js";
+
 export const LOG_LIMIT = 200;
 type Cost = Extract<ControlMessage, { type: "cost" }>;
 type Health = Extract<ControlMessage, { type: "health" }>;
 export interface ControlModel {
   state: BeatView | null;
+  preview: PreviewState;
   cost: Cost | null;
   health: Health | null;
   settings: BeatSettings;
@@ -15,6 +18,7 @@ export interface ControlModel {
 }
 export const createControlModel = (): ControlModel => ({
   state: null,
+  preview: createPreviewState(),
   cost: null,
   health: null,
   settings: { ...DEFAULT_BEAT_SETTINGS },
@@ -28,22 +32,28 @@ export function mergeLogs(current: readonly BeatLogRecord[], incoming: readonly 
     .sort((a, b) => b.at - a.at || b.id.localeCompare(a.id))
     .slice(0, LOG_LIMIT);
 }
-export function receiveControl(model: ControlModel, message: ControlMessage): ControlModel {
+export function receiveControl(
+  model: ControlModel,
+  message: ControlMessage,
+  now = 0,
+): ControlModel {
+  const preview = receivePreview(model.preview, message, now);
+  const next = preview === model.preview ? model : { ...model, preview };
   switch (message.type) {
     case "hello":
-      return { ...model, state: message.state };
+      return { ...next, state: message.state };
     case "state": {
       const { type: _type, ...state } = message;
-      return { ...model, state };
+      return { ...next, state };
     }
     case "log":
-      return { ...model, logs: mergeLogs(model.logs, [message.row]) };
+      return { ...next, logs: mergeLogs(model.logs, [message.row]) };
     case "cost":
-      return { ...model, cost: message };
+      return { ...next, cost: message };
     case "health":
-      return { ...model, health: message };
+      return { ...next, health: message };
     default:
-      return model;
+      return next;
   }
 }
 
