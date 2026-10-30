@@ -51,6 +51,8 @@ Run `npm run build` before starting the server. Copy the dock URL with `npm run 
 
 The dock shows step and blocking conditions, mode, question, health, cost, latency and beat history. Veto cancels either take; Mute and Kill stop both. Focus the dock to use V, S, M, K and U for Veto, Speak now, Mute, Kill and Unmute. Editing a field suppresses shortcuts. **Test while offline** is a visible, session-only exception to the live-stream gate and resets at restart.
 
+The mode button **Captions only** runs without voice and uses `quiet` in chat commands and the API. Mute holds until its timer expires or Unmute is pressed; Kill holds until explicit Unmute.
+
 The layout selector changes the shared overlay layout. A valid explicit `layout` query parameter pins that browser source instead. Ordinary control tabs never claim audio ownership.
 
 For an offline channel check, note the current session cap and select On-demand. In Settings, save a small cap and minimum voices of 1 before enabling **Test while offline**. Use an ordinary alt account for votes; the broadcaster's own messages are excluded from agreement. Each Speak now starts a paid beat. Finish with explicit Unmute to clear any persisted Kill, Turn off, disable the test switch, restore minimum voices to 2 and the original cap, then restore Auto and save. The mock stores settings separately, so configure the real server too.
