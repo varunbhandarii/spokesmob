@@ -6,6 +6,9 @@ import {
   type BeatLogRecord,
   beatLogRecordSchema,
 } from "../../../../packages/core/src/beat-types.js";
+import { recordedModeration } from "../beat/billing.js";
+import { BeatRecords } from "../beat/records.js";
+import { systemClock } from "../clock.js";
 import { databaseFile, openApplicationStore } from "./application.js";
 import { openStorage } from "./db.js";
 import { migrate } from "./migrations.js";
@@ -61,6 +64,61 @@ test("migrations are transactional, versioned and repeatable without losing sett
     expect(() => migrate(db)).toThrow("newer");
   } finally {
     db.close();
+  }
+});
+
+test("late moderation settlement refreshes its original completed beat from the ledger", async () => {
+  const f = fixture();
+  try {
+    const ledger = new SpendLedger(f.costLedger, "session", 5);
+    f.beatLog.insert(row("first", 0));
+    f.beatLog.insert(row("no-ledger", 0));
+    for (const [source, usd] of [
+      ["consensus", 0.0007036],
+      ["voice", 0.0008544],
+    ] as const) {
+      const ticket = ledger.reserve(source, 0, "first");
+      if (!ticket) throw new Error("Test admission failed");
+      ledger.settle(ticket, usd);
+    }
+    const emitted = vi.fn();
+    const records = new BeatRecords(f, "session", emitted, (names) => [...names]);
+    let current: string | null = "first";
+    let complete!: () => void;
+    const port = recordedModeration({
+      ledger,
+      clock: systemClock,
+      beatId: () => current,
+      port: {
+        moderate: async () => {
+          await new Promise<void>((resolve) => {
+            complete = resolve;
+          });
+          return { results: [], usage: null, costUsd: 0 };
+        },
+      },
+      updated: (id) => {
+        if (id) records.reconcileCost(id);
+      },
+    });
+    const pending = port.moderate(["blue"]);
+    expect(ledger.totals().unknown).toBe(1);
+    expect(f.beatLog.get("first")).toMatchObject({ costUsd: null, unknownCost: true });
+    current = "next";
+    complete();
+    await pending;
+    expect(ledger.totals().unknown).toBe(0);
+    expect(f.beatLog.get("first")).toMatchObject({ costUsd: 0.001558, unknownCost: false });
+    expect(emitted).toHaveBeenCalledOnce();
+    expect(emitted.mock.calls[0]?.[0]).toMatchObject({
+      id: "first",
+      costUsd: 0.001558,
+      unknownCost: false,
+    });
+    expect(f.beatLog.reconcileCost("no-ledger")).toBeNull();
+    expect(f.beatLog.get("no-ledger")?.unknownCost).toBe(true);
+  } finally {
+    f.db.close();
   }
 });
 

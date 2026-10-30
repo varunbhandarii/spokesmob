@@ -47,6 +47,28 @@ function response(change: Record<string, unknown> = {}) {
   };
 }
 const input = buildInput(assembleWindow([], { seed: 1 }), [], null);
+
+test("connection warm-up only retrieves metadata and never creates a response or submits tokens", async () => {
+  const requests: { method: string | undefined; path: string; hasBody: boolean }[] = [];
+  const client = new OpenAI({
+    apiKey: "synthetic-test-key",
+    maxRetries: 0,
+    fetch: async (url, init) => {
+      requests.push({
+        method: init?.method,
+        path: new URL(String(url)).pathname,
+        hasBody: !!init?.body,
+      });
+      return new Response(
+        JSON.stringify({ id: "gpt-6-luna", object: "model", created: 0, owned_by: "openai" }),
+        { headers: { "content-type": "application/json" } },
+      );
+    },
+  });
+  const model = new OpenAIConsensusModel({ client, serviceTier: "fast" });
+  await model.warmup();
+  expect(requests).toEqual([{ method: "GET", path: "/v1/models/gpt-6-luna", hasBody: false }]);
+});
 function fixture(body: unknown, status = 200) {
   const requests: Record<string, unknown>[] = [];
   const fetch = vi.fn(async (_url: unknown, init?: RequestInit) => {

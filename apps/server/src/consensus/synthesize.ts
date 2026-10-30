@@ -223,6 +223,7 @@ export async function synthesize(options: SynthesisOptions): Promise<SynthesisRe
       options.question ?? null,
       attempt ? reason : undefined,
       options.moodContext,
+      options.previousLine ?? null,
     );
     result.attempts++;
     let generated: ModelResult;

@@ -220,4 +220,16 @@ test("a short dense crowd keeps every beat accounted for and reports stage distr
   expect(report.windowProcessingMs.count).toBeGreaterThan(0);
   expect(report.e2eMs.count).toBeGreaterThan(0);
   expect(report.simulated).toBe(true);
+  expect(report.dissentBeats).toBe(0);
+  const record = f.store.beatLog.recent(100).find((row) => row.status === "spoken");
+  if (!record) throw new Error("Expected a completed test beat");
+  const withDissent = loopReport({
+    rows: [{ ...record, dissent: "Some say red." }],
+    calls: [],
+    runner: f.runner,
+    heap: [],
+    elapsedMs: 0,
+    apiFailure: null,
+  });
+  expect(withDissent.dissentBeats).toBe(1);
 });

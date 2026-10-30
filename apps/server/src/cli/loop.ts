@@ -188,7 +188,8 @@ export async function runLoop(
     let before: string | undefined;
     for (;;) {
       const batch = loop.application.store.beatLog.recent(1000, before);
-      rows.push(...batch.filter((row) => row.id.startsWith(`${loop?.application.sessionId}:`)));
+      for (const row of batch.filter((row) => row.id.startsWith(`${loop?.application.sessionId}:`)))
+        rows.push(loop.application.store.beatLog.reconcileCost(row.id) ?? row);
       if (batch.length < 1000) break;
       before = batch.at(-1)?.id;
     }

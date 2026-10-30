@@ -98,10 +98,17 @@ export class BeatRecords {
   update(id: number) {
     const book = this.books.get(id);
     const previous = this.store.beatLog.get(this.key(id));
-    if (!book?.status || !previous) return;
+    if (!book?.status || !previous) {
+      this.reconcileCost(this.key(id));
+      return;
+    }
     const row = this.row(book, previous.kind, previous.mode);
     this.store.beatLog.update(row.id, row);
     this.emit(row);
+  }
+  reconcileCost(id: string) {
+    const row = this.store.beatLog.reconcileCost(id);
+    if (row) this.emit(row);
   }
   private row(book: BeatBook, kind: "consensus" | "event", mode: BeatState["mode"]): BeatLogRecord {
     const line = book.line;

@@ -51,6 +51,22 @@ test("quotes, embedded markers and JSON remain inside a single data envelope", (
   expect(embedded.mapping.get("c1")).toMatch(/^cluster-/);
 });
 
+test("the previous spoken line is the mob's own output, separate from current chat evidence", () => {
+  const previousLine = "Most of chat wants Gary.";
+  const window = assembleWindow([], { seed: 1 });
+  for (const reason of [undefined, "near_duplicate"] as const) {
+    const built = buildInput(window, [], null, reason, {}, previousLine);
+    expect(built.previousLine).toBe(previousLine);
+    expect(promptMessages(built)).toEqual([
+      { role: "developer", content: STATIC_PREFIX },
+      { role: "assistant", content: previousLine },
+      { role: "user", content: built.userMessage },
+    ]);
+    expect(built.userMessage).not.toContain(previousLine);
+    expect(Object.keys(built.data)).not.toContain("previousLine");
+  }
+});
+
 test("the schema pins six fields, strict IDs and the citation bounds", () => {
   const good: ConsensusOutput = {
     line: "Most of chat wants Gary.",

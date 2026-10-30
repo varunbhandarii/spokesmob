@@ -47,6 +47,7 @@ export function loopReport(options: {
     droppedBeats: runner.records.begun - runner.resolvedBeats - runner.pendingBeats,
     outcomes,
     reasons,
+    dissentBeats: rows.filter((row) => !!row.dissent).length,
     posts: calls.filter((call) => call.path === "/helix/chat/messages" && call.method === "POST")
       .length,
     pins: calls.filter((call) => call.path === "/helix/chat/pins" && call.method === "PUT").length,

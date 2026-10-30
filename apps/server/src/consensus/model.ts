@@ -59,6 +59,9 @@ export class OpenAIConsensusModel implements ConsensusModelPort {
   ) {
     this.clock = options.clock ?? systemClock;
   }
+  async warmup(): Promise<void> {
+    await this.options.client.models.retrieve("gpt-6-luna", { timeout: 6000, maxRetries: 0 });
+  }
   async generate(input: BuiltInput, signal?: AbortSignal): Promise<ModelResult> {
     const start = this.clock.now();
     try {

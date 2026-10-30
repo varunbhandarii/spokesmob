@@ -44,5 +44,6 @@ export interface ModelResult {
 }
 export type ApiFailure = "auth" | "timeout" | "server" | "rate_limit" | "transport" | "request";
 export interface ConsensusModelPort {
+  warmup?(): Promise<void>;
   generate(input: BuiltInput, signal?: AbortSignal): Promise<ModelResult>;
 }

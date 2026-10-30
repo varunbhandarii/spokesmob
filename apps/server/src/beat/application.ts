@@ -75,7 +75,10 @@ export async function createBeatApplication(options: {
       ledger,
       clock: options.clock ?? systemClock,
       beatId: () => (runner?.state.current ? runner.records.key(runner.state.current.id) : null),
-      updated: () => runner?.publishCost(),
+      updated: (beatId) => {
+        if (beatId) runner?.records.reconcileCost(beatId);
+        runner?.publishCost();
+      },
     });
     voice = await createVoiceRuntime({
       tokenFile: config.tokenFile,
@@ -173,6 +176,12 @@ export async function createBeatApplication(options: {
       commands: router,
       async start() {
         const path = await runtimeVoice.start();
+        // Connect and configure only: no prompt, input audio or response generation.
+        await Promise.all([
+          model.warmup?.(),
+          options.stubVoice ? undefined : runtimeVoice.manager.start(),
+        ]);
+        log.info("API connections ready; no warm-up generation requested");
         beat.start();
         twitch.client.start();
         return path;

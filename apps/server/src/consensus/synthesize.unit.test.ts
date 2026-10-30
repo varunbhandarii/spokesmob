@@ -71,6 +71,16 @@ test("the happy path verifies a line with recomputed counts and a complete resul
   expect(synthesisResultSchema.safeParse(result).success).toBe(true);
   expect(f.outputPort.requests).toHaveLength(0);
 });
+
+test("generation and its single retry both receive the prior spoken line while duplicate checks stay active", async () => {
+  const different = { ...good, line: "Most of chat says Gary." };
+  const f = fixture([fakeModelResult(good), fakeModelResult(different)]);
+  const result = await synthesize({ ...f.options, previousLine: good.line });
+  expect(result).toMatchObject({ status: "verified", attempts: 2, line: different.line });
+  expect(f.model.requests).toHaveLength(2);
+  expect(f.model.requests.every((input) => input.previousLine === good.line)).toBe(true);
+  expect(f.model.requests[1]?.data.previous_attempt_rejected).toBe("near_duplicate");
+});
 test("too few voices suppresses without any API-port call", async () => {
   const f = fixture([], ["Gary"]);
   expect(await synthesize(f.options)).toMatchObject({

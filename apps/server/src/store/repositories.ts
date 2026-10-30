@@ -97,6 +97,18 @@ export function createRepositories(storage: Storage) {
     },
   };
   const beatLog = {
+    reconcileCost(id: string): BeatLogRecord | null {
+      const previous = beatLog.get(id);
+      if (!previous) return null;
+      if (!storage.get("SELECT 1 AS present FROM cost_ledger WHERE beat_id=? LIMIT 1", id))
+        return null;
+      const costs = costLedger.beatTotal(id);
+      const unknownCost = costs.unknownCount > 0;
+      if (previous.costUsd === costs.usd && previous.unknownCost === unknownCost) return null;
+      const row = { ...previous, costUsd: costs.usd, unknownCost };
+      beatLog.update(id, row);
+      return row;
+    },
     insert(record: BeatLogRecord): void {
       const value = beatLogRecordSchema.parse(record);
       storage.run(
