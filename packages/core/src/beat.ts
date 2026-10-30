@@ -205,16 +205,15 @@ export function reduce(input: BeatState, event: BeatEvent, now: number): BeatRed
   };
   const holdEnded = () => {
     const beat = state.current;
-    if (
-      !beat ||
-      state.step !== "preview" ||
-      state.mode === "quiet" ||
-      now < (beat.holdUntil ?? Infinity)
-    )
-      return;
-    if (beat.main.status === "caption_only") {
+    if (!beat || state.step !== "preview" || now < (beat.holdUntil ?? Infinity)) return;
+    if (state.mode === "quiet") {
+      effects.push({ type: "reveal", beatId: beat.id, fresh: false });
+      state.step = "speaking";
+    } else if (beat.main.status === "caption_only") {
       effects.push({ type: "cancelVoice", beatId: beat.id, reason: "caption_only" });
-      unitEnded("caption_only", false);
+      effects.push({ type: "reveal", beatId: beat.id, fresh: true });
+      state.step = "speaking";
+      timer("reading", now + Math.max(2500, (beat.line?.text.length ?? 0) * 55));
     } else startPlay("main");
   };
   const preview = (line: BeatLine) => {
@@ -235,8 +234,10 @@ export function reduce(input: BeatState, event: BeatEvent, now: number): BeatRed
       holdMs: state.settings.holdMs,
       quiet: state.mode === "quiet",
     });
-    if (state.mode === "quiet") timer("reading", beat.holdUntil + 3000);
-    else {
+    if (state.mode === "quiet") {
+      timer("hold", beat.holdUntil);
+      timer("reading", beat.holdUntil + 3000);
+    } else {
       effects.push({ type: "prepareVoice", beatId: beat.id, line: beat.line });
       timer("hold", beat.holdUntil);
     }
@@ -433,8 +434,12 @@ export function reduce(input: BeatState, event: BeatEvent, now: number): BeatRed
         }
         armWindow();
       } else if (event.timer === "hold") holdEnded();
-      else if (event.timer === "reading" && state.step === "preview" && state.mode === "quiet")
-        unitEnded("caption_only", true);
+      else if (
+        event.timer === "reading" &&
+        state.step === "speaking" &&
+        (state.mode === "quiet" || state.current?.main.status === "caption_only")
+      )
+        unitEnded("caption_only", state.mode === "quiet");
       else if (event.timer === "cooldown" && state.step === "cooldown") {
         state.cooldownUntil = null;
         state.step = "listening";
@@ -470,6 +475,7 @@ export function reduce(input: BeatState, event: BeatEvent, now: number): BeatRed
         preview({
           text: result.line,
           dissent: result.dissent,
+          dissentPct: result.dissentPct,
           pct: result.pct,
           voices: result.voices,
           mood: result.mood,
@@ -547,6 +553,8 @@ export function reduce(input: BeatState, event: BeatEvent, now: number): BeatRed
         beat.id !== event.beatId ||
         !take ||
         take.status === "ended" ||
+        take.status === "caption_only" ||
+        take.status === "cancelled" ||
         beat.output !== "idle" ||
         state.mode === "quiet"
       )

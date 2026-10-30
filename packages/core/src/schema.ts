@@ -87,6 +87,7 @@ export const consensusInputSchema = z.strictObject({
 });
 
 export const synthesisResultSchema = z.strictObject({
+  dissentPct: z.number().int().min(0).max(100).nullable(),
   selectedCandidate: z.enum(["line", "alternate_line", "fallback"]).optional(),
   rejectedCandidates: z.array(candidateRejectionSchema).optional(),
   status: z.enum(["verified", "suppressed"]),

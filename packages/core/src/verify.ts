@@ -24,6 +24,7 @@ export interface VerifyContext {
   moderation: { line: OutputModeration; alternate?: OutputModeration; dissent?: OutputModeration };
 }
 export interface Verification {
+  dissentPct: number | null;
   ok: boolean;
   line: string | null;
   dissent: string | null;
@@ -155,6 +156,7 @@ export function verifyTemplated(
 export function verifyLine(output: unknown, ctx: VerifyContext): Verification {
   const offendingTokens = { line: [] as string[], dissent: [] as string[] };
   const empty = (failure: RuleCode): Verification => ({
+    dissentPct: null,
     ok: false,
     line: null,
     dissent: null,
@@ -203,6 +205,7 @@ export function verifyLine(output: unknown, ctx: VerifyContext): Verification {
     return empty("near_duplicate");
   const failures: RuleCode[] = [];
   let dissent: string | null = null;
+  let dissentPct: number | null = null;
   if (value.dissent_cluster_id !== null || value.dissent_line !== null) {
     const cluster = clusters.get(ctx.mapping.get(value.dissent_cluster_id ?? "") ?? "");
     const dissentFailure =
@@ -221,12 +224,16 @@ export function verifyLine(output: unknown, ctx: VerifyContext): Verification {
           ) ??
           moderationFailure(ctx.moderation.dissent));
     if (dissentFailure) failures.push(dissentFailure);
-    else dissent = value.dissent_line;
+    else if (cluster) {
+      dissent = value.dissent_line;
+      dissentPct = agreement([cluster], ctx.voices).pct;
+    }
   }
   return {
     ok: true,
     line: value.line,
     dissent,
+    dissentPct,
     citedAuthors: support.authorIds,
     pct: support.pct,
     failures,

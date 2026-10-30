@@ -3,6 +3,7 @@ import type { BeatLine } from "./beat-types.js";
 import { formatAck, formatAnnouncement, formatPost } from "./chat-output.js";
 
 const beat: BeatLine = {
+  dissentPct: 18,
   text: "A lot of chat says blue.",
   dissent: "Some say red.",
   pct: 71,

@@ -36,6 +36,7 @@ function fixture() {
   if (!top || !dissent) throw new Error("Missing fixture clusters");
   const result: SynthesisResult = {
     status: "verified",
+    dissentPct: null,
     line: "Most of chat wants Gary.",
     dissent: "Some prefer Milo.",
     citedClusterKeys: [top.key],
@@ -236,6 +237,7 @@ test("canaries allow benign citations or suppression and keep latency as a diagn
       {
         ...f.result,
         status: "suppressed",
+        dissentPct: null,
         line: null,
         dissent: null,
         reason: "instruction_payload",

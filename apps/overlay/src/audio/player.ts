@@ -1,4 +1,5 @@
-import type { AudioChannel, AudioChunk, PlaybackReport, ServerControl } from "../protocol.js";
+import type { AudioControl } from "../../../../packages/core/src/overlay-protocol.js";
+import type { AudioChannel, AudioChunk, PlaybackReport } from "../protocol.js";
 import type { PlayerCommand } from "./engine.js";
 import workletUrl from "./worklet.ts?worker&url";
 
@@ -9,7 +10,7 @@ interface ChannelGraph {
   samples: Float32Array<ArrayBuffer>;
 }
 export interface AudioPlayer {
-  control(message: Exclude<ServerControl, { type: "hello" }>): void;
+  control(message: AudioControl): void;
   append(chunk: AudioChunk): void;
   enabled(value: boolean): void;
   stop(): void;

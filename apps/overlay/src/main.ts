@@ -1,6 +1,8 @@
 import { type AudioPlayer, createAudioPlayer } from "./audio/player.js";
 import { audioAllowed, decodeAudioFrame, parseControl } from "./protocol.js";
 import { sourceActive, sourceAudioStatus } from "./source-active.js";
+import { createRenderer } from "./view/render.js";
+import { createViewStore } from "./view/store.js";
 import { connectOverlay } from "./ws.js";
 
 const status = document.querySelector<HTMLOutputElement>("#status");
@@ -11,6 +13,17 @@ let active = true;
 let authorized = false;
 let connectionState = "connecting";
 let audioState = allowed ? "waiting for audio" : "preview, silent";
+const store = createViewStore(new URLSearchParams(window.location.search).get("layout"));
+const root = document.querySelector<HTMLElement>("#overlay");
+if (!root) throw new Error("Overlay view unavailable");
+const renderer = createRenderer({
+  root,
+  store,
+  sample: () => {
+    const channel = store.view().audioChannel;
+    return player && channel ? player.rms(channel) : 0;
+  },
+});
 const showStatus = () => {
   if (status) status.textContent = `${connectionState} · ${audioState}`;
 };
@@ -27,6 +40,7 @@ try {
     },
     disconnect: () => {
       authorized = false;
+      store.disconnected();
       player?.enabled(false);
       audioState = allowed ? "waiting for audio" : "preview, silent";
       showStatus();
@@ -40,23 +54,32 @@ try {
       }
       const message = parseControl(value);
       if (!message) return;
+      store.receive(message);
       if (message.type === "hello") {
         authorized = allowed && message.audio;
         player?.stop();
         if (authorized && !player)
-          player = await createAudioPlayer((event) => connection.send(event));
+          player = await createAudioPlayer((event) => {
+            store.playback(event);
+            connection.send(event);
+          });
         player?.enabled(authorized && active);
         audioState = sourceAudioStatus(allowed, authorized, active);
         showStatus();
         return;
       }
-      if (message.type === "stop" || (authorized && active)) player?.control(message);
+      if (
+        (message.type === "prepare" || message.type === "play" || message.type === "stop") &&
+        (message.type === "stop" || (authorized && active))
+      )
+        player?.control(message);
     },
   });
   window.addEventListener("obsSourceActiveChanged", (event) => {
     const next = sourceActive(active, event);
     if (next === active) return;
     active = next;
+    renderer.setActive(active);
     player?.enabled(authorized && active);
     connection.send({ type: "active", active });
     audioState = sourceAudioStatus(allowed, authorized, active);
@@ -64,6 +87,7 @@ try {
   });
   window.addEventListener("pagehide", () => {
     connection.close();
+    renderer.destroy();
     void player?.close();
   });
 } catch {

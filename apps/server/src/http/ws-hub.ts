@@ -41,6 +41,10 @@ export class OverlayHub implements VoiceTransport {
   private readonly playbackListeners = new Set<(event: PlaybackReport) => void>();
   private readonly clientListeners = new Set<() => void>();
   private snapshot = (): BeatView => beatViewSchema.strip().parse(createBeatState());
+  private channel = "spokesmob";
+  setChannel(channel: string) {
+    this.channel = channel;
+  }
   private actionListener:
     | ((action: ControlAction) => Promise<{ ok: boolean; reason: string | null }>)
     | null = null;
@@ -118,6 +122,7 @@ export class OverlayHub implements VoiceTransport {
               type: "hello",
               role: "overlay",
               audio: false,
+              channel: this.channel,
               state: this.snapshot(),
             });
           }
@@ -129,6 +134,7 @@ export class OverlayHub implements VoiceTransport {
           type: "hello",
           role: client.role,
           audio: client.audio,
+          ...(client.role === "overlay" ? { channel: this.channel } : {}),
           state: this.snapshot(),
         });
         this.clientsChanged();

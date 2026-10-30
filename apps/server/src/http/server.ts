@@ -32,6 +32,18 @@ export async function createHttpServer(options: {
     }
     reply.header("Referrer-Policy", "no-referrer");
     reply.header("Cache-Control", "no-store");
+    reply.header(
+      "Content-Security-Policy",
+      [
+        "default-src 'self'",
+        `connect-src 'self' ws://127.0.0.1:${port()} ws://localhost:${port()}`,
+        "img-src 'self' data:",
+        "font-src 'self'",
+        "script-src 'self'",
+        "worker-src 'self'",
+        "style-src 'self'",
+      ].join("; "),
+    );
   });
   await app.register(websocket, { options: { maxPayload: 8000 } });
   await app.register(staticFiles, {

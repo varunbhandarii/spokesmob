@@ -84,6 +84,7 @@ test("a duplicate primary selects a fully verified alternate with identical cita
     dissent: output.dissent_line,
   });
   expect(result.candidates[0]?.verification.failures).toEqual(["near_duplicate"]);
+  expect(result.verification.dissentPct).toBe(30);
 });
 
 test("only a sole duplicate failure enables alternate selection", () => {
@@ -106,6 +107,15 @@ test("only a sole duplicate failure enables alternate selection", () => {
   );
   expect(moderated.candidates).toHaveLength(1);
   expect(moderated.verification.failures).toEqual(["moderation_flagged"]);
+});
+test("dissent percentage uses the distinct author union and is null when dissent fails", () => {
+  const { ctx, output } = fixture();
+  const clusters = ctx.clusters.map((cluster) => ({
+    ...cluster,
+    authorIds: [...cluster.authorIds, ...cluster.authorIds],
+  }));
+  expect(verifyLine(output, { ...ctx, clusters }).dissentPct).toBe(30);
+  expect(verifyLine({ ...output, dissent_cluster_id: "c1" }, ctx).dissentPct).toBeNull();
 });
 
 test.each([

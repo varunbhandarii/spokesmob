@@ -32,6 +32,7 @@ const state: BeatView = {
   hype: null,
 };
 const line = {
+  dissentPct: null,
   type: "line",
   take: 1,
   text: "Some of chat says blue.",
@@ -75,6 +76,36 @@ const log = {
   costUsd: null,
   unknownCost: true,
 };
+test("preview belongs only to controls; reveal, channel and dissent support belong to overlays", () => {
+  const preview = {
+    type: "preview",
+    take: 1,
+    text: line.text,
+    dissent: null,
+    pct: 71,
+    voices: 312,
+    holdMs: 1000,
+    quiet: false,
+  };
+  expect(serverControlMessageSchema.safeParse(preview).success).toBe(true);
+  expect(serverOverlayMessageSchema.safeParse(preview).success).toBe(false);
+  expect(serverOverlayMessageSchema.safeParse({ type: "reveal", take: 1 }).success).toBe(true);
+  expect(serverControlMessageSchema.safeParse({ type: "reveal", take: 1 }).success).toBe(false);
+  for (const dissentPct of [null, 0, 18, 100])
+    expect(serverOverlayMessageSchema.safeParse({ ...line, dissentPct }).success).toBe(true);
+  for (const dissentPct of [-1, 101, 18.5, undefined])
+    expect(serverOverlayMessageSchema.safeParse({ ...line, dissentPct }).success).toBe(false);
+  for (const channel of ["", "bad/name", "UpperCase", undefined])
+    expect(
+      serverOverlayMessageSchema.safeParse({
+        type: "hello",
+        role: "overlay",
+        audio: false,
+        channel,
+        state,
+      }).success,
+    ).toBe(false);
+});
 
 test("all beat steps, layouts and multiple held reasons have one strict state contract", () => {
   expect(BEAT_STEPS).toEqual([
@@ -118,7 +149,13 @@ test("the declared diagram covers every beat step and cancellation from active s
 
 test("visual snapshots retain effective mood and active train state across an overlay reload", () => {
   const visual = { ...state, mood: "hype", hype: { level: 4, shared: true } };
-  const message = { type: "hello", role: "overlay", audio: true, state: visual };
+  const message = {
+    type: "hello",
+    role: "overlay",
+    audio: true,
+    channel: "spokesmob",
+    state: visual,
+  };
   expect(serverOverlayMessageSchema.parse(JSON.parse(JSON.stringify(message)))).toEqual(message);
   expect(beatViewSchema.safeParse({ ...visual, hype: { level: -1, shared: true } }).success).toBe(
     false,
@@ -194,7 +231,7 @@ test("role-specific schemas separate overlay playback reports from control comma
 
 test("overlay messages cover visuals and preserve every audio control shape", () => {
   for (const message of [
-    { type: "hello", role: "overlay", audio: true, state },
+    { type: "hello", role: "overlay", audio: true, channel: "spokesmob", state },
     { type: "state", ...state },
     { type: "listening", voices: 2, messages: 4, windowMs: 8000 },
     { type: "particles", names: ["Viewer"] },

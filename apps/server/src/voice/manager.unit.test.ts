@@ -66,6 +66,14 @@ test("prepare verifies raw PCM, records trimming and holds all audio until play"
   f.manager.report({ type: "ended", take: take.id });
   expect(await take.ended).toEqual({ reason: "ended" });
 });
+test("visual and audio takes reserve unique IDs from one increasing counter", () => {
+  const f = fixture();
+  expect(f.manager.nextTakeId()).toBe(1);
+  expect(f.manager.prepareTestTone().id).toBe(2);
+  expect(f.manager.nextTakeId()).toBe(3);
+  expect(f.manager.prepareTestTone().id).toBe(4);
+  expect(f.connections).toEqual([]);
+});
 
 test("startup connection warm-up configures both voices without input, responses or audio release", async () => {
   vi.useFakeTimers();

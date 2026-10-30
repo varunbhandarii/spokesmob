@@ -64,6 +64,7 @@ export async function synthesize(options: SynthesisOptions): Promise<SynthesisRe
   let clusters: Cluster[] = [];
   const usage: CallUsage[] = [];
   const result: SynthesisResult = {
+    dissentPct: null,
     rejectedCandidates: [],
     status: "suppressed",
     line: null,
@@ -232,6 +233,7 @@ export async function synthesize(options: SynthesisOptions): Promise<SynthesisRe
       result.selectedCandidate = ignorePrevious ? "fallback" : (checked.selected ?? "line");
       result.line = verified.line;
       result.dissent = verified.dissent;
+      result.dissentPct = verified.dissentPct;
       result.citedAuthors = verified.citedAuthors;
       result.pct = verified.pct;
       result.citedClusterKeys = keys;

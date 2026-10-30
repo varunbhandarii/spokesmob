@@ -12,9 +12,13 @@ export class FakeVoice {
     private readonly clock: Clock = systemClock,
     private readonly durationMs = 1000,
     private readonly readyMs = 300,
+    private readonly allocate?: () => number,
   ) {}
+  nextTakeId() {
+    return this.allocate ? this.allocate() : ++this.sequence;
+  }
   prepare(text: string, channel: VoiceChannel): VoiceTake {
-    const id = ++this.sequence;
+    const id = this.nextTakeId();
     const result: VoiceResult = {
       take: id,
       channel,

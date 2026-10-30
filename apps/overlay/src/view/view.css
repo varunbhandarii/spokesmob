@@ -1,0 +1,136 @@
+html,
+body {
+  margin: 0;
+  width: 1920px;
+  height: 1080px;
+  overflow: hidden;
+  background: transparent;
+}
+body {
+  color: #fff;
+  font-family: system-ui, sans-serif;
+}
+.overlay-view {
+  position: relative;
+  width: 1920px;
+  height: 1080px;
+  overflow: hidden;
+}
+.overlay-view > div {
+  position: absolute;
+  box-sizing: border-box;
+}
+.overlay-view [hidden] {
+  display: none;
+}
+.plate {
+  background: rgb(15 20 22 / 85%);
+  border-radius: 14px;
+  padding: 8px 16px;
+}
+.face-host svg {
+  width: 100%;
+  height: 100%;
+}
+.caption {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  line-height: 1.15;
+}
+.agreement,
+.counter,
+.question,
+.ai-badge {
+  text-align: center;
+}
+.counter {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  padding: 0;
+}
+.dissent {
+  font-style: italic;
+  text-align: center;
+}
+.ai-badge {
+  white-space: nowrap;
+  padding: 2px 8px;
+  color: #d5ef9c;
+}
+.bottom-bar {
+  background: rgb(15 20 22 / 85%);
+  border: 1px solid #58635b;
+  border-radius: 24px;
+}
+.qr-placeholder {
+  white-space: pre-line;
+  display: grid;
+  place-content: center;
+  text-align: center;
+  border: 2px dashed #d5ef9c;
+}
+.state-tag {
+  font-size: 18px;
+  color: #d5ef9c;
+}
+#status {
+  position: fixed;
+  right: 20px;
+  top: 18px;
+  color: #fff;
+  background: #17191ddd;
+  font:
+    16px system-ui,
+    sans-serif;
+  padding: 8px 12px;
+  border-radius: 8px;
+  z-index: 2;
+}
+.scene-page {
+  background: #243035;
+}
+.scene-heading {
+  position: absolute;
+  left: 32px;
+  top: 20px;
+  font-size: 20px;
+  color: #d5ef9c;
+}
+.sheet-page {
+  width: auto;
+  height: auto;
+  overflow: auto;
+  background: #0f1416;
+  padding: 30px;
+  box-sizing: border-box;
+}
+.sheet-page h1 {
+  font-size: 32px;
+}
+.face-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 200px);
+  gap: 16px;
+}
+.face-cell {
+  width: 200px;
+  text-align: center;
+  background: #233036;
+  border-radius: 16px;
+  padding: 6px;
+  box-sizing: border-box;
+}
+.face-cell svg {
+  display: block;
+  width: 188px;
+  height: 188px;
+}
+.face-cell p {
+  margin: 4px;
+  color: #d5ef9c;
+  font-size: 14px;
+}

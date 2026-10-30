@@ -133,6 +133,7 @@ export interface StageLatency {
   total: number;
 }
 export interface SynthesisResult {
+  dissentPct: number | null;
   selectedCandidate?: "line" | "alternate_line" | "fallback";
   rejectedCandidates?: CandidateRejection[];
   status: "verified" | "suppressed";

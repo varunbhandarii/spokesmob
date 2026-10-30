@@ -1,8 +1,14 @@
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { resolveBeatSettings } from "../../../../packages/core/src/beat-settings.js";
 import { createBlocklist } from "../../../../packages/core/src/blocklist.js";
-import type { OverlayMessage } from "../../../../packages/core/src/overlay-protocol.js";
-import { serverOverlayMessageSchema } from "../../../../packages/core/src/overlay-protocol.js";
+import type {
+  ControlMessage,
+  OverlayMessage,
+} from "../../../../packages/core/src/overlay-protocol.js";
+import {
+  serverControlMessageSchema,
+  serverOverlayMessageSchema,
+} from "../../../../packages/core/src/overlay-protocol.js";
 import { type Clock, systemClock } from "../clock.js";
 import {
   clearModeration,
@@ -45,13 +51,14 @@ function fixture(
     windowS?: number;
     alternate?: boolean;
     moderation?: ModerationPort;
+    voiceReadyMs?: number;
   } = {},
 ) {
   const db = openStorage(":memory:");
   migrate(db);
   const store = createRepositories(db);
   const bus = new TwitchBus();
-  const voice = new FakeVoice();
+  const voice = new FakeVoice(systemClock, 1000, options.voiceReadyMs ?? 300);
   const calls: { action: string; at: number; text?: string; id?: string }[] = [];
   const output = new ChatOutput(
     {
@@ -78,6 +85,8 @@ function fixture(
     createLogger("silent"),
   );
   const overlay: OverlayMessage[] = [];
+  const overlayAt: { message: OverlayMessage; at: number }[] = [];
+  const controls: ControlMessage[] = [];
   const runner = new BeatRunner({
     bus,
     online: { snapshot: () => ({ known: true, online: true }), onChange: () => () => undefined },
@@ -122,6 +131,11 @@ function fixture(
     overlay: (message) => {
       serverOverlayMessageSchema.parse(message);
       overlay.push(message);
+      overlayAt.push({ message, at: Date.now() });
+    },
+    control: (message) => {
+      serverControlMessageSchema.parse(message);
+      controls.push(message);
     },
     log: createLogger("silent"),
     paidModel: options.paidModel ?? false,
@@ -158,7 +172,7 @@ function fixture(
     bus.emit(event);
     return event;
   };
-  return { runner, store, voice, calls, overlay, bus, chat };
+  return { runner, store, voice, calls, overlay, overlayAt, controls, bus, chat };
 }
 
 test("the shell completes one verified unit, posts once, pins and records actual first-audio timing", async () => {
@@ -224,6 +238,55 @@ test("the selected alternate reaches the caption, voice, chat post and confirmed
     ],
   });
 });
+test.each([false, true])(
+  "a preview veto never reveals or plays in caption mode %s",
+  async (quiet) => {
+    const f = fixture({ quiet });
+    f.chat("one", "blue");
+    f.chat("two", "blue");
+    await vi.advanceTimersByTimeAsync(8500);
+    expect(f.controls.some((message) => message.type === "preview")).toBe(true);
+    expect(f.overlay.some((message) => message.type === "reveal")).toBe(false);
+    f.runner.dispatch({ type: "veto" });
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(f.voice.played).toEqual([]);
+    expect(f.overlay.some((message) => message.type === "reveal")).toBe(false);
+    expect(f.calls).toEqual([]);
+  },
+);
+test.each([300, 2000])(
+  "caption fallback reveals once after the hold with voice ready at %s ms",
+  async (voiceReadyMs) => {
+    const f = fixture({ voiceReadyMs });
+    const original = f.voice.prepare.bind(f.voice);
+    vi.spyOn(f.voice, "prepare").mockImplementation((text, channel) => {
+      const take = original(text, channel);
+      take.result.status = "caption_only";
+      return take;
+    });
+    f.chat("one", "blue");
+    f.chat("two", "blue");
+    await vi.advanceTimersByTimeAsync(8999);
+    expect(f.overlay.some((message) => message.type === "reveal")).toBe(false);
+    await vi.advanceTimersByTimeAsync(1001);
+    const reveal = f.overlayAt.filter((row) => row.message.type === "reveal");
+    expect(reveal).toHaveLength(1);
+    expect(reveal[0]?.at).toBe(Math.max(9000, 8000 + voiceReadyMs));
+    const lines = f.overlay.filter((message) => message.type === "line");
+    expect(lines).toHaveLength(2);
+    expect(lines[1]?.take).toBeGreaterThan(lines[0]?.take ?? -1);
+    expect(reveal[0]?.message).toMatchObject({ take: lines[1]?.take });
+    expect(f.voice.played).toEqual([]);
+    f.runner.dispatch({ type: "veto" });
+    expect(
+      f.overlay.at(-1)?.type === "veto" ||
+        f.overlay.some((message) => message.type === "veto" && message.take === lines[1]?.take),
+    ).toBe(true);
+    await vi.advanceTimersByTimeAsync(4000);
+    expect(f.overlay.filter((message) => message.type === "reveal")).toHaveLength(1);
+    expect(f.calls).toEqual([]);
+  },
+);
 
 test("window, hold and cooldown advance when every timeout wakes one millisecond early", async () => {
   const earlyAt: number[] = [];
@@ -336,7 +399,14 @@ test("quiet preview can be vetoed and otherwise posts after the preview plus rea
   const f = fixture({ quiet: true });
   f.chat("one", "blue");
   f.chat("two", "blue");
-  await vi.advanceTimersByTimeAsync(11999);
+  await vi.advanceTimersByTimeAsync(8999);
+  expect(f.overlay.some((message) => message.type === "reveal")).toBe(false);
+  await vi.advanceTimersByTimeAsync(1);
+  const line = f.overlay.find((message) => message.type === "line");
+  expect(f.overlay.filter((message) => message.type === "reveal")).toEqual([
+    { type: "reveal", take: line?.take },
+  ]);
+  await vi.advanceTimersByTimeAsync(2999);
   expect(f.calls).toEqual([]);
   await vi.advanceTimersByTimeAsync(1);
   expect(f.calls.map((call) => call.action)).toEqual(["send", "pin"]);
@@ -380,7 +450,7 @@ test("main caption-only never plays or posts and insufficient reservation room c
   });
   f.chat("one", "blue");
   f.chat("two", "blue");
-  await vi.advanceTimersByTimeAsync(10000);
+  await vi.advanceTimersByTimeAsync(13000);
   expect(f.voice.played).toEqual([]);
   expect(f.calls).toEqual([]);
   expect(f.store.beatLog.recent(1)[0]?.status).toBe("caption_only");

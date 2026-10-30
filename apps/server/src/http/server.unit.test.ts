@@ -3,6 +3,10 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join, resolve, sep } from "node:path";
 import { afterEach, expect, test } from "vitest";
 import { WebSocket } from "ws";
+import {
+  serverControlMessageSchema,
+  serverOverlayMessageSchema,
+} from "../../../../packages/core/src/overlay-protocol.js";
 import { loadOverlayToken, saveOverlayUrl, tokenMatches } from "./overlay-token.js";
 import { createHttpServer } from "./server.js";
 import { encodeAudioFrame } from "./ws-hub.js";
@@ -26,7 +30,12 @@ async function folder() {
 async function server() {
   const path = await folder();
   await writeFile(join(path, "index.html"), "<p>synthetic overlay</p>");
-  const http = await createHttpServer({ token: "synthetic-token", port: 0, overlayRoot: path });
+  const http = await createHttpServer({
+    token: "synthetic-token",
+    port: 0,
+    overlayRoot: path,
+    controlRoot: path,
+  });
   const origin = await http.listen();
   const url = origin.replace("http", "ws");
   const sockets: WebSocket[] = [];
@@ -89,6 +98,60 @@ test("local static serving rejects bad Host and WebSocket token or Origin", asyn
     });
     expect(status).toBe(403);
   }
+});
+test("both local pages enforce the strict bundled-only content security policy", async () => {
+  const f = await server();
+  for (const url of ["/overlay/", "/control/"]) {
+    const response = await f.app.inject({ url, headers: { host: new URL(f.origin).host } });
+    expect(response.statusCode).toBe(200);
+    expect(response.headers["content-security-policy"]).toBe(
+      [
+        "default-src 'self'",
+        "connect-src 'self' " +
+          f.origin.replace("http:", "ws:") +
+          " ws://localhost:" +
+          new URL(f.origin).port,
+        "img-src 'self' data:",
+        "font-src 'self'",
+        "script-src 'self'",
+        "worker-src 'self'",
+        "style-src 'self'",
+      ].join("; "),
+    );
+  }
+});
+test("preview crosses only the control boundary and reveal only the overlay boundary", async () => {
+  const f = await server();
+  f.hub.setChannel("synthetic_channel");
+  const overlay = await f.connect(false);
+  const control = new WebSocket(`${f.url}/ws?token=synthetic-token`, { origin: f.origin });
+  const messages: unknown[] = [];
+  control.on("message", (data) => messages.push(JSON.parse(data.toString())));
+  await once(control, "open");
+  const welcomed = once(control, "message");
+  control.send(JSON.stringify({ type: "hello", role: "control" }));
+  await welcomed;
+  f.hub.emitControl({
+    type: "preview",
+    take: 1,
+    text: "Chat says blue.",
+    dissent: null,
+    pct: 50,
+    voices: 2,
+    holdMs: 1000,
+    quiet: false,
+  });
+  f.hub.emitOverlay({ type: "reveal", take: 1 });
+  await until(() => messages.length === 2 && overlay.frames.length === 2);
+  const visuals = overlay.frames.map((frame) => JSON.parse(frame.data.toString()));
+  expect(visuals[0]).toMatchObject({ channel: "synthetic_channel" });
+  expect(visuals.map((value) => value.type)).toEqual(["hello", "reveal"]);
+  for (const value of visuals)
+    expect(serverOverlayMessageSchema.safeParse(value).success).toBe(true);
+  for (const value of messages)
+    expect(serverControlMessageSchema.safeParse(value).success).toBe(true);
+  expect(messages.at(-1)).toMatchObject({ type: "preview" });
+  control.terminate();
 });
 test("binary frames use network-order take/chunk headers and preserve PCM", () => {
   const frame = encodeAudioFrame("dissent", 0x12345678, 3, Uint8Array.from([0, 128, 255, 127]));

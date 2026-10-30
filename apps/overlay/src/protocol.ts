@@ -1,7 +1,6 @@
-import type { AudioControl } from "../../../packages/core/src/overlay-protocol.js";
 import {
-  audioControlSchema,
-  overlayHelloReplySchema,
+  type OverlayMessage,
+  serverOverlayMessageSchema,
 } from "../../../packages/core/src/overlay-protocol.js";
 
 export type {
@@ -11,7 +10,7 @@ export type {
 
 import type { AudioChannel } from "../../../packages/core/src/overlay-protocol.js";
 
-export type ServerControl = { type: "hello"; audio: boolean; state: unknown } | AudioControl;
+export type ServerControl = OverlayMessage;
 export interface AudioChunk {
   channel: AudioChannel;
   take: number;
@@ -24,9 +23,7 @@ export function audioAllowed(obs: boolean, search: string): boolean {
 }
 export function parseControl(value: unknown): ServerControl | null {
   if (!value || typeof value !== "object") return null;
-  const hello = overlayHelloReplySchema.safeParse(value);
-  if (hello.success) return hello.data;
-  const parsed = audioControlSchema.safeParse(value);
+  const parsed = serverOverlayMessageSchema.safeParse(value);
   return parsed.success ? parsed.data : null;
 }
 export function decodeAudioFrame(buffer: ArrayBuffer): AudioChunk | null {

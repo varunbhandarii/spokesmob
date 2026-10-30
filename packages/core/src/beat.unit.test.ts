@@ -19,6 +19,7 @@ const gates: Partial<BeatGates> = {
 };
 const synthesized = (dissent = true): SynthesisResult => ({
   status: "verified",
+  dissentPct: null,
   line: "Some of chat says blue.",
   dissent: dissent ? "Some still say red." : null,
   citedClusterKeys: ["blue"],
@@ -271,10 +272,14 @@ test.each([false, true])(
     ).state;
     if (failMain) {
       const result = tick(state, "hold", 9100);
-      expect(result.state.step).toBe("cooldown");
+      expect(result.state.step).toBe("speaking");
       expect(types(result)).not.toContain("post");
       expect(types(result)).toContain("cancelVoice");
-      expect(result.effects.find((effect) => effect.type === "log")).toMatchObject({
+      expect(types(result)).toContain("reveal");
+      const read = tick(result.state, "reading", result.state.timers.reading?.at ?? 0);
+      expect(read.state.step).toBe("cooldown");
+      expect(types(read)).not.toContain("post");
+      expect(read.effects.find((effect) => effect.type === "log")).toMatchObject({
         gate: "voice",
         reason: "drift",
       });
@@ -323,9 +328,13 @@ test.each([
 
 test("quiet mode requires an overlay but no audio owner, waits hold plus reading time and can be vetoed", () => {
   const state = preview({ mode: "quiet" });
-  expect(state.timers.hold).toBeUndefined();
+  expect(state.timers.hold?.at).toBe(9100);
   expect(state.timers.reading?.at).toBe(12100);
-  const result = tick(state, "reading", 12100);
+  const early = tick(state, "hold", 9099);
+  expect(types(early)).not.toContain("reveal");
+  const reading = tick(early.state, "hold", 9100);
+  expect(types(reading).filter((type) => type === "reveal")).toHaveLength(1);
+  const result = tick(reading.state, "reading", 12100);
   expect(types(result)).toContain("post");
   expect(types(result)).not.toContain("play");
   expect(types(result)).not.toContain("prepareVoice");
@@ -412,6 +421,7 @@ test("event lines queue during speech, raid wins over hype, and templates bypass
       reason: null,
       line: {
         text: raid.text,
+        dissentPct: null,
         dissent: null,
         pct: 0,
         voices: 0,
@@ -444,6 +454,7 @@ test("suppression and rejected templates log their gate and never prepare or pos
       result: {
         ...synthesized(),
         status: "suppressed",
+        dissentPct: null,
         reason: "input_moderation",
         gate: "input_moderation",
       },

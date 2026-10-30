@@ -1,0 +1,78 @@
+.placeholder-face {
+  --face-tint: #d5ef9c;
+  --face-blush: #e9a6ad;
+  --face-blush-opacity: 0.35;
+  --face-brow-y: 0px;
+  --face-brow-angle: 0deg;
+  --face-lid-scale: 1;
+  overflow: visible;
+}
+.face-head {
+  fill: var(--face-tint);
+  stroke: #142327;
+  stroke-width: 10px;
+}
+.face-rim {
+  fill: none;
+  stroke: #edf5df;
+  stroke-width: 5px;
+  opacity: 0.35;
+}
+.placeholder-face[data-hype="on"] .face-rim {
+  stroke: #ffcf66;
+  opacity: 1;
+}
+.face-eye {
+  fill: #fffef1;
+}
+.face-pupil,
+.face-mouth {
+  fill: #142327;
+}
+.face-brows {
+  transform: translateY(var(--face-brow-y)) rotate(var(--face-brow-angle));
+  transform-origin: 256px 155px;
+  fill: none;
+  stroke: #142327;
+  stroke-width: 12px;
+  stroke-linecap: round;
+}
+.face-cheeks {
+  fill: var(--face-blush);
+  opacity: var(--face-blush-opacity);
+}
+.face-lids {
+  transform: scaleY(var(--face-lid-scale));
+  transform-origin: 256px 227px;
+}
+.face-zip {
+  fill: none;
+  stroke: #142327;
+  stroke-width: 8px;
+  stroke-linecap: round;
+}
+.placeholder-face[data-mood="hype"] {
+  --face-tint: #f1dc84;
+  --face-brow-y: -5px;
+}
+.placeholder-face[data-mood="salty"] {
+  --face-tint: #f1bba3;
+  --face-brow-y: 7px;
+  --face-lid-scale: 0.75;
+}
+.placeholder-face[data-mood="chill"] {
+  --face-tint: #bcded5;
+  --face-lid-scale: 0.85;
+}
+.placeholder-face[data-mood="chaos"] {
+  --face-tint: #d0bef0;
+}
+.placeholder-face[data-mood="wholesome"] {
+  --face-tint: #e8c6d0;
+  --face-blush: #dc7d9b;
+  --face-blush-opacity: 0.75;
+}
+.placeholder-face[data-mood="confused"] {
+  --face-tint: #c3d5ef;
+  --face-brow-angle: -6deg;
+}

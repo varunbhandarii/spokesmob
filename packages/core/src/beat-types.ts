@@ -68,6 +68,7 @@ export interface QueuedEventLine {
   text: string;
 }
 export interface BeatLine {
+  dissentPct: number | null;
   text: string;
   dissent: string | null;
   pct: number;
@@ -284,6 +285,7 @@ export type BeatEffect =
   | { type: "abortSynthesis"; beatId: number | null }
   | { type: "preview"; beatId: number; line: BeatLine; holdMs: number; quiet: boolean }
   | { type: "prepareVoice"; beatId: number; line: BeatLine }
+  | { type: "reveal"; beatId: number; fresh: boolean }
   | { type: "play"; beatId: number; channel: BeatVoiceChannel }
   | { type: "cancelVoice"; beatId: number | null; reason: string }
   | { type: "post"; beatId: number; line: BeatLine }
@@ -318,13 +320,13 @@ export const BEAT_TRANSITIONS = [
   { from: "listening", to: "listening", when: "too few voices at thirty seconds: slide" },
   { from: "synthesizing", to: "preview", when: "verified consensus or event line" },
   { from: "synthesizing", to: "cooldown", when: "suppressed" },
-  { from: "preview", to: "speaking", when: "hold ended and main ready" },
-  { from: "preview", to: "cooldown", when: "veto or main caption-only or quiet reading complete" },
+  { from: "preview", to: "speaking", when: "hold ended and main ready or caption reading" },
+  { from: "preview", to: "cooldown", when: "veto" },
   { from: "speaking", to: "speaking", when: "main ended and dissent pending or playing" },
   {
     from: "speaking",
     to: "cooldown",
-    when: "unit and output settled or main caption-only or veto",
+    when: "unit/output or caption reading complete or veto",
   },
   { from: "cooldown", to: "listening", when: "cooldown ended" },
   { from: "listening", to: "held", when: "blocking gate" },

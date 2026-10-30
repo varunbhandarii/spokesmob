@@ -81,6 +81,7 @@ export async function createBeatApplication(options: {
       },
     });
     voice = await createVoiceRuntime({
+      channel: config.channel,
       tokenFile: config.tokenFile,
       voice: config.voice,
       openai: config.openai,
@@ -100,7 +101,10 @@ export async function createBeatApplication(options: {
         runner.state.step !== "synthesizing",
     });
     const hub = voice.http.hub;
-    const fakeVoice = options.stubVoice ? new FakeVoice(options.clock) : null;
+    const voiceManager = voice.manager;
+    const fakeVoice = options.stubVoice
+      ? new FakeVoice(options.clock, 1000, 300, () => voiceManager.nextTakeId())
+      : null;
     const output = new ChatOutput(twitch.helix, log);
     runner = new BeatRunner({
       bus: twitch.bus,

@@ -30,6 +30,7 @@ test("control messages reject invalid IDs and durations", () => {
       type: "hello",
       role: "overlay",
       audio: false,
+      channel: "spokesmob",
       state: beatViewSchema.strip().parse(createBeatState()),
     }),
   ).toMatchObject({
@@ -47,4 +48,20 @@ test("control messages reject invalid IDs and durations", () => {
     { type: "prepare", take: 1, channel: "other", text: "test" },
   ])
     expect(parseControl(value)).toBe(null);
+});
+test("the overlay boundary accepts reveal and computed dissent, but refuses control previews", () => {
+  expect(parseControl({ type: "reveal", take: 7 })).toEqual({ type: "reveal", take: 7 });
+  expect(parseControl({ type: "reveal", take: -1 })).toBeNull();
+  expect(
+    parseControl({
+      type: "preview",
+      take: 7,
+      text: "Private preview",
+      dissent: null,
+      pct: 71,
+      voices: 312,
+      holdMs: 1000,
+      quiet: false,
+    }),
+  ).toBeNull();
 });

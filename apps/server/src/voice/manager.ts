@@ -136,6 +136,10 @@ export class VoiceManager {
       muted: this.muted,
     };
   }
+  nextTakeId(): number {
+    if (this.sequence >= 0xffff_ffff) throw new Error("Take identity exhausted");
+    return ++this.sequence;
+  }
   prepare(line: string, channel: VoiceChannel = "main"): VoiceTake {
     return this.createTake(line, channel, false);
   }
@@ -143,7 +147,7 @@ export class VoiceManager {
     return this.createTake("Test tone", "main", true);
   }
   private createTake(line: string, channel: VoiceChannel, tone: boolean): VoiceTake {
-    const id = ++this.sequence;
+    const id = this.nextTakeId();
     const controller = new AbortController();
     const result: VoiceResult = {
       take: id,

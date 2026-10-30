@@ -48,7 +48,7 @@ export interface BeatRunnerOptions {
   ledger: SpendLedger;
   settings: BeatSettings;
   sessionId: string;
-  voice: Pick<VoiceManager, "prepare" | "cancelAll">;
+  voice: Pick<VoiceManager, "prepare" | "cancelAll" | "nextTakeId">;
   output: ChatOutput;
   model: ConsensusModelPort;
   moderation: ModerationPort;
@@ -73,6 +73,7 @@ export class BeatRunner {
   private readonly snapshots = new Map<number, CollectorSnapshot>();
   private readonly controllers = new Map<number, AbortController>();
   private readonly takes = new Map<number, { main?: VoiceTake; dissent?: VoiceTake }>();
+  private readonly visualTakes = new Map<number, number>();
   private readonly takeBeats = new Map<number, number>();
   private readonly tickets = new Map<string, string>();
   private readonly timers = new Map<string, () => void>();
@@ -393,6 +394,7 @@ export class BeatRunner {
             line = {
               text: effect.event.text,
               dissent: null,
+              dissentPct: null,
               pct: 0,
               voices: 0,
               mood: "hype",
@@ -426,22 +428,64 @@ export class BeatRunner {
         const book = this.records.begin(beat, this.state.mode);
         book.line = effect.line;
         book.previewAt = this.clock.now();
-        if (effect.quiet)
+        if (effect.quiet) {
+          const take = this.options.voice.nextTakeId();
+          this.visualTakes.set(effect.beatId, take);
+          this.options.control?.({
+            type: "preview",
+            take,
+            text: effect.line.text,
+            dissent: effect.line.dissent,
+            pct: effect.line.pct,
+            voices: effect.line.voices,
+            holdMs: effect.holdMs,
+            quiet: true,
+          });
           this.options.overlay({
             type: "line",
             text: effect.line.text,
             pct: effect.line.pct,
             voices: effect.line.voices,
             dissent: effect.line.dissent,
+            dissentPct: effect.line.dissentPct,
             mood: effect.line.mood,
             question: effect.line.question,
             answersQuestion: effect.line.answersQuestion,
             templated: effect.line.templated,
-            take: effect.beatId,
+            take,
             holdMs: effect.holdMs,
             quiet: true,
             citedNames: this.safeNames(effect.line.citedNames),
           });
+        }
+        break;
+      }
+      case "reveal": {
+        if (!this.current(effect.beatId)) break;
+        let take = this.visualTakes.get(effect.beatId);
+        if (effect.fresh) {
+          const line = this.state.current?.line;
+          if (!line) break;
+          take = this.options.voice.nextTakeId();
+          this.visualTakes.set(effect.beatId, take);
+          this.options.overlay({
+            type: "line",
+            take,
+            text: line.text,
+            dissent: line.dissent,
+            dissentPct: line.dissentPct,
+            pct: line.pct,
+            voices: line.voices,
+            mood: line.mood,
+            question: line.question,
+            answersQuestion: line.answersQuestion,
+            templated: line.templated,
+            citedNames: this.safeNames(line.citedNames),
+            holdMs: this.state.settings.holdMs,
+            quiet: false,
+          });
+        }
+        if (take !== undefined) this.options.overlay({ type: "reveal", take });
         break;
       }
       case "prepareVoice":
@@ -550,6 +594,7 @@ export class BeatRunner {
           effect.reason,
         );
         this.takes.delete(effect.beat.id);
+        this.visualTakes.delete(effect.beat.id);
         break;
       case "emit": {
         if (effect.name === "state") {
@@ -560,7 +605,10 @@ export class BeatRunner {
         } else if (effect.name === "veto") {
           const take = effect.beatId === null ? undefined : this.takes.get(effect.beatId)?.main;
           if (effect.beatId !== null)
-            this.options.overlay({ type: "veto", take: take?.id ?? effect.beatId });
+            this.options.overlay({
+              type: "veto",
+              take: this.visualTakes.get(effect.beatId) ?? take?.id ?? effect.beatId,
+            });
         }
         break;
       }
@@ -668,6 +716,17 @@ export class BeatRunner {
     const main = this.options.voice.prepare(line.text, "main");
     const dissent = line.dissent ? this.options.voice.prepare(line.dissent, "dissent") : undefined;
     this.takes.set(beatId, { main, ...(dissent ? { dissent } : {}) });
+    this.visualTakes.set(beatId, main.id);
+    this.options.control?.({
+      type: "preview",
+      take: main.id,
+      text: line.text,
+      dissent: line.dissent,
+      pct: line.pct,
+      voices: line.voices,
+      holdMs: this.state.settings.holdMs,
+      quiet: false,
+    });
     this.takeBeats.set(main.id, beatId);
     if (dissent) this.takeBeats.set(dissent.id, beatId);
     while (this.takeBeats.size > 2000)
@@ -679,6 +738,7 @@ export class BeatRunner {
       pct: line.pct,
       voices: line.voices,
       dissent: line.dissent,
+      dissentPct: line.dissentPct,
       mood: line.mood,
       question: line.question,
       answersQuestion: line.answersQuestion,

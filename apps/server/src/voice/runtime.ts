@@ -13,6 +13,7 @@ import { type RealtimeFactory, realtimeFactory } from "./transport.js";
 
 export async function createVoiceRuntime(options: {
   tokenFile: string;
+  channel?: string;
   voice: VoiceConfig;
   openai: OpenAIConfig;
   log: Logger;
@@ -33,6 +34,7 @@ export async function createVoiceRuntime(options: {
     log: options.log,
     ...(options.overlayRoot ? { overlayRoot: options.overlayRoot } : {}),
   });
+  http.hub.setChannel(options.channel ?? "spokesmob");
   const factory =
     options.factory ?? realtimeFactory(options.openai.apiKey ?? "", options.voice.realtimeUrl);
   const manager = new VoiceManager({

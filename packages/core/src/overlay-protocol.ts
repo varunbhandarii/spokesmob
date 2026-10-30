@@ -115,6 +115,7 @@ export const overlayHelloReplySchema = z.strictObject({
   type: z.literal("hello"),
   role: z.literal("overlay"),
   audio: z.boolean(),
+  channel: z.string().regex(/^[a-z0-9_]{1,25}$/),
   state: beatViewSchema,
 });
 export const controlHelloReplySchema = z.strictObject({
@@ -141,6 +142,7 @@ export const lineMessageSchema = z.strictObject({
   pct: z.number().int().min(0).max(100),
   voices: z.number().int().nonnegative(),
   dissent: z.string().nullable(),
+  dissentPct: z.number().int().min(0).max(100).nullable(),
   mood: z.enum(MOODS),
   question: questionSchema,
   answersQuestion: z.boolean(),
@@ -148,6 +150,20 @@ export const lineMessageSchema = z.strictObject({
   citedNames: z.array(displayNameSchema).max(40),
   holdMs: z.number().int().min(500).max(3000),
   quiet: z.boolean(),
+});
+export const previewMessageSchema = z.strictObject({
+  type: z.literal("preview"),
+  take: takeIdSchema,
+  text: z.string().min(1).max(2000),
+  dissent: z.string().nullable(),
+  pct: z.number().int().min(0).max(100),
+  voices: z.number().int().nonnegative(),
+  holdMs: z.number().int().min(500).max(3000),
+  quiet: z.boolean(),
+});
+export const revealMessageSchema = z.strictObject({
+  type: z.literal("reveal"),
+  take: takeIdSchema,
 });
 export const vetoMessageSchema = z.strictObject({ type: z.literal("veto"), take: takeIdSchema });
 export const eventMessageSchema = z.discriminatedUnion("kind", [
@@ -226,6 +242,7 @@ export const serverOverlayMessageSchema = z.union([
   particlesMessageSchema,
   particlesClearMessageSchema,
   lineMessageSchema,
+  revealMessageSchema,
   vetoMessageSchema,
   eventMessageSchema,
   audioControlSchema,
@@ -233,6 +250,7 @@ export const serverOverlayMessageSchema = z.union([
 export const serverControlMessageSchema = z.union([
   controlHelloReplySchema,
   stateMessageSchema,
+  previewMessageSchema,
   logMessageSchema,
   costMessageSchema,
   healthMessageSchema,

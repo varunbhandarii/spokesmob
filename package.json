@@ -18,7 +18,7 @@
     "lint": "biome check .",
     "format": "biome format --write .",
     "test": "vitest run",
-    "test:e2e": "node -e \"console.log('not implemented')\"",
+    "test:e2e": "playwright test --config apps/overlay/e2e/playwright.config.ts",
     "dev": "node -e \"console.log('not implemented')\"",
     "start": "node --env-file-if-exists=.env --import tsx apps/server/src/index.ts",
     "setup": "node --env-file-if-exists=.env --import tsx apps/server/src/cli/setup.ts",
@@ -29,10 +29,13 @@
     "consensus": "node --env-file-if-exists=.env --import tsx apps/server/src/cli/consensus.ts",
     "eval": "node --env-file-if-exists=.env --import tsx eval/src/run.ts",
     "voice": "node --env-file-if-exists=.env --import tsx apps/server/src/cli/voice.ts",
-    "loop": "node --env-file-if-exists=.env --import tsx apps/server/src/cli/loop.ts"
+    "loop": "node --env-file-if-exists=.env --import tsx apps/server/src/cli/loop.ts",
+    "pretest:e2e": "npm run build",
+    "posttypecheck": "tsc -p apps/overlay/e2e/tsconfig.json"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.3",
+    "@playwright/test": "1.64.1",
     "@types/node": "24.19.2",
     "@types/ws": "8.18.2",
     "tsx": "4.23.15",

@@ -97,6 +97,7 @@ test("the schema pins seven fields, strict IDs and the citation bounds", () => {
 test("result schema preserves unavailable cost rather than inventing zero", () => {
   const result: SynthesisResult = {
     status: "suppressed",
+    dissentPct: null,
     line: null,
     dissent: null,
     citedClusterKeys: [],
