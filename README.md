@@ -29,6 +29,8 @@ Chat collection continues while a beat is being verified or spoken. The next win
 
 Settings, mute/kill, gags, beat records and per-call cost reservations use local SQLite beside the token file. Timed mute survives restart until its saved expiry; kill persists until explicit unmute. History cleanup does not reset the active session's spend accounting. Raising the cap can release a capped loop; missing usage keeps its reservation.
 
+The beat log retains outcomes, gate/reason, selected and rejected wording, available cost and latency stages. History defaults to seven days, with cleanup at startup and hourly. Cancelled requests with unavailable cost remain unknown. A lost live/audio gate, moderator deletion, veto, mute, kill or shutdown can cancel in-flight work; a provisional moderation request cancelled at a window handoff is replaced for an active synthesis caller.
+
 EventSub also provides typed message deletions, user-message clears and full chat clears through the existing chat-read authorization. Use `npm run mock -- moderator-actions` to replay these actions locally.
 
 Speech protection combines a built-in profanity matcher, encoded harassment terms and the channel's Twitch blocked terms. Channel terms load at startup and refresh every ten minutes; a failed refresh keeps the last good protection and logs a warning.
@@ -51,6 +53,8 @@ The dock shows step and blocking conditions, mode, question, health, cost, laten
 
 The layout selector changes the shared overlay layout. A valid explicit `layout` query parameter pins that browser source instead. Ordinary control tabs never claim audio ownership.
 
+For an offline channel check, note the current session cap and select On-demand. In Settings, save a small cap and minimum voices of 1 before enabling **Test while offline**. Use an ordinary alt account for votes; the broadcaster's own messages are excluded from agreement. Each Speak now starts a paid beat. Finish with explicit Unmute to clear any persisted Kill, Turn off, disable the test switch, restore minimum voices to 2 and the original cap, then restore Auto and save. The mock stores settings separately, so configure the real server too.
+
 Only the broadcaster badge or moderator badge authorizes chat commands, including the broadcaster's own messages. Other accounts are ignored silently. Commands never count as votes.
 
 | Command | Action |
@@ -63,13 +67,15 @@ Only the broadcaster badge or moderator badge authorizes chat commands, includin
 | `!mob gag @user` / `!mob ungag @user` | Exclude or restore a user resolved from Twitch's mention fragment |
 | `!ask <question>` / `!mob clear` | Set a moderated question of at most 100 characters, or clear it |
 
-State changes acknowledge once through the chat guard. Gag acknowledgments never repeat the name. Questions reject URLs and mentions, pass the blocklist and per-item moderation, then announce in purple. Clear cancels a pending question change too.
+State changes acknowledge once through the chat guard. Identical acknowledgments within 30 seconds can be suppressed. Gag acknowledgments never repeat the name. Questions reject URLs and mentions, pass the blocklist and per-item moderation, then announce in purple. Clear removes the question without a chat acknowledgment and cancels a pending question change too.
 
 HTTP controls use the same handlers: `POST /api/on`, `off`, `speak`, `veto`, `mute`, `unmute`, `kill`, `mode`, `question`, `clear` and `settings`. Bodies are strict JSON: empty `{}` for simple actions, `{"minutes":5}`, `{"mode":"demand"}`, `{"question":"Name my cat"}` or `{"changes":{"holdMs":1000}}`. Send the local token through `Authorization: Bearer <token>` or the token query parameter; never publish a credential-bearing URL. POST requires the local Origin, and all requests require the local Host. Foreign origins are rejected.
 
 `GET /api/state` returns `{state,settings}`. `GET /api/log?limit=200` returns newest-first records with cited names omitted. Add `names=1` to include them, and `before=<last-row-id>` for the next page. Request and error logs omit URLs and credentials.
 
 WebSocket clients declare one immutable role in hello. Only control clients may send commands or voice checks. They receive state, health, cost and log updates with no audio. Overlays receive visuals and verified audio, with playback reports accepted only from the current audio owner.
+
+External GET hotkey actions are reserved for a later release. Their reserved URL format is `http://127.0.0.1:4040/api/hotkey/<action>?token=<token>`, with `veto`, `speak`, `mute` or `kill` as the action; these URLs are not served in this version. Use the focused dock shortcuts or the authenticated POST controls above.
 
 ## Local Twitch mock
 

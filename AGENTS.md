@@ -78,6 +78,17 @@ Spokesmob is a local Node 24 + TypeScript service plus an OBS browser-source ove
 - OBS source activity starts true and changes only on `obsSourceActiveChanged` with boolean `detail.active`. OBS output status does not describe source activity.
 - Real audio stays in memory. Calibration reports retain metrics and transcripts, encode blocked transcript text, and never save PCM.
 
+## Beat loop and controls
+- `packages/core/src/beat.ts` is a pure reducer: state, event and supplied time produce state and effect data. `apps/server/src/beat/runner.ts` owns timers, I/O and cancellation. Early timer delivery must re-arm the pending deadline.
+- `packages/core/src/overlay-protocol.ts` is the single shared overlay/control contract. Validate both boundaries and keep the current beat-cycle field named `step`.
+- Collection continues through synthesis, preview, speaking and cooldown. Closing a window starts its successor atomically. A provisional moderation caller's cancellation must not abort another caller sharing that request; obtain a fresh checked result while retaining real cancellation and fail-closed checks.
+- The main take and optional dissent form one spoken unit. Prepare both during preview; play main then dissent. Post and pin only after the whole unit finishes; cooldown follows output settlement. Veto cancels either take and suppresses that unit's post.
+- Every spoken unit requires the one-second preview by default and all live, audio-client, mute, kill and spend gates. The offline test switch is session-only. Mute and Kill persist; explicit Unmute clears Kill. Off pauses without a muted acknowledgment.
+- Consensus output requires nullable `alternate_line` with the same main citations. Only a sole primary near-duplicate rejection enables full verification of the alternate. Both share the existing inline output-moderation result. Retain the single regeneration limit and rejected-candidate diagnostics.
+- Parse chat commands only for broadcaster or moderator badges, including broadcaster self messages. Ignore other accounts silently and exclude all command messages from votes. Resolve gag targets from mention fragments. Commands and HTTP controls use `CommandRouter`.
+- WebSocket roles are immutable: control clients receive logs/state and send actions, never PCM; overlays receive visuals/audio and cannot issue actions. HTTP controls require the local token, Host and Origin. Never log credential-bearing URLs.
+- Keep usage, unknown costs and reservations in the ledger. The retained beat log includes outcomes, gate/reason, latency stages and selected text. Cancelled or unknown calls must not be priced as zero without evidence. Cleanup must not reset active spend.
+
 ## Safety invariants (tests must cover these; never weaken them)
 1. Raw chat text is never spoken. Only these are spoken: the verified line, the verified dissent, templated event lines, or an approved Grab-the-mic message.
 2. Agreement percent and voice counts are computed in `packages/core/agreement.ts` from author sets. Model-produced numbers are never displayed.
@@ -91,7 +102,7 @@ Spokesmob is a local Node 24 + TypeScript service plus an OBS browser-source ove
 ## Commands
 - `npm run dev`: reserved development command; currently a stub.
 - `npm run build`: build the overlay assets before starting the local server.
-- `npm start`: Twitch listener and local overlay audio server with a single-instance lock.
+- `npm start`: real Twitch listener, automatic beat loop and local overlay/control server with a single-instance lock. Eligible beats make paid consensus/voice calls; obtain approval before a live check.
 - `npm run setup`: Device Code Flow.
 - `npm run twitch:check -- --status`, `--listen 120`, or `--write`: authorization, typed events and guarded write verification.
 - `npm run record -- --minutes 2`: local JSONL capture; `--anonymize <input> <output> --replace-text` creates a fixture with synthetic text.
@@ -99,12 +110,14 @@ Spokesmob is a local Node 24 + TypeScript service plus an OBS browser-source ove
 - `npm run test:e2e`: reserved browser smoke-test command; currently a stub.
 - `npm run typecheck`, `npm run lint`
 - `npm run voice -- --tone`: free test tone through the server and OBS overlay.
-- `npm run voice -- --copy-url`: copy the private overlay URL without printing it.
+- `npm run voice -- --copy-url` or `--copy-url control`: copy the private overlay or dock URL without printing it.
 - `npm run voice -- --say "<text>" [--dissent] --yes`, `--kill-test --yes`, or `--calibrate 40 --yes`: paid voice checks, only after explicit approval. Calibration uses `--max-cost-usd` (default `0.10`), reserves before each attempt, retains unknown reservations and reports rejected attempts without saving audio.
 - `npm run consensus -- <scenario|golden>`: offline consensus check with unmoderated fakes. `--live` and `--count-prefix` call the API and require explicit approval.
 - `npm run eval -- --offline`: free harness checks through the real pipeline with fakes.
 - `npm run eval`: costs money. Run only when asked.
 - `npm run mock -- name-my-cat`: local EventSub, Helix and auth; accepts a scenario name or JSONL path.
+- `npm run loop -- --mock name-my-cat --report`: free full mock loop with stub consensus and simulated playback. `--headless` is for stubs only. `--live-model` / `--live-voice` require explicit paid approval plus `--yes`; `--max-cost-usd` enforces the run ceiling.
+- `npm run loop -- --mock crowd --authors 300 --rate 60 --minutes 5 --headless --report`: free full-load check outside the unit-test suite; report processing, resolved/dropped beats and heap behavior.
 - `npm run sim -- --authors 300 --rate 60`
 
 ## Skills
