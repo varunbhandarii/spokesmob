@@ -6,6 +6,7 @@ import { OpenAIConsensusModel, OpenAIModerationPort } from "./model.js";
 
 const output = {
   line: "Most of chat wants Gary.",
+  alternate_line: null,
   cited_cluster_ids: ["c1"],
   dissent_cluster_id: null,
   dissent_line: null,

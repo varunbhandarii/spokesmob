@@ -17,7 +17,7 @@ export function projectLoop(minutes: number, liveModel: boolean, liveVoice: bool
     beats,
     expectedModelCalls: liveModel ? beats : 0,
     expectedVoiceCalls: liveVoice ? beats * 2 : 0,
-    expectedCostUsd: beats * ((liveModel ? 0.00012 : 0) + (liveVoice ? 2 * 0.000985 : 0)),
+    expectedCostUsd: beats * ((liveModel ? 0.00016 : 0) + (liveVoice ? 2 * 0.000985 : 0)),
     maximumModelAttempts: liveModel ? beats * 2 : 0,
     maximumVoiceAttempts: liveVoice ? beats * 4 : 0,
   };

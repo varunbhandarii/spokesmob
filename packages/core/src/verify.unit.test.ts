@@ -4,7 +4,7 @@ import { createBlocklist } from "./blocklist.js";
 import { clusterWindow } from "./cluster.js";
 import { buildInput } from "./prompt.js";
 import type { ChatMessage, ConsensusOutput } from "./types.js";
-import { type VerifyContext, verifyLine, verifyTemplated } from "./verify.js";
+import { type VerifyContext, verifyLine, verifyOutput, verifyTemplated } from "./verify.js";
 import { assembleWindow } from "./window.js";
 
 const clear = { status: "ok", flagged: false } as const;
@@ -35,6 +35,7 @@ function fixture(
   };
   const output: ConsensusOutput = {
     line: "Most of chat wants Gary.",
+    alternate_line: null,
     cited_cluster_ids: ["c1"],
     dissent_cluster_id: "c2",
     dissent_line: "Some prefer Milo.",
@@ -59,6 +60,7 @@ test("a complete supported line and dissent use distinct author sets for agreeme
       {
         ...output,
         line: "Some of chat wants Milo.",
+        alternate_line: null,
         cited_cluster_ids: ["c2"],
         dissent_cluster_id: null,
         dissent_line: null,
@@ -66,6 +68,105 @@ test("a complete supported line and dissent use distinct author sets for agreeme
       ctx,
     ).ok,
   ).toBe(true);
+});
+
+test("a duplicate primary selects a fully verified alternate with identical citation support", () => {
+  const { ctx, output } = fixture();
+  const result = verifyOutput(
+    { ...output, alternate_line: "Most of chat says Gary." },
+    { ...ctx, previousLine: output.line, moderation: { ...ctx.moderation, alternate: clear } },
+  );
+  expect(result.selected).toBe("alternate_line");
+  expect(result.verification).toMatchObject({
+    ok: true,
+    line: "Most of chat says Gary.",
+    pct: 60,
+    dissent: output.dissent_line,
+  });
+  expect(result.candidates[0]?.verification.failures).toEqual(["near_duplicate"]);
+});
+
+test("only a sole duplicate failure enables alternate selection", () => {
+  const { ctx, output } = fixture();
+  for (const line of [output.line, "Most of chat wants Neptune."]) {
+    const result = verifyOutput(
+      { ...output, line, alternate_line: "Most of chat says Gary." },
+      { ...ctx, moderation: { ...ctx.moderation, alternate: clear } },
+    );
+    expect(result.candidates).toHaveLength(1);
+    expect(result.selected).toBe(line === output.line ? "line" : null);
+  }
+  const moderated = verifyOutput(
+    { ...output, alternate_line: "Most of chat says Gary." },
+    {
+      ...ctx,
+      previousLine: output.line,
+      moderation: { line: { status: "ok", flagged: true }, alternate: clear },
+    },
+  );
+  expect(moderated.candidates).toHaveLength(1);
+  expect(moderated.verification.failures).toEqual(["moderation_flagged"]);
+});
+
+test.each([
+  ["too_long", Array(21).fill("Gary").join(" ")],
+  ["novel_token", "Most of chat wants Neptune."],
+  ["pattern_banned", "Most of chat says https://example.test"],
+  ["username_banned", "Most of chat wants Viewer 0."],
+  ["blocked_term", `Most of chat says ${decodeBase64("ZnVjaw==")}`],
+  ["near_duplicate", "Most of chat wants Gary."],
+] as const)("an alternate failing %s is rejected by the same verifier", (code, text) => {
+  const { ctx, output } = fixture();
+  const result = verifyOutput(
+    { ...output, alternate_line: text },
+    { ...ctx, previousLine: output.line, moderation: { ...ctx.moderation, alternate: clear } },
+  );
+  expect(result.selected).toBeNull();
+  expect(result.verification.ok).toBe(false);
+  expect(result.verification.failures).toContain(code);
+});
+
+test("alternate majority wording and missing or flagged moderation never bypass their gates", () => {
+  const { ctx, output } = fixture([
+    "Gary",
+    "Gary",
+    "Gary",
+    "Milo",
+    "Milo",
+    "Milo",
+    "Pickles",
+    "Pickles",
+    "Pickles",
+    "Pepper",
+  ]);
+  const primary = "Some of chat wants Gary.";
+  const checks = [
+    { text: "Most of chat wants Gary.", moderation: clear, code: "majority_word" },
+    {
+      text: "Some of chat says Gary.",
+      moderation: { status: "error" } as const,
+      code: "moderation_error",
+    },
+    {
+      text: "Some of chat says Gary.",
+      moderation: { status: "ok", flagged: true } as const,
+      code: "moderation_flagged",
+    },
+  ];
+  for (const check of checks) {
+    const result = verifyOutput(
+      {
+        ...output,
+        line: primary,
+        alternate_line: check.text,
+        dissent_cluster_id: null,
+        dissent_line: null,
+      },
+      { ...ctx, previousLine: primary, moderation: { line: clear, alternate: check.moderation } },
+    );
+    expect(result.selected).toBeNull();
+    expect(result.verification.failures).toContain(check.code);
+  }
 });
 
 test("schema, refusal and incomplete states fail before citation checks", () => {

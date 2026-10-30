@@ -7,9 +7,10 @@ test("the OpenAI structured format keeps the complete strict schema and parses i
   expect(format.type).toBe("json_schema");
   expect(format.strict).toBe(true);
   expect(format.schema.additionalProperties).toBe(false);
-  expect(format.schema.required).toHaveLength(6);
+  expect(format.schema.required).toHaveLength(7);
   const output = {
     line: "Most of chat wants Gary.",
+    alternate_line: null,
     cited_cluster_ids: ["c1"],
     dissent_cluster_id: null,
     dissent_line: null,

@@ -177,11 +177,17 @@ export async function createBeatApplication(options: {
       async start() {
         const path = await runtimeVoice.start();
         // Connect and configure only: no prompt, input audio or response generation.
+        const warm = async (source: string, connect: () => Promise<void> | undefined) => {
+          try {
+            await connect();
+          } catch {
+            log.warn({ source }, "Connection warm-up unavailable; connecting on demand");
+          }
+        };
         await Promise.all([
-          model.warmup?.(),
-          options.stubVoice ? undefined : runtimeVoice.manager.start(),
+          warm("model", () => model.warmup?.()),
+          warm("voice", () => (options.stubVoice ? undefined : runtimeVoice.manager.start())),
         ]);
-        log.info("API connections ready; no warm-up generation requested");
         beat.start();
         twitch.client.start();
         return path;

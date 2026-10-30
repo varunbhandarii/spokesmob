@@ -124,6 +124,10 @@ export class BeatRecords {
     return beatLogRecordSchema.parse(
       wire({
         ...(this.simulated ? { simulated: true } : {}),
+        rejectedCandidates: book.result?.rejectedCandidates ?? [],
+        ...(book.result?.selectedCandidate
+          ? { selectedCandidate: book.result.selectedCandidate }
+          : {}),
         id: this.key(book.id),
         at: book.at,
         kind,

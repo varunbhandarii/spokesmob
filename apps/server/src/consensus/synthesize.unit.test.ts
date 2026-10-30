@@ -20,6 +20,7 @@ import { type SynthesisOptions, synthesize } from "./synthesize.js";
 
 const good: ConsensusOutput = {
   line: "Most of chat wants Gary.",
+  alternate_line: null,
   cited_cluster_ids: ["c1"],
   dissent_cluster_id: null,
   dissent_line: null,
@@ -80,6 +81,55 @@ test("generation and its single retry both receive the prior spoken line while d
   expect(f.model.requests).toHaveLength(2);
   expect(f.model.requests.every((input) => input.previousLine === good.line)).toBe(true);
   expect(f.model.requests[1]?.data.previous_attempt_rejected).toBe("near_duplicate");
+});
+
+test("a verified alternate avoids regeneration and records the rejected primary", async () => {
+  const f = fixture([fakeModelResult({ ...good, alternate_line: "Most of chat says Gary." })]);
+  const result = await synthesize({ ...f.options, previousLine: good.line });
+  expect(result).toMatchObject({
+    status: "verified",
+    line: "Most of chat says Gary.",
+    selectedCandidate: "alternate_line",
+    attempts: 1,
+    fallback: false,
+  });
+  expect(f.model.requests).toHaveLength(1);
+  expect(result.rejectedCandidates).toEqual([
+    { attempt: 1, candidate: "line", text: good.line, failures: ["near_duplicate"] },
+  ]);
+  expect(f.outputPort.requests).toHaveLength(0);
+});
+
+test("both candidates failing causes exactly one regeneration, retaining each failure", async () => {
+  const badPair = { ...good, alternate_line: "Most of chat wants Neptune." };
+  const f = fixture([
+    fakeModelResult(badPair),
+    fakeModelResult({ ...good, line: "Most of chat suggests Gary." }),
+  ]);
+  const result = await synthesize({ ...f.options, previousLine: good.line });
+  expect(f.model.requests).toHaveLength(2);
+  expect(result).toMatchObject({
+    status: "verified",
+    attempts: 2,
+    line: "Most of chat suggests Gary.",
+  });
+  expect(result.rejectedCandidates?.map((row) => [row.candidate, row.failures])).toEqual([
+    ["line", ["near_duplicate"]],
+    ["alternate_line", ["novel_token"]],
+  ]);
+});
+
+test("blocked rejected text is encoded in retained candidate diagnostics", async () => {
+  const blocked = { ...good, line: decodeBase64("ZnVjaw==") ?? "" };
+  const f = fixture([fakeModelResult(blocked), fakeModelResult(good)]);
+  const result = await synthesize(f.options);
+  expect(result.rejectedCandidates?.[0]).toMatchObject({
+    candidate: "line",
+    text: null,
+    text_b64: "ZnVjaw==",
+    failures: ["blocked_term"],
+  });
+  expect(result.line).toBe(good.line);
 });
 test("too few voices suppresses without any API-port call", async () => {
   const f = fixture([], ["Gary"]);
@@ -189,9 +239,14 @@ test("an unsafe or unavailable fallback output is suppressed", async () => {
     }),
   ]) {
     const f = fixture([bad, bad]);
-    expect(await synthesize({ ...f.options, outputModeration: outputPort })).toMatchObject({
+    const result = await synthesize({ ...f.options, outputModeration: outputPort });
+    expect(result).toMatchObject({
       status: "suppressed",
       gate: "output_moderation",
+    });
+    expect(result.rejectedCandidates?.at(-1)).toMatchObject({
+      text: "Most of chat says Gary",
+      failures: [result.reason],
     });
   }
 });
@@ -202,6 +257,7 @@ test("low-score flags remove the exact bucket and recount the affected author", 
         fakeModelResult({
           ...good,
           line: `Some of chat says ${input.data.clusters[0]?.exemplars[0] ?? ""}`,
+          alternate_line: null,
           cited_cluster_ids: [input.data.clusters[0]?.id ?? "c1"],
         }),
     ],

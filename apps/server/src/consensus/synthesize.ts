@@ -7,13 +7,18 @@ import { buildInput } from "../../../../packages/core/src/prompt.js";
 import { THRESHOLDS } from "../../../../packages/core/src/thresholds.js";
 import type {
   CallUsage,
+  CandidateRejection,
   ChatMessage,
   Cluster,
   RuleCode,
   SynthesisResult,
   Window,
 } from "../../../../packages/core/src/types.js";
-import { type OutputModeration, verifyLine } from "../../../../packages/core/src/verify.js";
+import {
+  type OutputModeration,
+  verifyLine,
+  verifyOutput,
+} from "../../../../packages/core/src/verify.js";
 import { assembleWindow, type WindowOptions } from "../../../../packages/core/src/window.js";
 import { type Clock, systemClock } from "../clock.js";
 import { ModerationFailure, type ModerationGate, moderationDecision } from "./moderation.js";
@@ -59,6 +64,7 @@ export async function synthesize(options: SynthesisOptions): Promise<SynthesisRe
   let clusters: Cluster[] = [];
   const usage: CallUsage[] = [];
   const result: SynthesisResult = {
+    rejectedCandidates: [],
     status: "suppressed",
     line: null,
     dissent: null,
@@ -171,8 +177,23 @@ export async function synthesize(options: SynthesisOptions): Promise<SynthesisRe
     questionChanged: options.questionChanged ?? false,
     names,
     minVoices,
-    moderation: { line: moderation, dissent: moderation },
+    moderation: { line: moderation, alternate: moderation, dissent: moderation },
   });
+  const recordRejection = (
+    candidate: CandidateRejection["candidate"],
+    text: string | null,
+    failures: readonly RuleCode[],
+  ) => {
+    const protect =
+      !!text && (options.blocklist.check(text).blocked || failures.includes("pattern_banned"));
+    result.rejectedCandidates?.push({
+      attempt: result.attempts,
+      candidate,
+      text: protect ? null : text,
+      ...(protect ? { text_b64: Buffer.from(text ?? "").toString("base64") } : {}),
+      failures: [...failures],
+    });
+  };
   const accept = (
     output: NonNullable<ModelResult["output"]>,
     mapping: ReadonlyMap<string, string>,
@@ -180,23 +201,35 @@ export async function synthesize(options: SynthesisOptions): Promise<SynthesisRe
     ignorePrevious = false,
   ) => {
     const verifyStart = clock.now();
-    const verified = verifyLine(output, {
+    const checked = verifyOutput(output, {
       ...context(mapping, moderation),
       ...(ignorePrevious ? { previousLine: null } : {}),
     });
+    const verified = checked.verification;
     result.latency.verification += clock.now() - verifyStart;
-    options.onVerification?.({
-      kind: ignorePrevious ? "fallback" : "generation",
-      attempt: result.attempts,
-      ok: verified.ok,
-      failures: [...verified.failures],
-      line: output.line,
-      dissent: output.dissent_line,
-      offendingTokens: verified.offendingTokens,
-    });
+    for (const candidate of checked.candidates) {
+      const check = candidate.verification;
+      options.onVerification?.({
+        kind: ignorePrevious ? "fallback" : "generation",
+        attempt: result.attempts,
+        candidate: candidate.candidate,
+        ok: check.ok,
+        failures: [...check.failures],
+        line: candidate.text,
+        dissent: output.dissent_line,
+        offendingTokens: check.offendingTokens,
+      });
+      if (!check.ok) {
+        recordRejection(candidate.candidate, candidate.text, check.failures);
+      }
+      if (check.ok && check.failures.length && output.dissent_line) {
+        recordRejection("dissent_line", output.dissent_line, check.failures);
+      }
+    }
     if (verified.ok) {
       const keys = output.cited_cluster_ids.map((id) => mapping.get(id) ?? "");
       result.status = "verified";
+      result.selectedCandidate = ignorePrevious ? "fallback" : (checked.selected ?? "line");
       result.line = verified.line;
       result.dissent = verified.dissent;
       result.citedAuthors = verified.citedAuthors;
@@ -289,7 +322,10 @@ export async function synthesize(options: SynthesisOptions): Promise<SynthesisRe
     dissent: fallback.output.dissent_line,
     offendingTokens: preflight.offendingTokens,
   });
-  if (!preflight.ok) return finish("verification", preflight.failures[0] ?? reason);
+  if (!preflight.ok) {
+    recordRejection("line", fallback.output.line, preflight.failures);
+    return finish("verification", preflight.failures[0] ?? reason);
+  }
   let outputResult: OutputModeration = { status: "error" };
   let outputUsage: CallUsage = {
     source: "output_moderation",
@@ -321,6 +357,7 @@ export async function synthesize(options: SynthesisOptions): Promise<SynthesisRe
     moderation: { line: outputResult },
   });
   if (!verified.ok) {
+    recordRejection("line", fallback.output.line, verified.failures);
     options.onVerification?.({
       kind: "fallback",
       attempt: result.attempts,

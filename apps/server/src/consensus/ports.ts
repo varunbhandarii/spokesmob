@@ -23,6 +23,7 @@ export interface ModerationPort {
   }>;
 }
 export interface VerificationAttempt {
+  candidate?: "line" | "alternate_line";
   kind: "generation" | "fallback_preflight" | "fallback";
   attempt: number;
   ok: boolean;

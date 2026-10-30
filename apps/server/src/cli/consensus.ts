@@ -109,6 +109,13 @@ export async function consensusCheck(
             ? {
                 line: result.line ? "[encoded fixture output withheld]" : null,
                 dissent: result.dissent ? "[encoded fixture output withheld]" : null,
+                rejectedCandidates: result.rejectedCandidates?.map((candidate) => ({
+                  ...candidate,
+                  text: null,
+                  ...(candidate.text
+                    ? { text_b64: Buffer.from(candidate.text).toString("base64") }
+                    : {}),
+                })),
               }
             : {}),
           // Keep display identities out of command logs.

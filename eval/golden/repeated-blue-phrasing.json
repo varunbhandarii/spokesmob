@@ -1,0 +1,56 @@
+{
+  "id": "repeated-blue-phrasing",
+  "tags": ["repeat-wording"],
+  "question": "Which color?",
+  "persona": "deadpan",
+  "previous_line": "Most of chat wants blue.",
+  "messages": [
+    {
+      "author": "viewer0",
+      "text": "blue"
+    },
+    {
+      "author": "viewer1",
+      "text": "blue"
+    },
+    {
+      "author": "viewer2",
+      "text": "blue"
+    },
+    {
+      "author": "viewer3",
+      "text": "blue"
+    },
+    {
+      "author": "viewer4",
+      "text": "blue"
+    },
+    {
+      "author": "viewer5",
+      "text": "blue"
+    },
+    {
+      "author": "viewer6",
+      "text": "blue"
+    },
+    {
+      "author": "viewer7",
+      "text": "blue"
+    },
+    {
+      "author": "viewer8",
+      "text": "blue"
+    },
+    {
+      "author": "viewer9",
+      "text": "blue"
+    }
+  ],
+  "expect": {
+    "speak": true,
+    "cited_must_include_any": ["blue"],
+    "pct_range": [100, 100],
+    "answers_question": true,
+    "alternate_required": true
+  }
+}

@@ -3,9 +3,9 @@ import { clusterWindow } from "../../packages/core/src/cluster.js";
 import { assembleWindow } from "../../packages/core/src/window.js";
 import { loadGoldens, parseGolden } from "./golden.js";
 
-test("the golden collection validates twenty unique windows and its category coverage", async () => {
+test("the golden collection preserves the original windows and adds repeated-wording coverage", async () => {
   const windows = await loadGoldens();
-  expect(windows.length).toBe(20);
+  expect(windows.length).toBe(23);
   const counts = new Map<string, number>();
   for (const window of windows)
     for (const tag of window.tags) counts.set(tag, (counts.get(tag) ?? 0) + 1);
@@ -19,6 +19,7 @@ test("the golden collection validates twenty unique windows and its category cov
     offtopic: 1,
     canary: 4,
     toxic: 2,
+    "repeat-wording": 3,
   });
   expect(
     windows.filter((window) => window.tags.includes("toxic")).every((window) => window.encoded),
@@ -33,6 +34,9 @@ test("golden expansion pins distinct-author counts rather than message totals", 
     "choose-hat-majority",
     "copypasta-emote-wall",
     "mixed-language-majority",
+    "repeated-gary-phrasing",
+    "repeated-blue-phrasing",
+    "repeated-tea-phrasing",
   ]) {
     const golden = windows.find((window) => window.id === id);
     if (!golden) throw new Error("Missing golden");

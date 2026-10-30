@@ -67,9 +67,10 @@ test("the previous spoken line is the mob's own output, separate from current ch
   }
 });
 
-test("the schema pins six fields, strict IDs and the citation bounds", () => {
+test("the schema pins seven fields, strict IDs and the citation bounds", () => {
   const good: ConsensusOutput = {
     line: "Most of chat wants Gary.",
+    alternate_line: null,
     cited_cluster_ids: ["c1"],
     dissent_cluster_id: null,
     dissent_line: null,
@@ -77,6 +78,10 @@ test("the schema pins six fields, strict IDs and the citation bounds", () => {
     answers_question: true,
   };
   expect(consensusOutputSchema.parse(good)).toEqual(good);
+  const missing: Record<string, unknown> = { ...good };
+  delete missing.alternate_line;
+  expect(consensusOutputSchema.safeParse(missing).success).toBe(false);
+  expect(consensusOutputSchema.safeParse({ ...good, alternate_line: 7 }).success).toBe(false);
   for (const change of [
     { cited_cluster_ids: [] },
     { cited_cluster_ids: ["c13"] },
@@ -86,7 +91,7 @@ test("the schema pins six fields, strict IDs and the citation bounds", () => {
     { mood: "angry" },
   ])
     expect(consensusOutputSchema.safeParse({ ...good, ...change }).success).toBe(false);
-  expect(Object.keys(consensusOutputSchema.shape)).toHaveLength(6);
+  expect(Object.keys(consensusOutputSchema.shape)).toHaveLength(7);
 });
 
 test("result schema preserves unavailable cost rather than inventing zero", () => {

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { type BeatSettings, type BeatSettingsPatch, beatModeSchema } from "./beat-settings.js";
+import { candidateRejectionSchema } from "./schema.js";
 import { MOODS, type Mood, type SynthesisResult } from "./types.js";
 
 export const BEAT_STEPS = [
@@ -201,6 +202,8 @@ export const voiceAttemptLogSchema = z.strictObject({
   costUsd: cost,
 });
 export const beatLogRecordSchema = z.strictObject({
+  rejectedCandidates: z.array(candidateRejectionSchema).optional(),
+  selectedCandidate: z.enum(["line", "alternate_line", "fallback"]).optional(),
   simulated: z.boolean().optional(),
   id: z.string().min(1),
   at: z.number().nonnegative(),

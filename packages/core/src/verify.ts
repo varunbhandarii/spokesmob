@@ -21,7 +21,7 @@ export interface VerifyContext {
   thresholds?: typeof THRESHOLDS;
   minVoices?: number;
   modelState?: "complete" | "refusal" | "incomplete";
-  moderation: { line: OutputModeration; dissent?: OutputModeration };
+  moderation: { line: OutputModeration; alternate?: OutputModeration; dissent?: OutputModeration };
 }
 export interface Verification {
   ok: boolean;
@@ -231,5 +231,51 @@ export function verifyLine(output: unknown, ctx: VerifyContext): Verification {
     pct: support.pct,
     failures,
     offendingTokens,
+  };
+}
+
+export function verifyOutput(
+  output: unknown,
+  ctx: VerifyContext,
+): {
+  verification: Verification;
+  selected: "line" | "alternate_line" | null;
+  candidates: {
+    candidate: "line" | "alternate_line";
+    text: string | null;
+    verification: Verification;
+  }[];
+} {
+  const primary = verifyLine(output, ctx);
+  const parsed = consensusOutputSchema.safeParse(output);
+  const candidates = [
+    {
+      candidate: "line" as const,
+      text: parsed.success ? parsed.data.line : null,
+      verification: primary,
+    },
+  ];
+  if (primary.ok) return { verification: primary, selected: "line", candidates };
+  if (
+    !parsed.success ||
+    parsed.data.alternate_line === null ||
+    primary.failures.length !== 1 ||
+    primary.failures[0] !== "near_duplicate"
+  )
+    return { verification: primary, selected: null, candidates };
+  const alternate = verifyLine(
+    { ...parsed.data, line: parsed.data.alternate_line },
+    {
+      ...ctx,
+      moderation: { ...ctx.moderation, line: ctx.moderation.alternate ?? { status: "error" } },
+    },
+  );
+  return {
+    verification: alternate,
+    selected: alternate.ok ? "alternate_line" : null,
+    candidates: [
+      ...candidates,
+      { candidate: "alternate_line", text: parsed.data.alternate_line, verification: alternate },
+    ],
   };
 }

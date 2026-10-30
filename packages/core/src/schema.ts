@@ -47,11 +47,20 @@ export const ruleCodeSchema = z.enum([
 
 export const consensusOutputSchema = z.strictObject({
   line: z.string(),
+  alternate_line: z.string().nullable(),
   cited_cluster_ids: z.array(clusterId).min(1).max(4),
   dissent_cluster_id: clusterId.nullable(),
   dissent_line: z.string().nullable(),
   mood: z.enum(MOODS),
   answers_question: z.boolean(),
+});
+
+export const candidateRejectionSchema = z.strictObject({
+  attempt: z.number().int().nonnegative(),
+  candidate: z.enum(["line", "alternate_line", "dissent_line"]),
+  text: z.string().nullable(),
+  text_b64: z.string().optional(),
+  failures: z.array(ruleCodeSchema).min(1),
 });
 
 export const consensusInputSchema = z.strictObject({
@@ -78,6 +87,8 @@ export const consensusInputSchema = z.strictObject({
 });
 
 export const synthesisResultSchema = z.strictObject({
+  selectedCandidate: z.enum(["line", "alternate_line", "fallback"]).optional(),
+  rejectedCandidates: z.array(candidateRejectionSchema).optional(),
   status: z.enum(["verified", "suppressed"]),
   line: z.string().nullable(),
   dissent: z.string().nullable(),

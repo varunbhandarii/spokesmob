@@ -1,0 +1,56 @@
+{
+  "id": "repeated-gary-phrasing",
+  "tags": ["repeat-wording"],
+  "question": "Name the cat?",
+  "persona": "deadpan",
+  "previous_line": "Most of chat wants Gary.",
+  "messages": [
+    {
+      "author": "viewer0",
+      "text": "Gary"
+    },
+    {
+      "author": "viewer1",
+      "text": "Gary"
+    },
+    {
+      "author": "viewer2",
+      "text": "Gary"
+    },
+    {
+      "author": "viewer3",
+      "text": "Gary"
+    },
+    {
+      "author": "viewer4",
+      "text": "Gary"
+    },
+    {
+      "author": "viewer5",
+      "text": "Gary"
+    },
+    {
+      "author": "viewer6",
+      "text": "Gary"
+    },
+    {
+      "author": "viewer7",
+      "text": "Gary"
+    },
+    {
+      "author": "viewer8",
+      "text": "Gary"
+    },
+    {
+      "author": "viewer9",
+      "text": "Gary"
+    }
+  ],
+  "expect": {
+    "speak": true,
+    "cited_must_include_any": ["gary"],
+    "pct_range": [100, 100],
+    "answers_question": true,
+    "alternate_required": true
+  }
+}

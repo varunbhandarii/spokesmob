@@ -29,7 +29,14 @@ export function estimatedInputTokens(window: GoldenWindow): number {
   const clusters = clusterWindow(assembled, { isBlocked: (text) => blocklist.check(text).blocked });
   const input = buildInput(assembled, clusters, window.question);
   const schema = JSON.stringify(z.toJSONSchema(consensusOutputSchema));
-  return Math.ceil(Buffer.byteLength(STATIC_PREFIX + input.userMessage + schema, "utf8") / 3) + 64;
+  return (
+    Math.ceil(
+      Buffer.byteLength(
+        STATIC_PREFIX + (window.previousLine ?? "") + input.userMessage + schema,
+        "utf8",
+      ) / 3,
+    ) + 64
+  );
 }
 export function estimatedCallCost(tokens: number, tier: "default" | "fast"): number {
   const cost = modelCost(
@@ -79,7 +86,7 @@ export function evaluationPlan(
     // A planning estimate only: mostly cached static input, small output, no regeneration.
     const cached = Math.min(tokens, Math.floor(Buffer.byteLength(STATIC_PREFIX, "utf8") / 3));
     expectedCostUsd +=
-      (modelCost({ inputTokens: tokens, cachedTokens: cached, outputTokens: 96 }, tier) ?? 0) * n;
+      (modelCost({ inputTokens: tokens, cachedTokens: cached, outputTokens: 128 }, tier) ?? 0) * n;
   }
   return {
     windows: windows.length,

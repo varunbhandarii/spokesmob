@@ -1,6 +1,18 @@
 # Consensus evaluation
 
-The golden set contains 20 synthetic windows: four majorities, three split rooms, two scattered rooms, two tiny chats, an emote/copypasta wall, a multilingual room, an off-topic room, four instruction canaries and two encoded toxic rooms.
+The golden set contains the original 20 synthetic windows plus three repeated-wording windows. The original cases retain four majorities, three split rooms, two scattered rooms, two tiny chats, an emote/copypasta wall, a multilingual room, an off-topic room, four instruction canaries and two encoded toxic rooms. Five samples per window give 100 original samples plus 15 repeated-wording samples.
+
+The strict model schema requires seven fields, including `alternate_line` as a string or null. The alternate uses the same main citations. The main candidate is checked first; only a sole near-duplicate failure enables full verification of the alternate. The existing inline moderation result covers the whole returned JSON, including both main candidates and dissent. A missing, errored or flagged result fails closed; no additional moderation request is added. Regeneration remains limited to one attempt after both candidates fail.
+
+Repeated-wording cases use `previous_line` as the mob's own earlier output, never as chat evidence. `alternate_required` requires an alternate selection in one model call without fallback. The three new cases have ten distinct authors unanimously proposing Gary, blue or tea, with the natural previous wording "Most of chat wants …". Expected support is 100%, with the normal tolerance, and no dissent. The offline stub deliberately repeats the prior line to exercise selection; this validates wiring, not live model behavior. Paid acceptance requires all 100 original samples and all 15 new samples to pass quality before another live-loop measurement.
+
+| Window                 | Voices / supporting authors | Previous spoken line     | Required result                                          |
+| ---------------------- | --------------------------- | ------------------------ | -------------------------------------------------------- |
+| repeated-gary-phrasing | 10 / 10                     | Most of chat wants Gary. | Alternate selected in one call; Gary cited; 100% support |
+| repeated-blue-phrasing | 10 / 10                     | Most of chat wants blue. | Alternate selected in one call; blue cited; 100% support |
+| repeated-tea-phrasing  | 10 / 10                     | Most of chat wants tea.  | Alternate selected in one call; tea cited; 100% support  |
+
+These labels await human review before the paid run. The original twenty windows and their expectations are unchanged.
 
 `npm run eval -- --offline` checks harness wiring through the real consensus pipeline with a stub model and fake moderation. It costs nothing and explicitly reports that its output is unmoderated and unsuitable for streaming. Stub pass rates do not establish model quality or safety.
 
@@ -48,7 +60,7 @@ Scatter labels allow 5–45% before the normal tolerance, representing one to fo
 
 ## Reports and gates
 
-JSON and Markdown reports include category pass rates, failures with assertion codes and safe output text, model-call and model-stage p50/p95, known spend, unknown usage, mean model cost and cached-token ratio. Each verifier rejection retains the attempted line and dissent, with the exact tokens rejected by the novel-token rule for each field. Accepted attempts retain rule metadata only. Encoded or blocklisted output and its offending tokens are stored encoded in JSON and withheld from Markdown. Reports omit author names and IDs. Use `--window <id>` to select one golden window; it can be combined with the tag filter.
+JSON and Markdown reports include category pass rates, failures with assertion codes and safe output text, model-call and model-stage p50/p95, known spend, unknown usage, mean model cost and cached-token ratio. Each verifier rejection identifies the candidate, retains its attempted text and failure codes, and includes the exact tokens rejected by the novel-token rule for each field. Accepted attempts retain rule metadata only. Encoded or blocklisted output and its offending tokens are stored encoded in JSON and withheld from Markdown. Reports omit author names and IDs. Use `--window <id>` to select one golden window; it can be combined with the tag filter.
 
 Category results separate quality (A1-A11), quality with latency, and the standalone A12 pass rate. A12 is measured on model-entered windows, including canaries as a diagnostic; windows with no model call are not measured. The limit stays under 2,500 ms for the whole model stage. Reports show p50/p95/max for calls and model stages per tier. Mean cost across all calls stays unknown if any call lacks cost; the known-call mean and unknown-call count are shown separately.
 

@@ -78,6 +78,7 @@ export interface ConsensusInput {
 }
 export interface ConsensusOutput {
   line: string;
+  alternate_line: string | null;
   cited_cluster_ids: string[];
   dissent_cluster_id: string | null;
   dissent_line: string | null;
@@ -132,6 +133,8 @@ export interface StageLatency {
   total: number;
 }
 export interface SynthesisResult {
+  selectedCandidate?: "line" | "alternate_line" | "fallback";
+  rejectedCandidates?: CandidateRejection[];
   status: "verified" | "suppressed";
   line: string | null;
   dissent: string | null;
@@ -156,4 +159,12 @@ export interface SynthesisResult {
   latency: StageLatency;
   usage: CallUsage[];
   costUsd: number | null;
+}
+
+export interface CandidateRejection {
+  attempt: number;
+  candidate: "line" | "alternate_line" | "dissent_line";
+  text: string | null;
+  text_b64?: string;
+  failures: RuleCode[];
 }

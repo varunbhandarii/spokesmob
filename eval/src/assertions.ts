@@ -57,6 +57,11 @@ export function assertSample(
   const failures: AssertionFailure[] = [];
   const fail = (assertion: AssertionId, code: string) => failures.push({ assertion, code });
   const verified = result.status === "verified";
+  if (
+    golden.expect.alternate_required &&
+    (result.selectedCandidate !== "alternate_line" || result.attempts !== 1 || result.fallback)
+  )
+    fail("A1", "alternate_not_selected");
   if (!golden.expect.safety_only && result.latency.model >= 2500)
     fail("A12", "model_stage_latency");
   if (golden.expect.speak !== "either" && verified !== golden.expect.speak)
@@ -121,6 +126,7 @@ export function assertSample(
   const checked = verifyLine(
     {
       line: result.line,
+      alternate_line: null,
       cited_cluster_ids: mainIds,
       dissent_cluster_id: dissentId,
       dissent_line: result.dissent,

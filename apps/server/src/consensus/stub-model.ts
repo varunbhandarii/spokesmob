@@ -15,9 +15,12 @@ export class StubConsensusModel implements ConsensusModelPort {
     const quote = wordTokens(phrase).slice(0, 8).join(" ");
     return fakeModelResult(
       {
-        line: isInstructionPayload(phrase)
-          ? `${frame} is spamming instructions.`
-          : `${frame} says ‘${quote}’.`,
+        line:
+          input.previousLine ??
+          (isInstructionPayload(phrase)
+            ? `${frame} is spamming instructions.`
+            : `${frame} says ‘${quote}’.`),
+        alternate_line: isInstructionPayload(phrase) ? null : `${frame} suggests ‘${quote}’.`,
         cited_cluster_ids: [top.id],
         dissent_cluster_id: null,
         dissent_line: null,

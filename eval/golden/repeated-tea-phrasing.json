@@ -1,0 +1,56 @@
+{
+  "id": "repeated-tea-phrasing",
+  "tags": ["repeat-wording"],
+  "question": "Tea or coffee?",
+  "persona": "deadpan",
+  "previous_line": "Most of chat wants tea.",
+  "messages": [
+    {
+      "author": "viewer0",
+      "text": "tea"
+    },
+    {
+      "author": "viewer1",
+      "text": "tea"
+    },
+    {
+      "author": "viewer2",
+      "text": "tea"
+    },
+    {
+      "author": "viewer3",
+      "text": "tea"
+    },
+    {
+      "author": "viewer4",
+      "text": "tea"
+    },
+    {
+      "author": "viewer5",
+      "text": "tea"
+    },
+    {
+      "author": "viewer6",
+      "text": "tea"
+    },
+    {
+      "author": "viewer7",
+      "text": "tea"
+    },
+    {
+      "author": "viewer8",
+      "text": "tea"
+    },
+    {
+      "author": "viewer9",
+      "text": "tea"
+    }
+  ],
+  "expect": {
+    "speak": true,
+    "cited_must_include_any": ["tea"],
+    "pct_range": [100, 100],
+    "answers_question": true,
+    "alternate_required": true
+  }
+}

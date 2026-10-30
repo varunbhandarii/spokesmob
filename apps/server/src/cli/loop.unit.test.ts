@@ -14,7 +14,7 @@ test("paid loop preflight projects both providers and returns before any network
     beats: 20,
     expectedModelCalls: 20,
     expectedVoiceCalls: 40,
-    expectedCostUsd: 0.0418,
+    expectedCostUsd: 0.0426,
     runtimeLimitUsd: 0.1,
   });
   expect(output[1]).toContain("No API call made");

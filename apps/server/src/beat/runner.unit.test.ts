@@ -37,6 +37,7 @@ function fixture(
     paidModel?: boolean;
     clock?: Clock;
     windowS?: number;
+    alternate?: boolean;
   } = {},
 ) {
   const db = openStorage(":memory:");
@@ -83,18 +84,31 @@ function fixture(
     sessionId: "sample",
     voice,
     output,
-    model: options.dissent
+    model: options.alternate
       ? new FakeConsensusModel([
           fakeModelResult({
-            line: "Some of chat says blue.",
+            line: "Chat wants blue.",
+            alternate_line: "Chat says blue.",
             cited_cluster_ids: ["c1"],
-            dissent_cluster_id: "c2",
-            dissent_line: "Some of chat says red.",
+            dissent_cluster_id: null,
+            dissent_line: null,
             mood: "chill",
             answers_question: false,
           }),
         ])
-      : new StubConsensusModel(),
+      : options.dissent
+        ? new FakeConsensusModel([
+            fakeModelResult({
+              line: "Some of chat says blue.",
+              alternate_line: null,
+              cited_cluster_ids: ["c1"],
+              dissent_cluster_id: "c2",
+              dissent_line: "Some of chat says red.",
+              mood: "chill",
+              answers_question: false,
+            }),
+          ])
+        : new StubConsensusModel(),
     moderation: new FakeModerationPort(),
     blocklist: createBlocklist(),
     clients: () => ({ audioConnected: true, audioActive: true, overlayConnected: true }),
@@ -153,6 +167,29 @@ test("the shell completes one verified unit, posts once, pins and records actual
     latency: { holdMs: 1000, voiceReadyMs: 300, preRollMs: 100 },
   });
   expect(f.overlay.some((message) => message.type === "line")).toBe(true);
+});
+
+test("the selected alternate reaches the caption, voice, chat post and confirmed pin", async () => {
+  const f = fixture({ alternate: true });
+  f.runner.state.previousLine = "Chat wants blue.";
+  f.chat("one", "blue");
+  f.chat("two", "blue");
+  await vi.advanceTimersByTimeAsync(11000);
+  expect(f.voice.prepared[0]?.text).toBe("Chat says blue.");
+  expect(f.overlay.find((message) => message.type === "line")).toMatchObject({
+    text: "Chat says blue.",
+  });
+  expect(f.calls).toEqual([
+    expect.objectContaining({ action: "send", text: expect.stringContaining('"Chat says blue."') }),
+    expect.objectContaining({ action: "pin", id: "message-1" }),
+  ]);
+  expect(f.store.beatLog.recent(1)[0]).toMatchObject({
+    line: "Chat says blue.",
+    selectedCandidate: "alternate_line",
+    rejectedCandidates: [
+      expect.objectContaining({ text: "Chat wants blue.", failures: ["near_duplicate"] }),
+    ],
+  });
 });
 
 test("window, hold and cooldown advance when every timeout wakes one millisecond early", async () => {

@@ -296,7 +296,12 @@ export async function evaluate(options: EvaluationOptions): Promise<EvaluationRe
       });
       const accepted = [...traces]
         .reverse()
-        .find((trace) => trace.result.output?.line === result.line && !trace.result.failure);
+        .find(
+          (trace) =>
+            (trace.result.output?.line === result.line ||
+              trace.result.output?.alternate_line === result.line) &&
+            !trace.result.failure,
+        );
       const moderation = result.fallback
         ? fallbackModeration
         : (accepted?.result.outputModeration ?? { status: "error" });
@@ -337,6 +342,7 @@ export async function evaluate(options: EvaluationOptions): Promise<EvaluationRe
         answersQuestion: result.answersQuestion,
         attempts: result.attempts,
         fallback: result.fallback,
+        ...(result.selectedCandidate ? { selectedCandidate: result.selectedCandidate } : {}),
         latency: result.latency,
         usage: result.usage,
         calls,

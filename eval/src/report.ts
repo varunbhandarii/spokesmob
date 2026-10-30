@@ -26,6 +26,7 @@ export interface ApiCallReport {
   latencyMs: number;
 }
 export interface SampleReport {
+  selectedCandidate?: "line" | "alternate_line" | "fallback";
   id: string;
   tags: string[];
   sample: number;

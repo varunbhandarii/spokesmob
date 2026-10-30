@@ -103,6 +103,8 @@ OpenAI receives the active question, voice total, mood signals and up to twelve 
 
 The immediately previous verified line is supplied as the mob's own prior output to avoid repeated phrasing. It supplies no votes or evidence for the new window. The near-duplicate verifier and single regeneration attempt still apply.
 
+Each model response also includes an alternate wording with the same citations. When the main line fails only for repeating the previous line, the alternate passes the full verifier before selection. The selected text is used for captions, voice and the chat post. Both candidates share the existing inline output-moderation result; no additional moderation call is needed. Beat records retain rejected candidate text and failure codes, encoding blocked text.
+
 When every cluster has a share below 0.20, the prompt can name up to three cited options using source wording. When at least two clusters each have a share of 0.25 or more, it cites only the largest one, breaking ties either way, and puts the next-largest one in dissent. It never adds opposing sides together as the main agreement in that case.
 
 The verifier checks support, wording, length, blocked terms, contact patterns, usernames and output moderation before a line is accepted. A rejected generation can be rewritten once. A transport failure or two rejected generations can use a separately moderated, verified fallback; otherwise the window is suppressed with a reason. Consensus commands print results without speaking or posting them.
@@ -166,7 +168,7 @@ Start a short recording and run `npm run voice -- --tone`. It generates a free o
 
 After a server restart, the overlay and control panel reconnect automatically with a retry delay capped at five seconds. Keep the browser source active while it reconnects.
 
-Before enabling the beat, startup retrieves model metadata over the HTTP connection and connects/configures both voice sessions. This warm-up submits no prompt, audio input or response-generation request and consumes no model tokens. The first actual generation still performs model and prompt-cache work. Free mock runs keep using stubs.
+Before enabling the beat, startup retrieves model metadata over the HTTP connection and connects/configures both voice sessions. This warm-up submits no prompt, audio input or response-generation request and consumes no model tokens. A failed warm-up logs a warning and leaves the server and controls running; the first beat can connect on demand. The first actual generation still performs model and prompt-cache work. Free mock runs keep using stubs.
 
 Spokesmob uses an **AI-generated voice**. Disclose that to viewers. Dissent is a different voice spoken normally, made softer by the overlay mixer; the model is never prompted to whisper. Generation is held on the server until transcript and raw-audio checks pass, then edge silence is trimmed before playback. A failed retry becomes caption-only; legacy is unavailable and is never called automatically.
 

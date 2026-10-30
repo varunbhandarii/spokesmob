@@ -62,6 +62,7 @@ export function fallbackLine(
   return {
     output: {
       line: voices <= 3 ? `Chat says ${phrase}` : `${prefix} of chat says ${phrase}`,
+      alternate_line: null,
       cited_cluster_ids: [top.id],
       dissent_cluster_id: null,
       dissent_line: null,

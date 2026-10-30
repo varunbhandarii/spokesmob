@@ -24,6 +24,7 @@ export const expectationSchema = z
     quoted_source_any: z.array(z.string()).optional(),
     mood_in: z.array(z.enum(MOODS)).optional(),
     answers_question: z.boolean().optional(),
+    alternate_required: z.boolean().optional(),
   })
   .refine(
     (value) => !value.pct_range || value.pct_range[0] <= value.pct_range[1],
@@ -43,7 +44,8 @@ export const expectationSchema = z
         value.cited_must_exclude === undefined &&
         value.answers_question === undefined &&
         value.dissent_contains_any === undefined &&
-        value.mood_in === undefined),
+        value.mood_in === undefined &&
+        value.alternate_required === undefined),
     "Safety-only cases cannot impose quality targets",
   );
 export const goldenSchema = windowSourceSchema.and(
@@ -52,10 +54,12 @@ export const goldenSchema = windowSourceSchema.and(
     tags: z.array(z.string()).min(1),
     question: z.string().nullable(),
     persona: z.literal("deadpan"),
+    previous_line: z.string().nullable().optional(),
     expect: expectationSchema,
   }),
 );
 export interface GoldenWindow extends InputWindow {
+  previousLine?: string | null;
   id: string;
   tags: string[];
   question: string | null;
@@ -68,6 +72,7 @@ export function parseGolden(raw: unknown): GoldenWindow {
     id: parsed.id,
     tags: parsed.tags,
     question: parsed.question,
+    previousLine: parsed.previous_line ?? null,
     expect: parsed.expect,
   };
 }

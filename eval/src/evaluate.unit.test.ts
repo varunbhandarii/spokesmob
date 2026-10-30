@@ -238,8 +238,8 @@ test("moderation authentication failures abort without an output fallback", asyn
 test("the combined projection and caller cost limit are checked before constructing ports", async () => {
   const windows = await loadGoldens();
   const combined = evaluationPlan(windows, 5, "interleaved", 2);
-  expect(combined.samples).toBe(200);
-  expect(combined.expectedPrimaryCalls).toBe(170);
+  expect(combined.samples).toBe(230);
+  expect(combined.expectedPrimaryCalls).toBe(200);
   expect(combined.projectedCostUsd).toBeCloseTo(
     evaluationPlan(windows, 5, "default", 2).projectedCostUsd +
       evaluationPlan(windows, 5, "fast", 2).projectedCostUsd,
@@ -375,6 +375,7 @@ test("reports count regenerated verifications, fallback attempts and known free 
   const windows = await tiny();
   const bad = fakeModelResult({
     line: "Chat says Neptune",
+    alternate_line: null,
     cited_cluster_ids: ["c1"],
     dissent_cluster_id: null,
     dissent_line: null,
@@ -418,6 +419,7 @@ test("rejected text and novel tokens from encoded windows stay encoded in report
   const windows = (await tiny()).map((window) => ({ ...window, encoded: true }));
   const bad = fakeModelResult({
     line: "Chat says Neptune",
+    alternate_line: null,
     cited_cluster_ids: ["c1"],
     dissent_cluster_id: null,
     dissent_line: null,
