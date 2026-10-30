@@ -8,7 +8,7 @@ Run `npm run test:e2e` from the repository root. It builds both browser apps, st
 - `scene.html?scene=speaking&layout=wide`: scripted synthetic messages and playback reports without a WebSocket or audio generation. Scenes are listed in `src/view/scenes.ts`.
 - `face-sheet.html`: seven mood states including neutral crossed with five mouth shapes, plus all nine poses.
 
-The circular face is temporary. Captions use bundled Atkinson Hyperlegible Next variable 5.2.6, fitted plates and at most three lines. Word highlighting follows the advertised duration and local played-sample reports. Text appears only at main playback start or a matching reveal, lingers for the greater of 2.5 seconds and 55 ms per character, and clears immediately on cancellation or lost safety gates. The stage QR uses uqr@0.1.2 to encode the hello channel's exact HTTPS Twitch URL with error correction M, four-module quiet zone and black modules on white. Particles and the selected-face audio envelope are separate layers.
+The circular face is temporary. Captions use bundled Atkinson Hyperlegible Next variable 5.2.6, fitted plates and at most three lines. Word highlighting follows the advertised duration and local played-sample reports. Text appears only at main playback start or a matching reveal, lingers for the greater of 2.5 seconds and 55 ms per character, and clears immediately on cancellation or lost safety gates. The stage QR uses uqr@0.1.2 to encode the hello channel's exact HTTPS Twitch URL with error correction M, four-module quiet zone and black modules on white. The selected-face audio envelope remains a separate layer.
 
 ## Message additions
 
@@ -53,3 +53,5 @@ Coordinates use a transparent 1920 x 1080 stage; values live in `src/view/layout
 Screenshots are layout probes and are never committed. Reload the OBS source once after rebuilding to load a changed renderer.
 
 The agreement tag reads "71% of 312 voices"; dissent reads "18% · Some prefer Milo." after dissent playback starts. Stage labels its large counter and invites viewers to type; smaller chats get the same invitation in the other layouts. Preview shows an ellipsis bubble without line text. Unrelated speech retains the question header and adds "Meanwhile, chat says". Raid banners last six seconds, while the Hype Train chip follows persistent state. The AI voice badge sits at the face's upper right. Temporary-face and synthetic-scene labels belong only to the harness pages; the production entry never renders them.
+
+Name particles use Canvas 2D and a preallocated 400-entry pool. A bounded 512-entry bitmap cache renders names with canvas text APIs; visible labels are at most 24 Unicode characters. Seeded drift stays within the selected layout band. Main playback start gathers matching cited full names into the mouth. A clear message wipes the canvas and pending name batches, including while the source is inactive. The particle layer shares the existing animation-frame loop.

@@ -1,6 +1,7 @@
 import { createFace } from "../face/index.js";
 import { LAYOUTS, type Zone } from "./layout.js";
 import { createFrameLoop, type FrameClock } from "./loop.js";
+import { createParticleCanvas } from "./particle-canvas.js";
 import { createChannelQr } from "./qr.js";
 import type { ViewStore } from "./store.js";
 import { captionWords, countUp, dissentCopy } from "./text.js";
@@ -79,6 +80,7 @@ export function createRenderer(options: {
   const qrLabel = make("qr-label", qr);
   const face = createFace({ seed: options.seed ?? 1729, size: 512 });
   faceHost.append(face.element);
+  const particles = createParticleCanvas(root, options.seed ?? 1729);
   write(badge.plate, "AI voice");
   write(bubble.plate, "\u2026");
   let qrChannel = "";
@@ -88,13 +90,26 @@ export function createRenderer(options: {
   let fitted = false;
   let alive = true;
   void document.fonts.ready.then(() => {
-    if (alive) fitted = false;
+    if (alive) {
+      fitted = false;
+      particles.invalidate();
+    }
   });
-  const loop = createFrameLoop((now) => {
+  const loop = createFrameLoop((now, dt) => {
     options.beforeDraw?.(now);
     if (options.sample) store.sample(options.sample());
     const view = store.view();
     const zones = LAYOUTS[view.layout];
+    particles.draw(
+      now,
+      dt,
+      zones.particles,
+      {
+        x: zones.face.x + zones.face.width * 0.5,
+        y: zones.face.y + zones.face.height * (345 / 512),
+      },
+      view.particles,
+    );
     root.dataset.layout = view.layout;
     root.dataset.pose = view.pose;
     const changedLayout = layout !== view.layout;
@@ -252,6 +267,7 @@ export function createRenderer(options: {
       alive = false;
       loop.destroy();
       face.destroy();
+      particles.destroy();
       root.replaceChildren();
     },
   };

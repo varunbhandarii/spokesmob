@@ -13,6 +13,7 @@ import {
   serverOverlayMessageSchema,
 } from "../../../../packages/core/src/overlay-protocol.js";
 import type { FacePose } from "../face/types.js";
+import type { ParticleCue } from "./particles.js";
 import { captionLingerMs, highlightedWord } from "./text.js";
 
 export interface VisibleCaption {
@@ -52,6 +53,7 @@ export interface OverlayView {
   audioChannel: AudioChannel | null;
   newestName: string | null;
   raid: { name: string; viewers: number } | null;
+  particles: readonly ParticleCue[];
 }
 const initial: BeatView = {
   step: "off",
@@ -83,6 +85,20 @@ export function createViewStore(
   let messages = 0;
   let rms = 0;
   let newestName: string | null = null;
+  let cueId = 0;
+  let particleCues: ParticleCue[] = [];
+  const cue = (type: ParticleCue["type"], names: readonly string[] = []) => {
+    const next: ParticleCue = { id: ++cueId, type, names };
+    particleCues =
+      type === "clear"
+        ? [next]
+        : [
+            ...(particleCues[0]?.type === "clear"
+              ? [particleCues[0], ...particleCues.slice(1).slice(-126)]
+              : particleCues.slice(-127)),
+            next,
+          ];
+  };
   let raid: { name: string; viewers: number; until: number } | null = null;
   const revealed = new Set<number>();
   const prepared = new Map<number, PreparedTake>();
@@ -136,6 +152,7 @@ export function createViewStore(
           cancelled.clear();
           revealed.clear();
           raid = null;
+          cue("clear");
           prepared.clear();
           clear();
           stoppedThrough = -1;
@@ -239,9 +256,11 @@ export function createViewStore(
           messages = event.messages;
           break;
         case "particles":
+          cue("spawn", event.names);
           newestName = event.names.at(-1) ?? newestName;
           break;
         case "particles_clear":
+          cue("clear");
           newestName = null;
           break;
       }
@@ -289,6 +308,7 @@ export function createViewStore(
             until: null,
           };
           pose = "speaking";
+          cue("gather", pending.citedNames);
         } else {
           if (caption) {
             caption.dissent = true;
@@ -361,6 +381,7 @@ export function createViewStore(
         audioChannel,
         newestName,
         raid: raid && at < raid.until ? { name: raid.name, viewers: raid.viewers } : null,
+        particles: particleCues,
       };
     },
   };

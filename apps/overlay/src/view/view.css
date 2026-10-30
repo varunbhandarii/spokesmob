@@ -190,3 +190,11 @@ body {
   color: #d5ef9c;
   font-size: 14px;
 }
+
+.particle-canvas {
+  position: absolute;
+  inset: 0;
+  width: 1920px;
+  height: 1080px;
+  pointer-events: none;
+}
