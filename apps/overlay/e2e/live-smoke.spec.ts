@@ -11,6 +11,10 @@ interface PlaybackObservation {
   captionAfterStarted: boolean;
   maxRms: number;
   maxMouth: number;
+  playAt: number | null;
+  startedAt: number | null;
+  endedAt: number | null;
+  lastSamples: number;
 }
 
 test("the live mock plays a verified tone, reveals on started and renders four hundred names smoothly", async ({
@@ -20,7 +24,7 @@ test("the live mock plays a verified tone, reveals on started and renders four h
   const runtime = await startMockLoop();
   let control: Awaited<ReturnType<typeof controlClient>> | null = null;
   const errors: string[] = [];
-  let metrics: Record<string, number | boolean> | null = null;
+  let metrics: Record<string, number | boolean | null> | null = null;
   try {
     page.on("pageerror", () => errors.push("browser script error"));
     page.on("console", (message) => {
@@ -45,15 +49,40 @@ test("the live mock plays a verified tone, reveals on started and renders four h
         captionAfterStarted: false,
         maxRms: 0,
         maxMouth: 0,
+        playAt: null,
+        startedAt: null,
+        endedAt: null,
+        lastSamples: 0,
       };
       (window as unknown as { playbackObservation: PlaybackObservation }).playbackObservation =
         observation;
-      const send = WebSocket.prototype.send;
+      const NativeSocket = WebSocket;
+      class ObservedSocket extends NativeSocket {
+        constructor(url: string | URL, protocols?: string | string[]) {
+          super(url, protocols);
+          this.addEventListener("message", (event) => {
+            if (typeof event.data !== "string") return;
+            try {
+              if ((JSON.parse(event.data) as { type?: string }).type === "play")
+                observation.playAt = performance.now();
+            } catch {
+              /* Only typed JSON controls contribute timing. */
+            }
+          });
+        }
+      }
+      Object.defineProperty(window, "WebSocket", { value: ObservedSocket });
+      const send = NativeSocket.prototype.send;
       WebSocket.prototype.send = function (data) {
         if (typeof data === "string") {
           try {
-            if ((JSON.parse(data) as { type?: string }).type === "started")
+            const report = JSON.parse(data) as { type?: string; samples?: number };
+            if (report.type === "started") {
               observation.started = true;
+              observation.startedAt = performance.now();
+            }
+            if (report.type === "ended") observation.endedAt = performance.now();
+            if (report.type === "played") observation.lastSamples = report.samples ?? 0;
           } catch {
             /* Binary data is never interpreted as a playback report. */
           }
@@ -87,6 +116,9 @@ test("the live mock plays a verified tone, reveals on started and renders four h
     await expect(page.locator("#status")).toContainText("audio ready");
     await expect(page.locator("#overlay")).toHaveAttribute("data-pose", "idle");
     await expect(page.locator(".caption")).toBeHidden();
+    // Let cold font/bitmap and audio-graph startup finish before timing playback.
+    await page.evaluate(() => document.fonts.ready.then(() => undefined));
+    await expect(page.locator(".particle-canvas")).toHaveAttribute("data-count", "400");
     control = await controlClient(runtime.url);
     control.tone();
     await page.waitForFunction(() => {
@@ -94,20 +126,35 @@ test("the live mock plays a verified tone, reveals on started and renders four h
         .playbackObservation;
       return value.maxRms > 0.005 && value.maxMouth > 0.1 && value.captionAfterStarted;
     });
-    await page.screenshot({ path: resolve("test-results/live-overlay.png") });
     await until(
       () => control?.messages.some((message) => message.type === "voice_result") ?? false,
     );
     const result = control.messages.find((message) => message.type === "voice_result");
-    expect(result).toMatchObject({ data: { status: "verified", playback: "ended", attempts: [] } });
     const observation = await page.evaluate(
       () => (window as unknown as { playbackObservation: PlaybackObservation }).playbackObservation,
     );
+    await writeFile(
+      resolve("test-results/playback-timing.json"),
+      `${JSON.stringify(
+        {
+          ...observation,
+          playback: result?.type === "voice_result" ? result.data.playback : null,
+          durationMs: result?.type === "voice_result" ? result.data.durationMs : null,
+        },
+        null,
+        2,
+      )}\n`,
+      "utf8",
+    );
+    expect(result).toMatchObject({ data: { status: "verified", playback: "ended", attempts: [] } });
     expect(observation.started).toBe(true);
     expect(observation.captionBeforeStarted).toBe(false);
     expect(observation.captionAfterStarted).toBe(true);
     expect(observation.maxRms).toBeGreaterThan(0.005);
     expect(observation.maxMouth).toBeGreaterThan(0.1);
+    // Capturing while the short take plays can delay its main-thread end report.
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: resolve("test-results/live-overlay.png") });
     await expect(page.locator(".particle-canvas")).toHaveAttribute("data-count", "400");
     const timing = await page.evaluate(
       () =>
