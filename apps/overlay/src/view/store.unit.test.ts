@@ -140,6 +140,7 @@ test("control previews are rejected and query layout pins over state changes", (
       take: 1,
       text: "Never an overlay preview",
       dissent: null,
+      dissentPct: null,
       pct: 50,
       voices: 2,
       holdMs: 1000,

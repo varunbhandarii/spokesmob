@@ -14,6 +14,7 @@ const notice = {
   take: 7,
   text: "Chat wants Gary.",
   dissent: "Some prefer Milo.",
+  dissentPct: 18,
   pct: 71,
   voices: 312,
   holdMs: 3000,
@@ -94,8 +95,8 @@ test("the dock shows verified preview, countdown and a large veto with confirmed
   const card = page.locator("#preview-card");
   await expect(card).toBeVisible();
   await expect(card.locator(".preview-line")).toHaveText(notice.text);
-  await expect(card.locator(".preview-dissent")).toHaveText(notice.dissent);
-  await expect(card.locator(".preview-summary")).toHaveText("71% of 312");
+  await expect(card.locator(".preview-dissent")).toHaveText("18% \u00b7 Some prefer Milo.");
+  await expect(card.locator(".preview-summary")).toHaveText("71% of 312 voices");
   await expect(card.locator(".preview-quiet")).toBeHidden();
   const start = await card
     .locator(".preview-fill")

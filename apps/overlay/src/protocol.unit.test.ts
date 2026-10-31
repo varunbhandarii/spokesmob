@@ -58,6 +58,7 @@ test("the overlay boundary accepts reveal and computed dissent, but refuses cont
       take: 7,
       text: "Private preview",
       dissent: null,
+      dissentPct: null,
       pct: 71,
       voices: 312,
       holdMs: 1000,

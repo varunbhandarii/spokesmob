@@ -7,6 +7,7 @@ const notice: PreviewNotice = {
   take: 7,
   text: "Chat wants Gary.",
   dissent: "Some prefer Milo.",
+  dissentPct: 18,
   pct: 71,
   voices: 312,
   holdMs: 1000,
@@ -19,8 +20,8 @@ test("preview metadata arriving before state starts one bounded countdown", () =
   expect(previewView(preview, state, true, 350)).toMatchObject({
     kind: "preview",
     text: notice.text,
-    dissent: notice.dissent,
-    summary: "71% of 312",
+    dissent: "18% \u00b7 Some prefer Milo.",
+    summary: "71% of 312 voices",
     remainingMs: 750,
     progress: 0.75,
   });

@@ -89,6 +89,7 @@ export function createRenderer(options: {
   let wordNodes: HTMLSpanElement[] = [];
   let fitted = false;
   let alive = true;
+  let renderedFrames = 0;
   void document.fonts.ready.then(() => {
     if (alive) {
       fitted = false;
@@ -110,6 +111,8 @@ export function createRenderer(options: {
       },
       view.particles,
     );
+    root.dataset.frame = String(++renderedFrames);
+    root.dataset.rms = view.rms.toFixed(4);
     root.dataset.layout = view.layout;
     root.dataset.pose = view.pose;
     const changedLayout = layout !== view.layout;
@@ -198,6 +201,7 @@ export function createRenderer(options: {
     const voices = countUp(line?.voices ?? 0, visible?.ageMs ?? 0);
     const meterChanged = write(meter.plate, `${String(pct)}% of ${String(voices)} voices`);
     meter.host.hidden = !line || line.voices === 0;
+    counter.host.hidden = !meter.host.hidden;
     meter.plate.dataset.pct = String(line?.pct ?? 0);
     const dissentChanged = write(dissent.plate, aside);
     dissent.host.hidden = !aside || layout === "compact";
@@ -246,13 +250,16 @@ export function createRenderer(options: {
       if (questionChanged) fitPlate(question.plate, zones.question, 2);
       if (dissentChanged) fitPlate(dissent.plate, zones.dissent, 2);
     }
-    if (meterChanged || changedLayout) fitPlate(meter.plate, zones.meter, 2);
+    if (meterChanged || changedLayout)
+      fitPlate(meter.plate, zones.meter, layout === "compact" ? 1 : 2);
     face.setPose(view.pose);
     face.setMood(view.state.mood);
     face.setHype(view.state.hype?.level ?? null);
     // The selected rig gets the audio envelope in its integration task.
+    const mouthOpenness = view.pose === "speaking" ? 0.65 : view.pose === "aside" ? 0.4 : 0;
+    root.dataset.mouthOpenness = mouthOpenness.toFixed(3);
     face.setMouth(
-      view.pose === "speaking" ? 0.65 : view.pose === "aside" ? 0.4 : 0,
+      mouthOpenness,
       view.pose === "speaking" || view.pose === "aside" ? "open" : "closed",
     );
     face.update(now);

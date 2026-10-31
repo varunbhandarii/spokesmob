@@ -13,3 +13,6 @@ The layout selector changes `state.layout`. An overlay source with an explicit v
 The view shows the newest 200 beats. **Copy beat** fetches the complete selected row with cited names. **Export log** walks retained history using `/api/log?limit=200&names=1&before=<last-row-id>` and downloads JSON only after all pages succeed. A repeated cursor, duplicate row or browser memory bound stops the export with a visible error; no partial file is labeled complete. The API token is sent in the Authorization header and never rendered or logged.
 
 During preview, a card above Live controls shows the verified main line, optional dissent, agreement count and a countdown for the configured hold. Captions-only previews carry a labeled chip. Its large red Veto uses the same command path as V and the regular Veto button. The card hides as soon as the beat leaves preview or the connection is lost. A confirmed veto replaces the content with "Vetoed" for two seconds; a new preview takes priority. All incoming text is rendered as text, never HTML.
+
+
+Preview counts include the unit ("71% of 312 voices"). Dissent includes its separate author-counted share ("18% · Some prefer Milo."). Both percentages come from core; the control-only preview message carries the existing computed dissentPct.

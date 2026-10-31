@@ -198,3 +198,8 @@ body {
   height: 1080px;
   pointer-events: none;
 }
+
+[data-layout="compact"] .agreement {
+  white-space: nowrap;
+  overflow-wrap: normal;
+}

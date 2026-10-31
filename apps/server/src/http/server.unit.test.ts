@@ -136,6 +136,7 @@ test("preview crosses only the control boundary and reveal only the overlay boun
     take: 1,
     text: "Chat says blue.",
     dissent: null,
+    dissentPct: null,
     pct: 50,
     voices: 2,
     holdMs: 1000,

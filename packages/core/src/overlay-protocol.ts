@@ -156,6 +156,7 @@ export const previewMessageSchema = z.strictObject({
   take: takeIdSchema,
   text: z.string().min(1).max(2000),
   dissent: z.string().nullable(),
+  dissentPct: z.number().int().min(0).max(100).nullable(),
   pct: z.number().int().min(0).max(100),
   voices: z.number().int().nonnegative(),
   holdMs: z.number().int().min(500).max(3000),

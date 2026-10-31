@@ -14,7 +14,7 @@ The circular face is temporary. Captions use bundled Atkinson Hyperlegible Next 
 
 | Direction     | Message / field                                      | Meaning                                                                           |
 | ------------- | ---------------------------------------------------- | --------------------------------------------------------------------------------- |
-| Controls only | `preview{take,text,dissent,pct,voices,holdMs,quiet}` | Verified text at preview entry; overlays reject it.                               |
+| Controls only | `preview{take,text,dissent,dissentPct,pct,voices,holdMs,quiet}` | Verified text at preview entry; overlays reject it.                               |
 | Overlay       | `reveal{take}`                                       | Show a matching verified caption after the server hold, without audio playback.   |
 | Overlay hello | `channel`                                            | Validated channel login, used by the stage layout.                                |
 | Overlay line  | `dissentPct`                                         | Integer or null; core computes distinct dissent authors divided by window voices. |
@@ -55,3 +55,8 @@ Screenshots are layout probes and are never committed. Reload the OBS source onc
 The agreement tag reads "71% of 312 voices"; dissent reads "18% · Some prefer Milo." after dissent playback starts. Stage labels its large counter and invites viewers to type; smaller chats get the same invitation in the other layouts. Preview shows an ellipsis bubble without line text. Unrelated speech retains the question header and adds "Meanwhile, chat says". Raid banners last six seconds, while the Hype Train chip follows persistent state. The AI voice badge sits at the face's upper right. Temporary-face and synthetic-scene labels belong only to the harness pages; the production entry never renders them.
 
 Name particles use Canvas 2D and a preallocated 400-entry pool. A bounded 512-entry bitmap cache renders names with canvas text APIs; visible labels are at most 24 Unicode characters. Seeded drift stays within the selected layout band. Main playback start gathers matching cited full names into the mouth. A clear message wipes the canvas and pending name batches, including while the source is inactive. The particle layer shares the existing animation-frame loop.
+
+
+The face counter hides while a caption's agreement tag is visible, and returns when that tag clears. Compact agreement stays on one line with fitted type.
+
+The browser suite also runs the production entry against an isolated headless mock loop on a dynamically assigned local port. It uses an OS temporary token folder and an environment containing no application credentials, reads the saved URL without logging it, and sends the free verified tone from a control client. It checks real audio RMS, mouth opening, started-gated captions, no console errors and at least 55 rendered frames per second with 400 particles over five seconds. The process and temporary folder are removed even on assertion failure. The current placeholder mouth is pose-driven; the selected face's audio envelope is verified after integration.

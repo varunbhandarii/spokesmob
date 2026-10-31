@@ -17,12 +17,12 @@ for (const layout of ["wide", "stage", "compact"]) {
       window.scene.seek(4100);
     });
     await expect(page.locator(".agreement")).toHaveText("71% of 312 voices");
-    await expect(page.locator(".counter-label")).toHaveText("voices");
+    await expect(page.locator(".counter")).toBeHidden();
     await expect(page.locator(layout === "compact" ? ".compact-dissent" : ".dissent")).toHaveText(
       layout === "compact" ? "\u00b7 18% \u00b7 Some prefer Milo." : "18% \u00b7 Some prefer Milo.",
     );
     const geometry = await page.evaluate(() => {
-      const selectors = [".question", ".agreement", ".caption", ".ai-badge", ".counter"];
+      const selectors = [".question", ".agreement", ".caption", ".ai-badge"];
       if (document.querySelector("#overlay")?.getAttribute("data-layout") !== "compact")
         selectors.push(".dissent");
       return selectors.map((selector) => {
@@ -44,6 +44,14 @@ for (const layout of ["wide", "stage", "compact"]) {
       geometry.every((row) => row.fits && row.slotFits),
       JSON.stringify(geometry),
     ).toBe(true);
+    if (layout === "compact") {
+      const lines = await page.locator(".agreement").evaluate((node) => {
+        const range = document.createRange();
+        range.selectNodeContents(node);
+        return range.getClientRects().length;
+      });
+      expect(lines).toBe(1);
+    }
     const badge = await page.locator(".ai-badge").boundingBox();
     const face = await page.locator(".face-host").boundingBox();
     expect(badge && face && badge.y < face.y + face.height / 2).toBeTruthy();
@@ -57,6 +65,9 @@ for (const layout of ["wide", "stage", "compact"]) {
       );
     }
     await page.screenshot({ path: info.outputPath(`text-${layout}.png`) });
+    await page.evaluate(() => window.scene.message({ type: "stop", take: "all" }));
+    await expect(page.locator(".agreement")).toBeHidden();
+    await expect(page.locator(".counter")).toBeVisible();
     expect(errors).toEqual([]);
   });
 }

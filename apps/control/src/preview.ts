@@ -54,8 +54,13 @@ export function previewView(
   return {
     kind: showing ? "preview" : connected && now < preview.vetoedUntil ? "vetoed" : "hidden",
     text: showing ? notice.text : "",
-    dissent: showing ? notice.dissent : null,
-    summary: showing ? `${String(notice.pct)}% of ${String(notice.voices)}` : "",
+    dissent:
+      showing && notice.dissent
+        ? notice.dissentPct === null
+          ? notice.dissent
+          : `${String(notice.dissentPct)}% \u00b7 ${notice.dissent}`
+        : null,
+    summary: showing ? `${String(notice.pct)}% of ${String(notice.voices)} voices` : "",
     quiet: showing && notice.quiet,
     remainingMs,
     progress: notice ? remainingMs / notice.holdMs : 0,

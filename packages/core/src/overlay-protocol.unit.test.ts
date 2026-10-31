@@ -76,12 +76,13 @@ const log = {
   costUsd: null,
   unknownCost: true,
 };
-test("preview belongs only to controls; reveal, channel and dissent support belong to overlays", () => {
+test("preview support stays on controls; reveal and channel remain overlay-only", () => {
   const preview = {
     type: "preview",
     take: 1,
     text: line.text,
     dissent: null,
+    dissentPct: null,
     pct: 71,
     voices: 312,
     holdMs: 1000,
@@ -91,10 +92,14 @@ test("preview belongs only to controls; reveal, channel and dissent support belo
   expect(serverOverlayMessageSchema.safeParse(preview).success).toBe(false);
   expect(serverOverlayMessageSchema.safeParse({ type: "reveal", take: 1 }).success).toBe(true);
   expect(serverControlMessageSchema.safeParse({ type: "reveal", take: 1 }).success).toBe(false);
-  for (const dissentPct of [null, 0, 18, 100])
+  for (const dissentPct of [null, 0, 18, 100]) {
     expect(serverOverlayMessageSchema.safeParse({ ...line, dissentPct }).success).toBe(true);
-  for (const dissentPct of [-1, 101, 18.5, undefined])
+    expect(serverControlMessageSchema.safeParse({ ...preview, dissentPct }).success).toBe(true);
+  }
+  for (const dissentPct of [-1, 101, 18.5, undefined]) {
     expect(serverOverlayMessageSchema.safeParse({ ...line, dissentPct }).success).toBe(false);
+    expect(serverControlMessageSchema.safeParse({ ...preview, dissentPct }).success).toBe(false);
+  }
   for (const channel of ["", "bad/name", "UpperCase", undefined])
     expect(
       serverOverlayMessageSchema.safeParse({
