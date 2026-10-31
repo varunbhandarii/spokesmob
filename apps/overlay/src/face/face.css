@@ -1,78 +1,205 @@
-.placeholder-face {
-  --face-tint: #d5ef9c;
-  --face-blush: #e9a6ad;
-  --face-blush-opacity: 0.35;
-  --face-brow-y: 0px;
-  --face-brow-angle: 0deg;
-  --face-lid-scale: 1;
-  overflow: visible;
+.round-ink {
+  --ri-ink: #192e30;
+  --ri-cream: #fff3d9;
+  --ri-tint: #b2c7a2;
+  --ri-blush: #cd8974;
+  --ri-blush-opacity: 0.34;
+  --ri-left-brow-y: 0px;
+  --ri-right-brow-y: 0px;
+  --ri-left-brow-angle: 0deg;
+  --ri-right-brow-angle: 0deg;
+  --ri-left-lid: 1;
+  --ri-right-lid: 1;
+  overflow: hidden;
+  isolation: isolate;
 }
-.face-head {
-  fill: var(--face-tint);
-  stroke: #142327;
-  stroke-width: 10px;
+.round-ink .ri-shell {
+  fill: var(--ri-ink);
+  stroke: #d5ef9c;
+  stroke-width: 3;
+  stroke-opacity: 0.65;
+  stroke-linejoin: round;
 }
-.face-rim {
+.round-ink .ri-skin {
+  fill: var(--ri-tint);
+}
+.round-ink .ri-ink,
+.round-ink .ri-mouth-cavity {
+  fill: var(--ri-ink);
+}
+.round-ink .ri-cream,
+.round-ink .ri-eye-white {
+  fill: var(--ri-cream);
+}
+.round-ink .ri-eye-white {
+  stroke: var(--ri-ink);
+  stroke-width: 7;
+}
+.round-ink .ri-line {
   fill: none;
-  stroke: #edf5df;
-  stroke-width: 5px;
-  opacity: 0.35;
+  stroke: var(--ri-ink);
+  stroke-width: 11;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
-.placeholder-face[data-hype="on"] .face-rim {
-  stroke: #ffcf66;
-  opacity: 1;
-}
-.face-eye {
-  fill: #fffef1;
-}
-.face-pupil,
-.face-mouth {
-  fill: #142327;
-}
-.face-brows {
-  transform: translateY(var(--face-brow-y)) rotate(var(--face-brow-angle));
-  transform-origin: 256px 155px;
+.round-ink .ri-lime-rim,
+.round-ink .ri-crest,
+.round-ink .ri-bottom-ink {
   fill: none;
-  stroke: #142327;
-  stroke-width: 12px;
   stroke-linecap: round;
 }
-.face-cheeks {
-  fill: var(--face-blush);
-  opacity: var(--face-blush-opacity);
+.round-ink .ri-lime-rim {
+  stroke: #d5ef9c;
+  stroke-width: 9;
 }
-.face-lids {
-  transform: scaleY(var(--face-lid-scale));
-  transform-origin: 256px 227px;
+.round-ink .ri-crest {
+  stroke: var(--ri-cream);
+  stroke-width: 6;
+  opacity: 0.72;
 }
-.face-zip {
+.round-ink .ri-bottom-ink {
+  stroke: var(--ri-ink);
+  stroke-width: 9;
+}
+.round-ink .ri-cheeks {
+  fill: var(--ri-blush);
+  opacity: var(--ri-blush-opacity);
+  transition: opacity 200ms ease;
+}
+.round-ink .ri-brow {
+  transition: transform 200ms ease;
+}
+.round-ink .ri-left .ri-brow {
+  transform: translateY(var(--ri-left-brow-y)) rotate(var(--ri-left-brow-angle));
+}
+.round-ink .ri-right .ri-brow {
+  transform: translateY(var(--ri-right-brow-y)) rotate(var(--ri-right-brow-angle));
+}
+.round-ink .ri-brow .ri-line {
+  stroke-width: 13;
+}
+.round-ink .ri-eye-mood {
+  transition: transform 200ms ease;
+}
+.round-ink .ri-left .ri-eye-mood {
+  transform: scaleY(var(--ri-left-lid));
+}
+.round-ink .ri-right .ri-eye-mood {
+  transform: scaleY(var(--ri-right-lid));
+}
+.round-ink .ri-nose,
+.round-ink .ri-small-line {
+  stroke-width: 6;
+}
+.round-ink .ri-nose {
+  opacity: 0.65;
+}
+.round-ink .ri-lip {
+  stroke-width: 10;
+}
+.round-ink .ri-tooth {
   fill: none;
-  stroke: #142327;
-  stroke-width: 8px;
+  stroke: var(--ri-cream);
+  stroke-width: 8;
   stroke-linecap: round;
 }
-.placeholder-face[data-mood="hype"] {
-  --face-tint: #f1dc84;
-  --face-brow-y: -5px;
+.round-ink .ri-tongue {
+  fill: #c58d78;
 }
-.placeholder-face[data-mood="salty"] {
-  --face-tint: #f1bba3;
-  --face-brow-y: 7px;
-  --face-lid-scale: 0.75;
+.round-ink .ri-zip .ri-line {
+  stroke-width: 7;
 }
-.placeholder-face[data-mood="chill"] {
-  --face-tint: #bcded5;
-  --face-lid-scale: 0.85;
+.round-ink .ri-zip-pull {
+  fill: var(--ri-cream);
+  stroke: var(--ri-ink);
+  stroke-width: 6;
+  stroke-linejoin: round;
 }
-.placeholder-face[data-mood="chaos"] {
-  --face-tint: #d0bef0;
+.round-ink .ri-pose-line,
+.round-ink .ri-reading-line {
+  stroke-width: 6;
 }
-.placeholder-face[data-mood="wholesome"] {
-  --face-tint: #e8c6d0;
-  --face-blush: #dc7d9b;
-  --face-blush-opacity: 0.75;
+.round-ink .ri-reading-line {
+  stroke-opacity: 0.7;
 }
-.placeholder-face[data-mood="confused"] {
-  --face-tint: #c3d5ef;
-  --face-brow-angle: -6deg;
+.round-ink .ri-breath,
+.round-ink .ri-aside-line,
+.round-ink .ri-gold {
+  fill: none;
+  stroke: var(--ri-cream);
+  stroke-width: 6;
+  stroke-linecap: round;
+}
+.round-ink .ri-aside-line {
+  stroke-width: 5;
+}
+.round-ink .ri-gold {
+  stroke: #e6be69;
+  stroke-width: 7;
+}
+.round-ink[data-mood="hype"] {
+  --ri-tint: #c6cf98;
+  --ri-left-brow-y: -10px;
+  --ri-right-brow-y: -10px;
+  --ri-left-brow-angle: -6deg;
+  --ri-right-brow-angle: 6deg;
+  --ri-left-lid: 1.08;
+  --ri-right-lid: 1.08;
+  --ri-blush: #cb9967;
+  --ri-blush-opacity: 0.5;
+}
+.round-ink[data-mood="salty"] {
+  --ri-tint: #bdbaa0;
+  --ri-left-brow-y: 12px;
+  --ri-right-brow-y: 12px;
+  --ri-left-brow-angle: 17deg;
+  --ri-right-brow-angle: -17deg;
+  --ri-left-lid: 0.63;
+  --ri-right-lid: 0.63;
+  --ri-blush: #b96f56;
+  --ri-blush-opacity: 0.55;
+}
+.round-ink[data-mood="chill"] {
+  --ri-tint: #a3bfac;
+  --ri-left-brow-y: 5px;
+  --ri-right-brow-y: 5px;
+  --ri-left-brow-angle: -3deg;
+  --ri-right-brow-angle: 3deg;
+  --ri-left-lid: 0.72;
+  --ri-right-lid: 0.72;
+  --ri-blush: #c89c82;
+  --ri-blush-opacity: 0.2;
+}
+.round-ink[data-mood="chaos"] {
+  --ri-tint: #b9c39a;
+  --ri-left-brow-y: -14px;
+  --ri-right-brow-y: 5px;
+  --ri-left-brow-angle: -19deg;
+  --ri-right-brow-angle: -11deg;
+  --ri-left-lid: 1.13;
+  --ri-right-lid: 0.69;
+  --ri-blush: #c48168;
+  --ri-blush-opacity: 0.48;
+}
+.round-ink[data-mood="wholesome"] {
+  --ri-tint: #c1c9a9;
+  --ri-left-brow-y: -3px;
+  --ri-right-brow-y: -3px;
+  --ri-left-brow-angle: -11deg;
+  --ri-right-brow-angle: 11deg;
+  --ri-left-lid: 0.88;
+  --ri-right-lid: 0.88;
+  --ri-blush: #cb8074;
+  --ri-blush-opacity: 0.76;
+}
+.round-ink[data-mood="confused"] {
+  --ri-tint: #a9bfb5;
+  --ri-left-brow-y: 10px;
+  --ri-right-brow-y: -15px;
+  --ri-left-brow-angle: 13deg;
+  --ri-right-brow-angle: -16deg;
+  --ri-left-lid: 0.69;
+  --ri-right-lid: 1.06;
+  --ri-blush: #b7907a;
+  --ri-blush-opacity: 0.29;
 }

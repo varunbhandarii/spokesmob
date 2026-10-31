@@ -1,144 +1,246 @@
 import type { Mood } from "../../../../packages/core/src/types.js";
 import { seededRandom } from "../view/random.js";
+import { createArtwork } from "./artwork.js";
 import type { FacePose, FaceRig, MouthShape } from "./types.js";
 import "./face.css";
 
 const clamp = (value: number, low = 0, high = 1) =>
   Number.isFinite(value) ? Math.max(low, Math.min(high, value)) : low;
-function svg<K extends keyof SVGElementTagNameMap>(
-  tag: K,
-  attrs: Record<string, string | number> = {},
-): SVGElementTagNameMap[K] {
-  const element = document.createElementNS("http://www.w3.org/2000/svg", tag);
-  for (const [key, value] of Object.entries(attrs)) element.setAttribute(key, String(value));
-  return element;
-}
-const POSES: Record<FacePose, { y: number; angle: number; scale: number }> = {
-  idle: { y: 0, angle: 0, scale: 1 },
-  thinking: { y: -5, angle: -5, scale: 1 },
-  inhale: { y: -8, angle: 0, scale: 1.025 },
-  speaking: { y: 0, angle: 0, scale: 1 },
-  aside: { y: 2, angle: 8, scale: 0.97 },
-  settle: { y: 5, angle: 0, scale: 0.98 },
-  reading: { y: 0, angle: -2, scale: 1 },
-  muted: { y: 0, angle: 0, scale: 1 },
-  asleep: { y: 12, angle: 5, scale: 0.97 },
+
+const REST = {
+  x: 0,
+  y: 0,
+  angle: 0,
+  sx: 1,
+  sy: 1,
+  leftLid: 1,
+  rightLid: 1,
+  leftBrowY: 0,
+  rightBrowY: 0,
+  leftBrowAngle: 0,
+  rightBrowAngle: 0,
+  gazeX: 0,
+  gazeY: 0,
+  mouthX: 0,
+  mouthY: 0,
+  mouthScale: 1,
+  thinking: 0,
+  inhale: 0,
+  aside: 0,
+  settle: 0,
+  reading: 0,
+  zip: 0,
+  sleep: 0,
 };
+type Posture = typeof REST;
+const posture = (values: Partial<Posture>): Posture => ({ ...REST, ...values });
+const POSES: Record<FacePose, Posture> = {
+  idle: posture({}),
+  thinking: posture({
+    y: -4,
+    angle: -8,
+    leftLid: 0.72,
+    leftBrowY: 9,
+    rightBrowY: -14,
+    leftBrowAngle: 12,
+    rightBrowAngle: -12,
+    gazeX: 0.55,
+    gazeY: -0.65,
+    mouthX: -15,
+    thinking: 1,
+  }),
+  inhale: posture({
+    y: -10,
+    sx: 1.025,
+    sy: 1.035,
+    leftLid: 1.12,
+    rightLid: 1.12,
+    leftBrowY: -15,
+    rightBrowY: -15,
+    mouthY: 5,
+    inhale: 1,
+  }),
+  speaking: posture({
+    y: -3,
+    leftBrowY: -5,
+    rightBrowY: -7,
+    leftBrowAngle: -4,
+    rightBrowAngle: 4,
+    sy: 1.01,
+  }),
+  aside: posture({
+    x: 7,
+    y: 4,
+    angle: 9,
+    sx: 0.95,
+    sy: 0.97,
+    leftLid: 0.66,
+    rightLid: 0.84,
+    leftBrowY: 4,
+    rightBrowY: -5,
+    rightBrowAngle: 8,
+    gazeX: -0.3,
+    mouthX: -11,
+    mouthScale: 0.86,
+    aside: 1,
+  }),
+  settle: posture({
+    y: 10,
+    sx: 1.035,
+    sy: 0.95,
+    leftLid: 0.57,
+    rightLid: 0.57,
+    leftBrowY: 7,
+    rightBrowY: 7,
+    gazeY: 0.15,
+    mouthY: -3,
+    settle: 1,
+  }),
+  reading: posture({
+    y: 3,
+    angle: -3,
+    leftLid: 0.8,
+    rightLid: 0.8,
+    leftBrowY: 5,
+    rightBrowY: 5,
+    leftBrowAngle: -8,
+    rightBrowAngle: 8,
+    gazeY: 0.85,
+    reading: 1,
+  }),
+  muted: posture({
+    leftLid: 0.82,
+    rightLid: 0.82,
+    leftBrowY: 3,
+    rightBrowY: 3,
+    zip: 1,
+  }),
+  asleep: posture({
+    y: 13,
+    angle: 10,
+    sx: 1.015,
+    sy: 0.95,
+    leftLid: 0,
+    rightLid: 0,
+    leftBrowY: 12,
+    rightBrowY: 12,
+    mouthScale: 0.8,
+    sleep: 1,
+  }),
+};
+
+function transform(node: SVGElement, x: number, y: number, angle = 0, sx = 1, sy = sx) {
+  node.setAttribute("transform", `translate(${x} ${y}) rotate(${angle}) scale(${sx} ${sy})`);
+}
+const opacity = (node: SVGElement, value: number) => node.setAttribute("opacity", String(value));
+
 export function createFace(options: { seed: number; size: number }): FaceRig {
+  const art = createArtwork(options.size);
+  const { element } = art;
   const random = seededRandom(options.seed);
-  const element = svg("svg", {
-    viewBox: "0 0 512 512",
-    width: options.size,
-    height: options.size,
-    "aria-label": "Spokesmob face",
-    role: "img",
-  });
-  element.classList.add("placeholder-face");
-  const body = svg("g");
-  const head = svg("circle", { cx: 256, cy: 256, r: 218, class: "face-head" });
-  const rim = svg("circle", { cx: 256, cy: 256, r: 235, class: "face-rim" });
-  const eyes = svg("g");
-  const eyeMood = svg("g", { class: "face-lids" });
-  const pupils = svg("g");
-  for (const x of [175, 337]) {
-    eyeMood.append(svg("ellipse", { cx: x, cy: 227, rx: 39, ry: 49, class: "face-eye" }));
-    pupils.append(svg("circle", { cx: x, cy: 231, r: 16, class: "face-pupil" }));
-  }
-  eyeMood.append(pupils);
-  eyes.append(eyeMood);
-  const brows = svg("g", { class: "face-brows" });
-  brows.append(svg("path", { d: "M136 158 Q173 140 210 156 M302 156 Q339 140 376 158" }));
-  const cheeks = svg("g", { class: "face-cheeks" });
-  for (const x of [123, 389]) cheeks.append(svg("ellipse", { cx: x, cy: 296, rx: 33, ry: 18 }));
-  const mouth = svg("g");
-  const shapes = new Map<MouthShape, SVGElement>();
-  for (const [shape, rx, ry] of [
-    ["closed", 42, 3],
-    ["mid", 43, 16],
-    ["open", 47, 36],
-    ["wide", 74, 42],
-    ["o", 26, 43],
-  ] as const) {
-    const part = svg("ellipse", { cx: 256, cy: 345, rx, ry, class: "face-mouth" });
-    shapes.set(shape, part);
-    mouth.append(part);
-  }
-  const zip = svg("g", { class: "face-zip" });
-  zip.append(
-    svg("path", {
-      d: "M188 345 H324 M200 333 V357 M222 333 V357 M244 333 V357 M266 333 V357 M288 333 V357 M310 333 V357",
-    }),
-  );
-  body.append(rim, head, cheeks, eyes, brows, mouth, zip);
-  element.append(body);
+  const driftOffset = random() * Math.PI * 2;
+  const driftPeriod = 1700 + random() * 700;
+  let blinkAt = 2800 + random() * 3200;
   let pose: FacePose = "idle";
-  const current = { ...POSES.idle };
-  let mood: Mood | null | undefined;
-  let hype: number | null | undefined;
+  const current = { ...REST };
+  let from = { ...REST };
+  let poseStart = 0;
+  let last = 0;
+  let gazeX = 0;
+  let gazeY = 0;
+  let targetX = 0;
+  let targetY = 0;
   let openness = 0;
   let shape: MouthShape = "closed";
-  let gaze = { x: 0, y: 0 };
-  let last: number | null = null;
-  let blinkAt = 2500 + random() * 3500;
+  let hype = 0;
   let destroyed = false;
+
   const rig: FaceRig = {
     element,
     setPose(value) {
+      if (destroyed || pose === value) return;
+      from = { ...current };
+      poseStart = last;
       pose = value;
       element.dataset.pose = value;
     },
-    setMood(value) {
-      if (mood === value) return;
-      mood = value;
-      element.dataset.mood = value ?? "neutral";
+    setMood(value: Mood | null) {
+      if (!destroyed) element.dataset.mood = value ?? "neutral";
     },
     setHype(value) {
-      if (hype === value) return;
-      hype = value;
+      if (destroyed) return;
+      hype = value === null ? 0 : 0.3 + clamp(value, 0, 5) * 0.1;
       element.dataset.hype = value === null ? "off" : "on";
     },
     setMouth(value, next) {
+      if (destroyed) return;
       openness = clamp(value);
       shape = next;
     },
     lookAt(x, y) {
-      gaze = { x: clamp(x, -1, 1), y: clamp(y, -1, 1) };
+      if (destroyed) return;
+      targetX = clamp(x, -1, 1);
+      targetY = clamp(y, -1, 1);
     },
-    update(now) {
-      if (destroyed || !Number.isFinite(now)) return;
-      const dt = last === null ? 200 : clamp(now - last, 0, 100);
+    update(nowMs) {
+      if (destroyed || !Number.isFinite(nowMs)) return;
+      const now = Math.max(last, nowMs);
+      const dt = now - last;
       last = now;
-      const mix = 1 - Math.exp(-dt / 60);
+      // A finite, interruptible 200 ms transition also settles on a single harness seek.
+      const progress = clamp((now - poseStart) / 200);
+      const ease = progress * progress * (3 - 2 * progress);
       const target = POSES[pose];
-      current.y += (target.y - current.y) * mix;
-      current.angle += (target.angle - current.angle) * mix;
-      current.scale += (target.scale - current.scale) * mix;
-      const drift = Math.sin(now / 1600) * 2;
-      body.setAttribute(
-        "transform",
-        "translate(0 " +
-          (current.y + drift) +
-          ") translate(256 256) rotate(" +
-          current.angle +
-          ") scale(" +
-          current.scale +
-          ") translate(-256 -256)",
-      );
-      if (now > blinkAt + 160) blinkAt = now + 2800 + random() * 4000;
-      const blink = now >= blinkAt ? Math.max(0.06, Math.abs(now - blinkAt - 80) / 80) : 1;
-      const lids = pose === "asleep" ? 0.05 : blink;
-      eyes.setAttribute("transform", `translate(0 227) scale(1 ${lids}) translate(0 -227)`);
-      pupils.setAttribute("transform", `translate(${gaze.x * 12} ${gaze.y * 9})`);
-      for (const [key, part] of shapes) {
-        part.style.opacity = pose === "muted" ? "0" : key === shape ? "1" : "0";
+      for (const key of Object.keys(REST) as (keyof Posture)[]) {
+        current[key] = from[key] + (target[key] - from[key]) * ease;
       }
-      mouth.setAttribute(
-        "transform",
-        "translate(0 345) scale(1 " +
-          (shape === "closed" ? 1 : Math.max(0.08, openness)) +
-          ") translate(0 -345)",
+      const follow = 1 - Math.exp(-dt / 45);
+      gazeX += (targetX - gazeX) * follow;
+      gazeY += (targetY - gazeY) * follow;
+      const drift = Math.sin(now / driftPeriod + driftOffset);
+      const breath = Math.sin(now / 1100 + driftOffset);
+      transform(
+        art.body,
+        256 + current.x,
+        256 + current.y + drift * 1.6 + current.sleep * breath * 1.5,
+        current.angle + drift * 0.35,
+        current.sx,
+        current.sy,
       );
-      zip.style.opacity = pose === "muted" ? "1" : "0";
+
+      // At most one gentle blink per 2.8 seconds; no timer, frame loop or clock read.
+      if (now > blinkAt + 180) blinkAt = now + 2800 + random() * 4200;
+      const blink = now >= blinkAt ? Math.abs(now - blinkAt - 90) / 90 : 1;
+      for (const [index, eye] of art.eyes.entries()) {
+        const lid = index === 0 ? current.leftLid : current.rightLid;
+        const opening = Math.max(0, lid * blink);
+        transform(eye.open, 0, 0, 0, 1, Math.max(0.025, opening));
+        opacity(eye.open, clamp(opening * 8));
+        opacity(eye.closed, 1 - clamp(opening * 4));
+        transform(
+          eye.pupil,
+          clamp(gazeX + current.gazeX, -1, 1) * 14,
+          clamp(gazeY + current.gazeY, -1, 1) * 11,
+        );
+        transform(
+          eye.browPose,
+          0,
+          index === 0 ? current.leftBrowY : current.rightBrowY,
+          index === 0 ? current.leftBrowAngle : current.rightBrowAngle,
+        );
+      }
+
+      // Pose articulation wraps the mouth; it never chooses its shape or envelope.
+      transform(art.mouth, 256 + current.mouthX, 344 + current.mouthY, 0, current.mouthScale);
+      for (const [key, part] of art.mouths) {
+        opacity(part, key === shape ? 1 : 0);
+        transform(part, 0, 0, 0, 1, key === "closed" ? 1 : 0.12 + openness * 0.88);
+      }
+      opacity(art.mouth, 1 - current.zip);
+      opacity(art.zip, current.zip);
+      opacity(art.gold, hype);
+      for (const key of ["thinking", "inhale", "aside", "settle", "reading", "sleep"] as const)
+        opacity(art.accents[key], current[key]);
       element.dataset.mouth = shape;
       element.dataset.openness = String(openness);
     },
@@ -147,9 +249,9 @@ export function createFace(options: { seed: number; size: number }): FaceRig {
       element.remove();
     },
   };
+  element.dataset.pose = pose;
   rig.setMood(null);
   rig.setHype(null);
-  rig.setPose("idle");
   rig.update(0);
   return rig;
 }
