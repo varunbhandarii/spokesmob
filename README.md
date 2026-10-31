@@ -164,6 +164,14 @@ Copy `.env.example` to `.env` and fill in your credentials locally. Keep credent
 | `SPEND_CAP_USD` | Per-stream spend cap; defaults to `5` USD |
 | `LOG_LEVEL` | Structured log verbosity; defaults to `info` |
 
+## Overlay visuals
+
+The Round Ink face follows verified audio, with a softer dissent pose, live mood and Hype Train accents. Captions appear when playback starts, or after the preview hold for a verified caption-only line. The dock shows the private preview and a countdown with Veto. Pending text never appears on the stream.
+
+Wide keeps the face and name particles near the lower-left; stage adds a large listening counter and a QR to your channel; compact uses a bottom bar. Agreement includes the voice count, dissent includes its own percentage, and the separate counter hides while agreement is displayed. Every layout shows the AI voice badge. The source follows the dock's layout selector unless its URL explicitly pins a layout.
+
+The [overlay guide](apps/overlay/README.md) covers the rig, text, layouts and synthetic scene harness. Run `npx playwright install chromium` once, then `npm run test:e2e` for browser checks and ignored scene screenshots. This suite also starts an isolated mock loop and plays a free verified tone; it does not use your credentials or call paid models. Unit and replay tests remain in `npm test`.
+
 ## OBS audio setup
 
 Run `npm run build`, then `npm start` and leave the server running. Startup saves the complete overlay URL beside the local token file and prints only its file path. In another terminal, run `npm run voice -- --copy-url` to copy the URL without displaying its token.

@@ -89,6 +89,16 @@ Spokesmob is a local Node 24 + TypeScript service plus an OBS browser-source ove
 - WebSocket roles are immutable: control clients receive logs/state and send actions, never PCM; overlays receive visuals/audio and cannot issue actions. HTTP controls require the local token, Host and Origin. Never log credential-bearing URLs.
 - Keep usage, unknown costs and reservations in the ledger. The retained beat log includes outcomes, gate/reason, latency stages and selected text. Cancelled or unknown calls must not be priced as zero without evidence. Cleanup must not reset active spend.
 
+## Overlay visuals
+- The original Round Ink SVG implements the named FaceRig interface in apps/overlay/src/face/types.ts. Keep its viewBox 0 0 512 512, nine poses, five mouth shapes and 200 ms pose blend.
+- One injected-clock animation loop drives the rig, captions and Canvas particles. Pause it while the OBS source is inactive. Pass a seed for blinks and drift; the rig owns no timers, animation-frame loop or clock reads.
+- Mouth motion follows local player RMS with gain 8, attack 30 ms and release 120 ms. Low-band energy may choose the round mouth; dissent scales openness to 60%. Ended audio closes over 250 ms; stop, veto, mute, kill and blocked states close immediately. Visual settings never change audio verification, mixer gain or filtering.
+- Pending line text stays hidden until the local main started report or a matching server reveal. Preview text is control-only. Stop-all blocks existing take IDs; a verified caption fallback uses a fresh later visual ID and remains vetoable. Never let a local timer reveal a line.
+- Render untrusted text with textContent or canvas text APIs, never innerHTML. Bundle fonts and assets locally; preserve the strict overlay/control CSP. Animate transform and opacity, with no more than three flashes per second.
+- Particle batches cap at 200 names, the pool at 400, cited names at 40, and displayed names at 24 Unicode characters. A clear wipes every particle. Explicit layout query parameters pin a source; otherwise follow state.layout.
+- Browser scenes use synthetic input only. After a scene seek, wait at least 300 ms before capture. Keep screenshots and browser output in ignored test-results; never commit them.
+- Keep browser checks separate from npm test. The live browser smoke uses an isolated OS temporary token folder, port 0, stubs and the free verified tone; no inherited application credentials or paid calls. Read private saved URLs silently and clean up the process and temporary folder.
+
 ## Safety invariants (tests must cover these; never weaken them)
 1. Raw chat text is never spoken. Only these are spoken: the verified line, the verified dissent, templated event lines, or an approved Grab-the-mic message.
 2. Agreement percent and voice counts are computed in `packages/core/agreement.ts` from author sets. Model-produced numbers are never displayed.
@@ -101,13 +111,13 @@ Spokesmob is a local Node 24 + TypeScript service plus an OBS browser-source ove
 
 ## Commands
 - `npm run dev`: reserved development command; currently a stub.
-- `npm run build`: build the overlay assets before starting the local server.
+- `npm run build`: build the overlay and control assets before starting the local server.
 - `npm start`: real Twitch listener, automatic beat loop and local overlay/control server with a single-instance lock. Eligible beats make paid consensus/voice calls; obtain approval before a live check.
 - `npm run setup`: Device Code Flow.
 - `npm run twitch:check -- --status`, `--listen 120`, or `--write`: authorization, typed events and guarded write verification.
 - `npm run record -- --minutes 2`: local JSONL capture; `--anonymize <input> <output> --replace-text` creates a fixture with synthetic text.
 - `npm test`: unit and replay tests. Must stay under 60 s, because the Stop hook runs it before any turn ends.
-- `npm run test:e2e`: reserved browser smoke-test command; currently a stub.
+- `npm run test:e2e`: Chromium scene, face, dock and isolated live-audio smoke checks; installs no browser automatically. Run npx playwright install chromium once. Never invokes paid models.
 - `npm run typecheck`, `npm run lint`
 - `npm run voice -- --tone`: free test tone through the server and OBS overlay.
 - `npm run voice -- --copy-url` or `--copy-url control`: copy the private overlay or dock URL without printing it.
