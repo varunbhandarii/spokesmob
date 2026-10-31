@@ -18,6 +18,7 @@ for (const layout of ["wide", "stage", "compact"])
       expect(response?.headers()["content-security-policy"]).toContain("script-src 'self'");
       await page.waitForFunction(() => !!window.scene);
       await page.evaluate((at) => window.scene.seek(at), CAPTURE_AT[scene]);
+      await page.waitForTimeout(300);
       // Let the advertised hold expire without a started/reveal event.
       if (scene === "preview") await page.waitForTimeout(1100);
       await expect(page.locator("#overlay")).toHaveAttribute("data-layout", layout);
@@ -55,6 +56,7 @@ test("face sheet contains every mood-mouth pair and every pose", async ({ page }
   await expect(page.locator("body")).toHaveAttribute("data-ready", "true");
   await expect(page.locator("#mood-grid svg")).toHaveCount(35);
   await expect(page.locator("#pose-grid svg")).toHaveCount(9);
+  await page.waitForTimeout(300);
   await page.screenshot({ path: info.outputPath("face-sheet.png"), fullPage: true });
   await page.screenshot({ path: resolve("test-results/face-sheet.png"), fullPage: true });
   expect(errors).toEqual([]);

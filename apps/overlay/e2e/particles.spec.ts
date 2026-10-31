@@ -19,6 +19,7 @@ test("name batches are bounded, cited names gather on started, and clear wipes t
       });
   });
   await expect(page.locator(".particle-canvas")).toHaveAttribute("data-count", "400");
+  await page.waitForTimeout(300);
   await page.screenshot({ path: info.outputPath("stage-particles.png") });
   await page.evaluate(() => window.scene.message({ type: "particles_clear" }));
   await expect(page.locator(".particle-canvas")).toHaveAttribute("data-count", "0");

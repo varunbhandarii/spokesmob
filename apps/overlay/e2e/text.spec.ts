@@ -16,6 +16,7 @@ for (const layout of ["wide", "stage", "compact"]) {
       await document.fonts.ready;
       window.scene.seek(4100);
     });
+    await page.waitForTimeout(300);
     await expect(page.locator(".agreement")).toHaveText("71% of 312 voices");
     await expect(page.locator(".counter")).toBeHidden();
     await expect(page.locator(layout === "compact" ? ".compact-dissent" : ".dissent")).toHaveText(
