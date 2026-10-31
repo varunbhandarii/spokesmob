@@ -161,7 +161,14 @@ export function createViewStore(
           clearedByStop = false;
           state = event.state;
           channel = event.channel;
-          pose = state.step === "synthesizing" ? "thinking" : "idle";
+          pose =
+            state.step === "synthesizing"
+              ? "thinking"
+              : state.step === "preview"
+                ? "inhale"
+                : state.step === "cooldown"
+                  ? "settle"
+                  : "idle";
           break;
         case "state":
           state = beatViewSchema.strip().parse(event);

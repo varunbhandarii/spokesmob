@@ -200,6 +200,11 @@ test("the live mock plays a verified tone, reveals on started and renders four h
     metrics.cleanupComplete = true;
     const report = JSON.stringify(metrics, null, 2);
     await writeFile(resolve("test-results/live-smoke.json"), `${report}\n`, "utf8");
+    await writeFile(
+      resolve(`test-results/live-smoke-${String(info.repeatEachIndex + 1)}.json`),
+      `${report}\n`,
+      "utf8",
+    );
     await info.attach("live-smoke-metrics", { body: report, contentType: "application/json" });
   }
 });

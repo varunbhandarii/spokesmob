@@ -1,5 +1,6 @@
 import { createFace } from "../face/index.js";
 import { LAYOUTS, type Zone } from "./layout.js";
+import { createLipSync, particleGaze } from "./lip-sync.js";
 import { createFrameLoop, type FrameClock } from "./loop.js";
 import { createParticleCanvas } from "./particle-canvas.js";
 import { createChannelQr } from "./qr.js";
@@ -40,6 +41,7 @@ export function createRenderer(options: {
   store: ViewStore;
   clock?: FrameClock;
   sample?: () => number;
+  lowBand?: () => number;
   seed?: number;
   harness?: boolean;
   beforeDraw?: (nowMs: number) => void;
@@ -80,6 +82,7 @@ export function createRenderer(options: {
   const qrLabel = make("qr-label", qr);
   const face = createFace({ seed: options.seed ?? 1729, size: 512 });
   faceHost.append(face.element);
+  const lips = createLipSync();
   const particles = createParticleCanvas(root, options.seed ?? 1729);
   write(badge.plate, "AI voice");
   write(bubble.plate, "\u2026");
@@ -107,7 +110,7 @@ export function createRenderer(options: {
       zones.particles,
       {
         x: zones.face.x + zones.face.width * 0.5,
-        y: zones.face.y + zones.face.height * (345 / 512),
+        y: zones.face.y + zones.face.height * (344 / 512),
       },
       view.particles,
     );
@@ -221,7 +224,7 @@ export function createRenderer(options: {
         : view.pose === "asleep"
           ? "The mob is resting"
           : options.harness
-            ? "Temporary face"
+            ? "Round Ink"
             : "",
     );
     stateTag.host.hidden = !stateTag.plate.textContent;
@@ -255,13 +258,24 @@ export function createRenderer(options: {
     face.setPose(view.pose);
     face.setMood(view.state.mood);
     face.setHype(view.state.hype?.level ?? null);
-    // The selected rig gets the audio envelope in its integration task.
-    const mouthOpenness = view.pose === "speaking" ? 0.65 : view.pose === "aside" ? 0.4 : 0;
-    root.dataset.mouthOpenness = mouthOpenness.toFixed(3);
-    face.setMouth(
-      mouthOpenness,
-      view.pose === "speaking" || view.pose === "aside" ? "open" : "closed",
+    const mouth = lips.update({
+      nowMs: now,
+      dtMs: dt,
+      pose: view.pose,
+      channel: view.audioChannel,
+      rms: view.rms,
+      lowBand: options.lowBand?.() ?? 0,
+    });
+    root.dataset.mouthOpenness = mouth.openness.toFixed(3);
+    root.dataset.mouthShape = mouth.shape;
+    face.setMouth(mouth.openness, mouth.shape);
+    const gaze = particleGaze(
+      view.pose === "idle" && view.state.step === "listening" ? particles.newestPosition() : null,
+      zones.face,
     );
+    root.dataset.gazeX = gaze.x.toFixed(3);
+    root.dataset.gazeY = gaze.y.toFixed(3);
+    face.lookAt(gaze.x, gaze.y);
     face.update(now);
   }, options.clock);
   loop.setActive(true);

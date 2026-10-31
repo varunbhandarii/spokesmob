@@ -191,3 +191,19 @@ test("raid banner expires after six seconds while hype remains in state", () => 
   now = 6000;
   expect(store.view().raid).toBeNull();
 });
+
+test.each([
+  ["synthesizing", "thinking"],
+  ["preview", "inhale"],
+  ["cooldown", "settle"],
+] as const)("reload restores %s pose without exposing prior line text", (step, pose) => {
+  const store = createViewStore();
+  store.receive({
+    type: "hello",
+    role: "overlay",
+    audio: true,
+    channel: "synthetic_channel",
+    state: { ...sceneState, step },
+  });
+  expect(store.view()).toMatchObject({ pose, caption: null });
+});

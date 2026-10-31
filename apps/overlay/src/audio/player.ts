@@ -1,6 +1,7 @@
 import type { AudioControl } from "../../../../packages/core/src/overlay-protocol.js";
 import type { AudioChannel, AudioChunk, PlaybackReport } from "../protocol.js";
 import type { PlayerCommand } from "./engine.js";
+import { lowBandShare } from "./spectrum.js";
 import workletUrl from "./worklet.ts?worker&url";
 
 interface ChannelGraph {
@@ -8,6 +9,7 @@ interface ChannelGraph {
   gain: GainNode;
   analyser: AnalyserNode;
   samples: Float32Array<ArrayBuffer>;
+  spectrum: Float32Array<ArrayBuffer>;
 }
 export interface AudioPlayer {
   control(message: AudioControl): void;
@@ -15,6 +17,7 @@ export interface AudioPlayer {
   enabled(value: boolean): void;
   stop(): void;
   rms(channel: AudioChannel): number;
+  lowBand(channel: AudioChannel): number;
   close(): Promise<void>;
 }
 
@@ -62,7 +65,13 @@ export async function createAudioPlayer(
       if (message.type === "ended" || message.type === "stopped") takes.delete(message.take);
       report(message);
     };
-    graphs[channel] = { node, gain, analyser, samples: new Float32Array(1024) };
+    graphs[channel] = {
+      node,
+      gain,
+      analyser,
+      samples: new Float32Array(1024),
+      spectrum: new Float32Array(analyser.frequencyBinCount),
+    };
   }
   const send = (channel: AudioChannel, message: PlayerCommand) =>
     graphs[channel].node.port.postMessage(message);
@@ -124,6 +133,11 @@ export async function createAudioPlayer(
       return Math.sqrt(
         graph.samples.reduce((sum, value) => sum + value * value, 0) / graph.samples.length,
       );
+    },
+    lowBand(channel) {
+      const graph = graphs[channel];
+      graph.analyser.getFloatFrequencyData(graph.spectrum);
+      return lowBandShare(graph.spectrum, context.sampleRate / graph.analyser.fftSize);
     },
     async close() {
       stop();

@@ -9,12 +9,14 @@ declare global {
       seek(at: number): void;
       message(value: unknown): boolean;
       playback(value: PlaybackReport): void;
+      audio(rms: number, lowBand?: number): void;
     };
   }
 }
 const query = new URLSearchParams(location.search);
 const scene = SCENES.find((item) => item === query.get("scene")) ?? "listening";
 let sceneTime = 0;
+let audioOverride: { rms: number; lowBand: number } | null = null;
 const store = createViewStore(query.get("layout"), () => sceneTime);
 const root = document.querySelector<HTMLElement>("#overlay");
 if (!root) throw new Error("Scene root unavailable");
@@ -32,6 +34,9 @@ const advance = (at: number) => {
   root.dataset.ready = "true";
 };
 window.scene = {
+  audio: (rms, lowBand = 0) => {
+    audioOverride = { rms, lowBand };
+  },
   message: (value) => store.receive(value),
   playback: (value) => store.playback(value),
   seek(at) {
@@ -41,11 +46,19 @@ window.scene = {
   },
 };
 const heading = document.querySelector("#scene-heading");
-if (heading) heading.textContent = `Synthetic scene / ${scene} / temporary face`;
+if (heading) heading.textContent = `Synthetic scene / ${scene} / Round Ink`;
 const renderer = createRenderer({
   root,
   store,
   harness: true,
+  sample: () =>
+    audioOverride?.rms ??
+    (store.view().audioChannel === "main"
+      ? 0.06
+      : store.view().audioChannel === "dissent"
+        ? 0.04
+        : 0),
+  lowBand: () => audioOverride?.lowBand ?? 0.2,
   beforeDraw: (now) => {
     if (!locked) advance(now);
   },

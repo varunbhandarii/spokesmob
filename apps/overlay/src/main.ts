@@ -19,6 +19,10 @@ if (!root) throw new Error("Overlay view unavailable");
 const renderer = createRenderer({
   root,
   store,
+  lowBand: () => {
+    const channel = store.view().audioChannel;
+    return player && channel ? player.lowBand(channel) : 0;
+  },
   sample: () => {
     const channel = store.view().audioChannel;
     return player && channel ? player.rms(channel) : 0;
