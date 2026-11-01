@@ -351,3 +351,19 @@ test("cost, health and logs are control-only and control replies cannot enable a
     }).success,
   ).toBe(false);
 });
+
+test("manual votes are control actions and split agreement visibility is a validated boolean", () => {
+  const command = {
+    type: "command",
+    request: "start-vote",
+    command: { action: "vote", a: "Gary", b: "Milo" },
+  };
+  expect(controlClientMessageSchema.safeParse(command).success).toBe(true);
+  expect(overlayClientMessageSchema.safeParse(command).success).toBe(false);
+  expect(serverOverlayMessageSchema.safeParse({ ...line, showAgreement: false }).success).toBe(
+    true,
+  );
+  expect(serverOverlayMessageSchema.safeParse({ ...line, showAgreement: "no" }).success).toBe(
+    false,
+  );
+});

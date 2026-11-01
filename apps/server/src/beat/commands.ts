@@ -1,6 +1,7 @@
 import type { Logger } from "pino";
 import type { Blocklist } from "../../../../packages/core/src/blocklist.js";
 import { formatAck } from "../../../../packages/core/src/chat-output.js";
+import { voteFailureMessage } from "../../../../packages/core/src/chat-vote.js";
 import { parseCommand } from "../../../../packages/core/src/commands.js";
 import {
   type ControlAction,
@@ -38,7 +39,13 @@ export class CommandRouter {
   ) {
     this.stopChat = options.bus.on("chat", (event) => {
       const command = parseCommand(event.text, event.fragments, event.author);
-      if (command) void this.execute(command);
+      if (command)
+        void this.execute(command)
+          .then(async (result) => {
+            if (command.action === "vote" && !result.ok)
+              await options.output.ack(`Vote not started: ${voteFailureMessage(result.reason)}`);
+          })
+          .catch(() => options.log.warn({ action: command.action }, "Chat command unavailable"));
     });
   }
   stop() {
@@ -55,6 +62,8 @@ export class CommandRouter {
     let ack = false;
     try {
       switch (command.action) {
+        case "vote":
+          return runner.startVote(command.a, command.b);
         case "question": {
           const request = ++this.questionRequest;
           const question = command.question.trim();

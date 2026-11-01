@@ -4,6 +4,17 @@ import { parseCommand } from "./commands.js";
 const moderator = { broadcaster: false, moderator: true };
 const broadcaster = { broadcaster: true, moderator: false };
 const viewer = { broadcaster: false, moderator: false };
+
+test("only broadcasters and moderators can start a vote, preserving both labels as data", () => {
+  for (const role of [broadcaster, moderator])
+    expect(parseCommand("!mob vote captain fluffington | milo", [], role)).toEqual({
+      action: "vote",
+      a: "captain fluffington",
+      b: "milo",
+    });
+  expect(parseCommand("!mob vote Gary | Milo", [], viewer)).toBeNull();
+  expect(parseCommand("!mob vote Gary", [], broadcaster)).toEqual({ action: "vote", a: "", b: "" });
+});
 const cases = [
   ["!mob on", { action: "on" }],
   [" !MOB   OFF ", { action: "off" }],

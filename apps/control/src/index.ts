@@ -122,6 +122,13 @@ questionForm.addEventListener("submit", (event) => {
   const question = questionInput.value.trim();
   if (question) dispatch({ action: "question", question });
 });
+element<HTMLFormElement>("vote-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  const form = element<HTMLFormElement>("vote-form");
+  const a = (form.elements.namedItem("a") as HTMLInputElement).value;
+  const b = (form.elements.namedItem("b") as HTMLInputElement).value;
+  dispatch({ action: "vote", a, b });
+});
 settingsForm.addEventListener("input", () => {
   draft = updateSettingsDraft(draft, { type: "edit" });
   element("settings-draft").hidden = false;
@@ -224,6 +231,12 @@ function renderLog() {
 }
 function render() {
   previewCard.update(model, connected);
+  element<HTMLButtonElement>("start-vote").disabled =
+    !connected ||
+    !model.state ||
+    model.state.step !== "listening" ||
+    !!model.state.heldBy.length ||
+    !!model.vote;
   element("demo-tag").hidden = !model.simulatedVoice;
   const state = model.state;
   element("beat-step").textContent = state?.step ?? "waiting";

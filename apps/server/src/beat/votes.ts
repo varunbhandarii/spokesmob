@@ -5,6 +5,7 @@ import {
   ChatVote,
   splitChoices,
   type VoteChoices,
+  validateVoteChoices,
 } from "../../../../packages/core/src/chat-vote.js";
 import type {
   ControlMessage,
@@ -35,10 +36,12 @@ export class SplitVotes {
   constructor(
     private readonly options: {
       enabled(): boolean;
+      resultMinimum?(): number;
+      onBallot?(event: Extract<TwitchEvent, { kind: "chat" }>): void;
       gagged(id: string): boolean;
       blocklist: Blocklist;
       moderation: Pick<ModerationGate, "resolve">;
-      safeTemplate(text: string): Promise<boolean>;
+      safeTemplate(text: string, signal?: AbortSignal): Promise<boolean>;
       overlay(message: OverlayMessage): void;
       control(message: ControlMessage): void;
       announce(text: string): Promise<void>;
@@ -94,7 +97,7 @@ export class SplitVotes {
         return null;
       const text = `Chat is split. Type 1 for ${choices[0]}, or 2 for ${choices[1]}.`;
       if (
-        !(await this.options.safeTemplate(text)) ||
+        !(await this.options.safeTemplate(text, signal)) ||
         signal.aborted ||
         version !== this.questionVersion ||
         !this.options.enabled()
@@ -109,8 +112,35 @@ export class SplitVotes {
       return null;
     }
   }
-  open(choices: VoteChoices) {
-    if (this.active || !this.options.enabled()) {
+  busy() {
+    return !!this.active || this.finishing;
+  }
+  async manual(a: string, b: string, names: readonly string[], signal: AbortSignal) {
+    if (this.busy()) return { proposal: null, reason: "vote_busy" };
+    const checked = validateVoteChoices(a, b, names, this.options.blocklist);
+    if (!checked.choices) return { proposal: null, reason: checked.reason };
+    const version = this.generation;
+    try {
+      const mapped = await this.options.moderation.resolve(checked.choices, signal);
+      if (
+        checked.choices.some((label) => {
+          const item = mapped.get(label);
+          return !item || moderationDecision(item) !== "allow";
+        })
+      )
+        return { proposal: null, reason: "vote_moderation" };
+      const text = `Vote time. Type 1 for ${checked.choices[0]}, or 2 for ${checked.choices[1]}.`;
+      const safe = await this.options.safeTemplate(text, signal);
+      if (signal.aborted || version !== this.generation)
+        return { proposal: null, reason: "vote_cancelled" };
+      if (!safe) return { proposal: null, reason: "vote_verification" };
+      return { proposal: { choices: checked.choices, text }, reason: null };
+    } catch {
+      return { proposal: null, reason: signal.aborted ? "vote_cancelled" : "vote_unavailable" };
+    }
+  }
+  open(choices: VoteChoices, manual = false) {
+    if (this.active || (!manual && !this.options.enabled())) {
       this.options.finish(null);
       return;
     }
@@ -137,7 +167,7 @@ export class SplitVotes {
     }, 250);
     this.deadline = atDeadline(this.clock, this.clock.now() + 30000, () => {
       if (this.active !== session) return;
-      const result = session.book.result();
+      const result = session.book.result(this.options.resultMinimum?.() ?? 3);
       this.clearTimers();
       this.active = null;
       this.finishing = true;
@@ -180,11 +210,15 @@ export class SplitVotes {
     this.active?.book.removeMessage(id);
   }
   isBallot(text: string) {
-    return !!this.active && ballotChoice(text, this.active.book.choices) !== null;
+    return (
+      !text.trimStart().startsWith("!") &&
+      !!this.active &&
+      ballotChoice(text, this.active.book.choices) !== null
+    );
   }
   acceptsChat(event: Extract<TwitchEvent, { kind: "chat" }>): boolean {
     const session = this.active;
-    if (!session) return true;
+    if (!session || event.text.trimStart().startsWith("!")) return true;
     const choice = ballotChoice(event.text, session.book.choices);
     if (choice === null) return true;
     const clear = session.cleared.get(event.author.id) ?? 0;
@@ -204,6 +238,7 @@ export class SplitVotes {
         )
           return;
         session.book.cast(event.author.id, event.id, choice, Date.parse(event.at));
+        this.options.onBallot?.(event);
       })
       .catch(() => undefined);
     return false;

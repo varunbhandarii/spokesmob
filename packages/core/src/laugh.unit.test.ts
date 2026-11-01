@@ -1,21 +1,38 @@
 import { expect, test } from "vitest";
-import { cutAtWord, LaughDetector } from "./laugh.js";
+import { cutAtWord, LaughDetector, laughAuthorThreshold } from "./laugh.js";
 
 const text = (value: string) => [{ type: "text" as const, text: value }];
+
+test("small rooms need two laughers and larger rooms scale up to four", () => {
+  expect([0, 3, 5, 6, 7, 8, 20].map(laughAuthorThreshold)).toEqual([2, 2, 2, 3, 3, 4, 4]);
+  const detector = new LaughDetector();
+  detector.shown("line", "Gary", 0);
+  expect(detector.observe("a", text("LUL"), 10, true, true, 4)).toBeNull();
+  expect(detector.observe("a", text("LUL"), 20, true, true, 4)).toBeNull();
+  expect(detector.observe("b", text("LUL"), 30, true, true, 4)?.id).toBe("line");
+});
+test("ordinary bursts wait for five seconds and still trigger without a seventh message", () => {
+  const detector = new LaughDetector();
+  detector.shown("line", "Gary", 0);
+  for (let i = 0; i < 6; i++)
+    expect(detector.observe(String(i % 3), text("nice"), 1000, true, true, 4)).toBeNull();
+  expect(detector.check(4999, true, true, 4)).toBeNull();
+  expect(detector.check(5000, true, true, 4)?.id).toBe("line");
+});
 test("four distinct laugh authors trigger once per shown line with a three-minute cooldown", () => {
   const detector = new LaughDetector();
   detector.shown("one", "Chat says Gary.", 0);
   for (let i = 0; i < 3; i++)
-    expect(detector.observe(`u${i}`, text("LUL"), 10, true, true)).toBeNull();
-  expect(detector.observe("u0", text("lol"), 11, true, true)).toBeNull();
-  expect(detector.observe("u3", text("KEKW"), 12, true, true)?.id).toBe("one");
-  expect(detector.observe("u4", text("lol"), 13, true, true)).toBeNull();
+    expect(detector.observe(`u${i}`, text("LUL"), 10, true, true, 10)).toBeNull();
+  expect(detector.observe("u0", text("lol"), 11, true, true, 10)).toBeNull();
+  expect(detector.observe("u3", text("KEKW"), 12, true, true, 10)?.id).toBe("one");
+  expect(detector.observe("u4", text("lol"), 13, true, true, 10)).toBeNull();
   detector.shown("two", "Milo", 1000);
   for (let i = 0; i < 5; i++)
-    expect(detector.observe(`u${i}`, text("LUL"), 1010, true, true)).toBeNull();
+    expect(detector.observe(`u${i}`, text("LUL"), 1010, true, true, 10)).toBeNull();
   detector.shown("three", "Gary", 180013);
-  for (let i = 0; i < 3; i++) detector.observe(`u${i}`, text("LUL"), 180014, true, true);
-  expect(detector.observe("u3", text("LUL"), 180014, true, true)?.id).toBe("three");
+  for (let i = 0; i < 3; i++) detector.observe(`u${i}`, text("LUL"), 180014, true, true, 10);
+  expect(detector.observe("u3", text("LUL"), 180014, true, true, 10)?.id).toBe("three");
 });
 test("rate trigger needs a sustained five-second rate, six messages and three distinct authors", () => {
   const detector = new LaughDetector();
@@ -39,8 +56,8 @@ test("a real ordinary-message burst clips, but two authors and a slow burst do n
     const detector = new LaughDetector();
     detector.shown("line", "Gary", 0);
     for (let i = 0; i < 5; i++)
-      expect(detector.observe(String(i % authors), text("great"), 1000, true, true)).toBeNull();
-    const result = detector.observe(String(5 % authors), text("great"), 1000, true, true);
+      expect(detector.observe(String(i % authors), text("great"), 5000, true, true)).toBeNull();
+    const result = detector.observe(String(5 % authors), text("great"), 5000, true, true);
     expect(result?.id ?? null).toBe(authors === 3 ? "line" : null);
   }
   const slow = new LaughDetector();

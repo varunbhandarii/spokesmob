@@ -80,6 +80,30 @@ async function openDock(page: Page) {
   return errors;
 }
 
+test("the dock submits two vote labels and explains a rejected label", async ({ page }) => {
+  const errors = await openDock(page);
+  await page.getByLabel("Choice 1").fill("Gary");
+  await page.getByLabel("Choice 2").fill("Milo");
+  await page.getByRole("button", { name: "Start vote", exact: true }).click();
+  const submitted = await page.evaluate(() => {
+    const harness = (window as unknown as { dockHarness: DockHarness }).dockHarness;
+    return harness.commands.find(
+      (value) => (value as { command?: { action: string } }).command?.action === "vote",
+    ) as { request: string; command: unknown };
+  });
+  expect(submitted.command).toEqual({ action: "vote", a: "Gary", b: "Milo" });
+  await page.evaluate((request) => {
+    (window as unknown as { dockHarness: DockHarness }).dockHarness.send({
+      type: "result",
+      request,
+      ok: false,
+      reason: "vote_label_words",
+    });
+  }, submitted.request);
+  await expect(page.locator("#notice")).toHaveText("Each label must be at most four words.");
+  expect(errors).toEqual([]);
+});
+
 test("the dock shows verified preview, countdown and a large veto with confirmed feedback", async ({
   page,
 }, info) => {

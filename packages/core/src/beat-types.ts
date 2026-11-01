@@ -241,6 +241,7 @@ export const beatLogRecordSchema = z.strictObject({
 export type BeatLogRecord = z.infer<typeof beatLogRecordSchema>;
 
 export type BeatEvent =
+  | { type: "manualVote"; line: BeatLine }
   | { type: "voteFinished"; line: BeatLine | null }
   | { type: "tick"; timer: BeatTimerKind; id: number }
   | { type: "windowReady"; windowId: number; voices: number; messages: number }

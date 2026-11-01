@@ -1,6 +1,13 @@
 import { expect, test } from "vitest";
 import { createBlocklist } from "./blocklist.js";
-import { ballotChoice, ChatVote, splitChoices, titleVoteLabel } from "./chat-vote.js";
+import {
+  ballotChoice,
+  ChatVote,
+  splitChoices,
+  titleVoteLabel,
+  validateVoteChoices,
+  voteMinimum,
+} from "./chat-vote.js";
 import type { Cluster } from "./types.js";
 
 const cluster = (key: string, authors: string[], exemplars = [key]): Cluster => ({
@@ -22,6 +29,40 @@ test("display labels are title case while matching remains folded", () => {
   expect(ballotChoice("CAPTAIN fluffington", ["Captain Fluffington", "Milo"])).toBe(0);
   expect(ballotChoice("gary", ["Gary", "Milo"])).toBe(0);
   expect(ballotChoice("MILO", ["Gary", "Milo"])).toBe(1);
+});
+
+test("four voices can form a supported two-versus-two split", () => {
+  const clusters = [cluster("gary", ["a", "b"]), cluster("milo", ["c", "d"])];
+  expect(splitChoices(clusters, 4, 2, [], createBlocklist())).toEqual(["Gary", "Milo"]);
+  expect(splitChoices(clusters, 4, 3, [], createBlocklist())).toBeNull();
+});
+test("manual labels reject long, unsafe, repeated or named choices without truncation", () => {
+  const blocklist = createBlocklist({ channelTerms: ["forbiddenfruit"] });
+  expect(validateVoteChoices("captain fluffington", "milo", [], blocklist).choices).toEqual([
+    "Captain Fluffington",
+    "Milo",
+  ]);
+  for (const a of [
+    "a".repeat(26),
+    "one two three four five",
+    "https://example.com",
+    "@someone",
+    "123456789",
+    "forbiddenfruit",
+    "Guest One",
+  ])
+    expect(validateVoteChoices(a, "Milo", ["Guest One"], blocklist).choices).toBeNull();
+  expect(validateVoteChoices("MILO", "milo", [], blocklist).reason).toBe("vote_labels_same");
+});
+test("small-chat result minimum respects configured voices while larger rooms require three", () => {
+  expect(voteMinimum(1, 6)).toBe(2);
+  expect(voteMinimum(3, 6)).toBe(3);
+  expect(voteMinimum(2, 7)).toBe(3);
+  const vote = new ChatVote(["Gary", "Milo"]);
+  vote.cast("a", "a", 0, 0);
+  vote.cast("b", "b", 0, 0);
+  expect(vote.result(voteMinimum(2, 4)).text).toBe("Gary wins, 100% of 2 voices.");
+  expect(vote.result(voteMinimum(2, 7)).text).toBe("Not enough votes to call it.");
 });
 test("close supported splits use deterministic shortest normalized labels", () => {
   const clusters = [

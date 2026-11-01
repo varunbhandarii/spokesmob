@@ -1,6 +1,7 @@
 import type { BeatSettings } from "../../../packages/core/src/beat-settings.js";
 import { DEFAULT_BEAT_SETTINGS } from "../../../packages/core/src/beat-settings.js";
 import type { BeatLogRecord, BeatView, HeldReason } from "../../../packages/core/src/beat-types.js";
+import { voteFailureMessage } from "../../../packages/core/src/chat-vote.js";
 import type { ControlAction, ControlMessage } from "../../../packages/core/src/overlay-protocol.js";
 
 import { createPreviewState, type PreviewState, receivePreview } from "./preview.js";
@@ -134,6 +135,7 @@ export function codeLabel(value: string | null): string {
   return /^[a-z][a-z0-9_]{0,79}$/.test(value) ? value.replaceAll("_", " ") : "Details unavailable";
 }
 export function commandFailure(reason: string | null): string {
+  if (reason?.startsWith("vote_")) return voteFailureMessage(reason);
   switch (reason) {
     case "blocked_term":
       return "That text was blocked by the channel's safety rules.";

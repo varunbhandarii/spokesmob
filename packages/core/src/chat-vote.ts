@@ -22,6 +22,64 @@ export function ballotChoice(text: string, choices: VoteChoices): 0 | 1 | null {
   if (value === "2" || value === fold(choices[1])) return 1;
   return null;
 }
+export const voteMinimum = (minVoices: number, chatters: number) =>
+  chatters <= 6 ? Math.max(2, minVoices) : 3;
+function validateVoteLabel(raw: string, names: readonly string[], blocklist: Blocklist) {
+  const display = titleVoteLabel(raw);
+  if (!display) return { label: null, reason: "vote_labels_required" };
+  if ([...display].length > 25) return { label: null, reason: "vote_label_length" };
+  if (wordTokens(display).length > 4) return { label: null, reason: "vote_label_words" };
+  if (["1", "2"].includes(display)) return { label: null, reason: "vote_label_ambiguous" };
+  const check = verifyTemplated(display, {
+    blocklist,
+    moderation: { status: "ok", flagged: false },
+  });
+  if (!check.ok) return { label: null, reason: "vote_label_hygiene" };
+  const tokens = wordTokens(display).map(fold);
+  if (
+    names.some((name) => {
+      const target = wordTokens(name).map(fold);
+      return (
+        target.length > 0 &&
+        tokens.some((_, i) => target.every((token, j) => tokens[i + j] === token))
+      );
+    })
+  )
+    return { label: null, reason: "vote_label_username" };
+  return { label: display, reason: null };
+}
+export function validateVoteChoices(
+  a: string,
+  b: string,
+  names: readonly string[],
+  blocklist: Blocklist,
+): { choices: VoteChoices | null; reason: string | null } {
+  const first = validateVoteLabel(a, names, blocklist),
+    second = validateVoteLabel(b, names, blocklist);
+  if (!first.label || !second.label)
+    return { choices: null, reason: first.reason ?? second.reason };
+  if (fold(first.label) === fold(second.label))
+    return { choices: null, reason: "vote_labels_same" };
+  return { choices: [first.label, second.label], reason: null };
+}
+export function voteFailureMessage(reason: string | null): string {
+  const messages: Record<string, string> = {
+    vote_labels_required: "Enter two labels, or use !mob vote A | B.",
+    vote_label_length: "Each label must be at most 25 characters.",
+    vote_label_words: "Each label must be at most four words.",
+    vote_label_ambiguous: "Labels cannot be the ballot numbers 1 or 2.",
+    vote_label_hygiene: "A label contains blocked or unsafe text.",
+    vote_label_username: "Labels cannot contain chatter usernames.",
+    vote_labels_same: "Choose two different labels.",
+    vote_moderation: "A label did not pass moderation.",
+    vote_verification: "The vote prompt did not pass verification.",
+    vote_unavailable: "Vote checks are unavailable; try again.",
+    vote_busy: "Wait for the current line, cooldown or vote to finish.",
+    vote_blocked: "Turn on the loop and check live, audio, mute, kill and spend gates.",
+    vote_cancelled: "The request was cancelled by a control or safety change.",
+  };
+  return messages[reason ?? ""] ?? "The vote could not start.";
+}
 export function splitChoices(
   clusters: readonly Cluster[],
   voices: number,
@@ -38,8 +96,8 @@ export function splitChoices(
     !a ||
     !b ||
     voices < minVoices ||
-    a.authorCount < Math.max(3, minVoices) ||
-    b.authorCount < Math.max(3, minVoices)
+    a.authorCount < Math.max(minVoices, Math.max(2, Math.min(3, Math.ceil(0.25 * voices)))) ||
+    b.authorCount < Math.max(minVoices, Math.max(2, Math.min(3, Math.ceil(0.25 * voices))))
   )
     return null;
   if (
@@ -58,26 +116,7 @@ export function splitChoices(
       return null;
     const value = cutAtWord(shortest.split(/\s+/u).slice(0, 4).join(" "), 25);
     if (!value || wordTokens(value).length > 4 || ["1", "2"].includes(value)) return null;
-    const tokens = wordTokens(value).map(fold);
-    if (
-      names.some((name) => {
-        const target = wordTokens(name).map(fold);
-        return (
-          target.length > 0 &&
-          tokens.some((_, index) =>
-            target.every((token, offset) => tokens[index + offset] === token),
-          )
-        );
-      })
-    )
-      return null;
-    const display = titleVoteLabel(value);
-    if (
-      [...display].length > 25 ||
-      !verifyTemplated(display, { blocklist, moderation: { status: "ok", flagged: false } }).ok
-    )
-      return null;
-    return display;
+    return validateVoteLabel(value, names, blocklist).label;
   };
   const first = label(a),
     second = label(b);
@@ -103,7 +142,7 @@ export class ChatVote {
     for (const ballot of this.ballots.values()) counts[ballot.choice]++;
     return counts;
   }
-  result() {
+  result(minVoters = 3) {
     const counts = this.counts(),
       n = this.ballots.size;
     const winner = counts[0] >= counts[1] ? 0 : 1;
@@ -116,7 +155,7 @@ export class ChatVote {
       pct,
       counts,
       text:
-        n < 3
+        n < minVoters
           ? "Not enough votes to call it."
           : counts[0] === counts[1]
             ? `It's a tie between ${this.choices[0]} and ${this.choices[1]}.`

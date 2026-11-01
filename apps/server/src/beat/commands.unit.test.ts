@@ -333,3 +333,39 @@ test("settings, layout and cap persist while the offline test switch remains ses
   expect(JSON.stringify(f.store.settings.list())).not.toContain("testOffline");
   expect(f.store.settings.get()).toMatchObject({ minVoices: 1, holdMs: 750, spendCapUsd: 5 });
 });
+
+test.each(["broadcaster", "moderator"] as const)(
+  "manual vote chat commands enforce roles and explain invalid labels for %s",
+  async (role) => {
+    const f = fixture();
+    f.chat("!mob vote Gary | Milo", "viewer");
+    await vi.advanceTimersByTimeAsync(0);
+    expect(f.runner.state.current).toBeNull();
+    expect(f.sent).toEqual([]);
+    f.chat("!mob vote forbiddenfruit | Milo", "moderator");
+    await vi.advanceTimersByTimeAsync(0);
+    expect(f.sent[0]).toContain("blocked or unsafe");
+    f.chat("!mob vote Gary | Milo", role);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(f.runner.state.current?.line?.text).toBe("Vote time. Type 1 for Gary, or 2 for Milo.");
+    expect(f.runner.state.collection?.voices).toBe(0);
+  },
+);
+test("manual vote errors explain moderation failure, bad syntax and safety gates", async () => {
+  const f = fixture(
+    new FakeModerationPort((texts) => texts.map(() => ({ ...clearModeration(), flagged: true }))),
+  );
+  expect(await f.commands.execute({ action: "vote", a: "Gary", b: "Milo" })).toMatchObject({
+    ok: false,
+    reason: "vote_moderation",
+  });
+  expect(await f.commands.execute({ action: "vote", a: "", b: "" })).toMatchObject({
+    ok: false,
+    reason: "vote_labels_required",
+  });
+  f.runner.dispatch({ type: "mute", minutes: 1 });
+  expect(await f.commands.execute({ action: "vote", a: "Gary", b: "Milo" })).toMatchObject({
+    ok: false,
+    reason: "vote_blocked",
+  });
+});

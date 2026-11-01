@@ -21,6 +21,15 @@ export function parseCommand(
     const question = ask[1]?.trim() ?? "";
     return question.length > 0 && question.length <= 100 ? { action: "question", question } : null;
   }
+  const vote = /^!mob\s+vote(?:\s+(.*))?$/isu.exec(input);
+  if (vote) {
+    const labels = (vote[1] ?? "").split("|");
+    return {
+      action: "vote",
+      a: labels.length === 2 ? (labels[0]?.trim() ?? "") : "",
+      b: labels.length === 2 ? (labels[1]?.trim() ?? "") : "",
+    };
+  }
   const parts = input.split(/\s+/u);
   if (parts[0]?.toLowerCase() !== "!mob") return null;
   const action = parts[1]?.toLowerCase();

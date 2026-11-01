@@ -71,6 +71,7 @@ export const activeMessageSchema = z.strictObject({
   active: z.boolean(),
 });
 export const controlActionSchema = z.discriminatedUnion("action", [
+  z.strictObject({ action: z.literal("vote"), a: z.string().max(500), b: z.string().max(500) }),
   z.strictObject({ action: z.enum(["on", "off", "speak", "veto", "unmute", "kill", "clear"]) }),
   z.strictObject({
     action: z.literal("mute"),

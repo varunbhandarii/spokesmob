@@ -53,6 +53,7 @@ function fixture(
     moderation?: ModerationPort;
     voiceReadyMs?: number;
     sendDelayMs?: number;
+    minVoices?: number;
   } = {},
 ) {
   const db = openStorage(":memory:");
@@ -100,6 +101,7 @@ function fixture(
     settings: resolveBeatSettings({
       mode: options.quiet ? "quiet" : "auto",
       spendCapUsd: options.cap ?? 5,
+      minVoices: options.minVoices ?? 2,
       ...(options.windowS === undefined ? {} : { windowS: options.windowS }),
     }),
     sessionId: "sample",
@@ -723,7 +725,107 @@ test("ballots never contribute to the ordinary-message laugh burst", async () =>
   for (let i = 0; i < 20; i++) f.chat(`voter${i}`, "1", `ballot${i}`);
   await vi.advanceTimersByTimeAsync(0);
   expect(f.clips.capture).not.toHaveBeenCalled();
+  await vi.advanceTimersByTimeAsync(4000);
   f.chat("sixth", "nice choice");
   await vi.advanceTimersByTimeAsync(0);
   expect(f.clips.capture).toHaveBeenCalledTimes(1);
+});
+
+test("four-chatters replay supports a two-versus-two split, two-voter result and two-laugher capture", async () => {
+  const f = fixture({ quiet: true, windowS: 5 });
+  f.runner.dispatch({ type: "question", question: "Name the cat?" });
+  f.chat("a", "Gary");
+  f.chat("b", "Gary");
+  f.chat("c", "Milo");
+  f.chat("d", "Milo");
+  await vi.advanceTimersByTimeAsync(10000);
+  expect(f.runner.state.voteOpen).toBe(true);
+  f.chat("a", "1", "vote-a");
+  f.chat("b", "1", "vote-b");
+  f.chat("a", "LUL", "laugh-a");
+  f.chat("b", "LUL", "laugh-b");
+  await vi.advanceTimersByTimeAsync(0);
+  expect(f.clips.capture).toHaveBeenCalledTimes(1);
+  await vi.advanceTimersByTimeAsync(34000);
+  expect(f.calls.find((call) => call.action === "send")?.text).toContain(
+    "Gary wins, 100% of 2 voices.",
+  );
+});
+test("manual replay needs no question, preserves preview and posts only the verified result", async () => {
+  const f = fixture({ quiet: true });
+  expect(await f.runner.startVote("gary", "milo")).toEqual({ ok: true, reason: null });
+  expect(f.runner.state.step).toBe("preview");
+  expect(f.overlay.find((message) => message.type === "line")).toMatchObject({
+    text: "Vote time. Type 1 for Gary, or 2 for Milo.",
+    showAgreement: false,
+  });
+  expect(f.calls).toHaveLength(0);
+  await vi.advanceTimersByTimeAsync(4000);
+  expect(f.runner.state.voteOpen).toBe(true);
+  expect(await f.runner.startVote("cat", "dog")).toEqual({ ok: false, reason: "vote_busy" });
+  f.chat("a", "1");
+  f.chat("b", "gary");
+  await vi.advanceTimersByTimeAsync(34000);
+  expect(f.calls.find((call) => call.action === "send")?.text).toContain(
+    "Gary wins, 100% of 2 voices.",
+  );
+  expect(f.calls.filter((call) => call.action === "pin")).toHaveLength(1);
+  await vi.advanceTimersByTimeAsync(2000);
+  expect(await f.runner.startVote("Biscuit", "Milo")).toMatchObject({ ok: true });
+});
+test("manual replay veto and mute cancel the vote before it can open", async () => {
+  for (const action of ["veto", "kill"] as const) {
+    const f = fixture({ quiet: true });
+    await f.runner.startVote("Gary", "Milo");
+    f.runner.dispatch({ type: action });
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(f.runner.state.voteOpen).toBe(false);
+    expect(f.calls.some((call) => call.action === "announce")).toBe(false);
+  }
+});
+
+test.each([3, 7])(
+  "two ballots are insufficient with configured support or a larger room (%s)",
+  async (size) => {
+    const f = fixture({ quiet: true, minVoices: size === 3 ? 3 : 2 });
+    if (size === 7) for (let i = 0; i < 7; i++) f.chat(`guest${i}`, "hello");
+    await f.runner.startVote("Gary", "Milo");
+    await vi.advanceTimersByTimeAsync(4000);
+    f.chat("guest0", "1", "ballot0");
+    f.chat("guest1", "1", "ballot1");
+    await vi.advanceTimersByTimeAsync(34000);
+    expect(f.calls.find((call) => call.action === "send")?.text).toContain(
+      "Not enough votes to call it.",
+    );
+  },
+);
+test("manual requests bypass an automatic vote's question limit and cooldown", async () => {
+  const f = splitFixture();
+  await vi.advanceTimersByTimeAsync(10000);
+  f.chat("gary0", "1", "ballot0");
+  f.chat("gary1", "1", "ballot1");
+  await vi.advanceTimersByTimeAsync(36000);
+  expect(await f.runner.startVote("Biscuit", "Milo")).toMatchObject({ ok: true });
+});
+test("a simultaneous second manual request is refused and a mute prevents late preview", async () => {
+  const f = fixture({ quiet: true });
+  const first = f.runner.startVote("Gary", "Milo");
+  expect(await f.runner.startVote("Biscuit", "Milo")).toMatchObject({
+    ok: false,
+    reason: "vote_busy",
+  });
+  f.runner.dispatch({ type: "mute", minutes: 1 });
+  expect(await first).toMatchObject({ ok: false });
+  expect(f.overlay.some((message) => message.type === "line")).toBe(false);
+});
+
+test("clear cancels a manual vote even when there was no active question", async () => {
+  const f = fixture({ quiet: true });
+  await f.runner.startVote("Gary", "Milo");
+  await vi.advanceTimersByTimeAsync(4000);
+  expect(f.runner.state.voteOpen).toBe(true);
+  f.runner.dispatch({ type: "question", question: null });
+  await vi.advanceTimersByTimeAsync(31000);
+  expect(f.runner.state.voteOpen).toBe(false);
+  expect(f.calls.some((call) => call.action === "send")).toBe(false);
 });

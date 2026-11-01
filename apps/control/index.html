@@ -45,6 +45,11 @@
         <p id="current-question" class="current-question">No active question</p>
         <form id="question-form"><label for="question-input" class="sr-only">Question</label><textarea id="question-input" rows="2" maxlength="100" placeholder="Name my cat?"></textarea><div class="button-row"><button type="submit" class="accent">Ask &amp; announce</button><button type="button" data-action="clear">Clear</button></div></form>
       </section>
+      <section class="card" aria-labelledby="start-vote-title">
+        <h2 id="start-vote-title">Start vote</h2>
+        <p class="small muted-text">Two labels, each at most four words and 25 characters. Wait for the current unit or vote to finish.</p>
+        <form id="vote-form"><label class="setting-row">Choice 1<input name="a" maxlength="25" required placeholder="Gary"></label><label class="setting-row">Choice 2<input name="b" maxlength="25" required placeholder="Milo"></label><button id="start-vote" type="submit" class="accent">Start vote</button></form>
+      </section>
       <section class="card log-card" aria-labelledby="log-title">
         <div class="card-heading"><h2 id="log-title">Beat log</h2><button type="button" id="export-log" class="text-button">Export log</button></div>
         <p class="small muted-text">Newest 200 shown. Export includes retained history.</p>

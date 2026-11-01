@@ -14,6 +14,7 @@ import {
 } from "../../../../packages/core/src/beat-types.js";
 import type { Blocklist } from "../../../../packages/core/src/blocklist.js";
 import type { ChatVote, VoteChoices } from "../../../../packages/core/src/chat-vote.js";
+import { voteMinimum } from "../../../../packages/core/src/chat-vote.js";
 import { modelCost } from "../../../../packages/core/src/cost.js";
 import {
   beatMoodSignals,
@@ -21,10 +22,12 @@ import {
   reduceEventLine,
 } from "../../../../packages/core/src/event-lines.js";
 import { LaughDetector } from "../../../../packages/core/src/laugh.js";
+import { fromTwitchChat } from "../../../../packages/core/src/normalize.js";
 import type {
   ControlMessage,
   OverlayMessage,
 } from "../../../../packages/core/src/overlay-protocol.js";
+import { RecentChat } from "../../../../packages/core/src/recent-chat.js";
 import { verifyTemplated } from "../../../../packages/core/src/verify.js";
 import { assembleWindow } from "../../../../packages/core/src/window.js";
 import { atDeadline, type Clock, systemClock } from "../clock.js";
@@ -67,13 +70,17 @@ export interface BeatRunnerOptions {
   paidModel: boolean;
   paidVoice: boolean;
   simulated?: boolean;
+  channelName?: string;
   clips?: Pick<ClipCapture, "capture" | "stop">;
   apiFailure?(source: "model" | "voice"): void;
 }
 export class BeatRunner {
   state: BeatState;
   private readonly votes: SplitVotes;
-  private readonly voteProposals = new Map<number, VoteChoices>();
+  private readonly voteProposals = new Map<number, { choices: VoteChoices; manual: boolean }>();
+  private readonly activity = new RecentChat();
+  private manualPending = false;
+  private manualController: AbortController | null = null;
   private readonly laughs = new LaughDetector();
   private readonly shownEnds = new Map<number, number>();
   private readonly clock: Clock;
@@ -133,10 +140,13 @@ export class BeatRunner {
     this.moderation = new ModerationGate({ port: options.moderation, clock: this.clock });
     this.votes = new SplitVotes({
       enabled: () => this.state.settings.splitVotes,
+      resultMinimum: () =>
+        voteMinimum(this.state.settings.minVoices, this.activity.distinct(this.clock.now())),
+      onBallot: (event) => this.activity.observe(fromTwitchChat(event)),
       gagged: (id) => this.options.store.gags.list().includes(id),
       blocklist: options.blocklist,
       moderation: this.moderation,
-      safeTemplate: (text) => this.verifyTemplate(text),
+      safeTemplate: (text, signal) => this.verifyTemplate(text, signal),
       overlay: options.overlay,
       control: (message) => options.control?.(message),
       announce: (text) => options.output.announceVote(text),
@@ -208,6 +218,15 @@ export class BeatRunner {
   dispatch(event: BeatEvent) {
     if (this.stopped) return;
     if (
+      ["off", "mute", "kill", "question"].includes(event.type) ||
+      (event.type === "gate" &&
+        (event.changes.online === false ||
+          event.changes.capped === true ||
+          event.changes.audioActive === false ||
+          event.changes.audioConnected === false))
+    )
+      this.manualController?.abort();
+    if (
       ["mute", "kill", "off", "veto", "invalidate"].includes(event.type) ||
       (event.type === "gate" && event.changes.online === false)
     )
@@ -243,6 +262,7 @@ export class BeatRunner {
   }
   invalidateGag(userId: string) {
     this.votes.removeAuthor(userId);
+    this.activity.removeAuthor(userId);
     this.particleNames = [];
     this.options.overlay({ type: "particles_clear" });
     const source = this.state.current
@@ -291,7 +311,19 @@ export class BeatRunner {
   private current(id: number) {
     return this.allowed() && this.state.current?.id === id;
   }
+  private capture(result: { text: string } | null) {
+    if (result && this.options.clips)
+      this.task(() => this.options.clips?.capture(result.text) ?? Promise.resolve(), "capture");
+  }
   private sampleWindow() {
+    this.capture(
+      this.laughs.check(
+        this.clock.now(),
+        this.state.settings.autoClip,
+        this.state.gates.online,
+        this.activity.distinct(this.clock.now()),
+      ),
+    );
     if (!this.state.collection) return;
     const started = performance.now();
     const snapshot = this.collector.snapshot();
@@ -341,6 +373,12 @@ export class BeatRunner {
         !event.self &&
         !event.text.trimStart().startsWith("!") &&
         !this.options.store.gags.list().includes(event.author.id)
+      )
+        this.activity.observe(fromTwitchChat(event));
+      if (
+        !event.self &&
+        !event.text.trimStart().startsWith("!") &&
+        !this.options.store.gags.list().includes(event.author.id)
       ) {
         const capture = this.laughs.observe(
           event.author.id,
@@ -348,12 +386,9 @@ export class BeatRunner {
           this.clock.now(),
           this.state.settings.autoClip,
           this.state.gates.online,
+          this.activity.distinct(this.clock.now()),
         );
-        if (capture && this.options.clips)
-          this.task(
-            () => this.options.clips?.capture(capture.text) ?? Promise.resolve(),
-            "capture",
-          );
+        this.capture(capture);
       }
       if (
         !this.state.collection ||
@@ -370,9 +405,16 @@ export class BeatRunner {
       event.kind === "chatClearUser" ||
       event.kind === "chatClear"
     ) {
-      if (event.kind === "chatClear") this.votes.cancel("chat cleared");
-      else if (event.kind === "chatClearUser") this.votes.removeAuthor(event.userId);
-      else this.votes.removeMessage(event.messageId);
+      if (event.kind === "chatClear") {
+        this.votes.cancel("chat cleared");
+        this.activity.clear();
+      } else if (event.kind === "chatClearUser") {
+        this.votes.removeAuthor(event.userId);
+        this.activity.removeAuthor(event.userId);
+      } else {
+        this.votes.removeMessage(event.messageId);
+        this.activity.removeMessage(event.messageId);
+      }
       this.particleNames = [];
       this.options.overlay({ type: "particles_clear" });
       const source = this.state.current
@@ -421,7 +463,7 @@ export class BeatRunner {
         break;
       case "openVote": {
         const choices = this.voteProposals.get(effect.beatId);
-        if (choices) this.votes.open(choices);
+        if (choices) this.votes.open(choices.choices, choices.manual);
         else this.dispatch({ type: "voteFinished", line: null });
         break;
       }
@@ -701,6 +743,51 @@ export class BeatRunner {
       }
     }
   }
+  async startVote(a: string, b: string): Promise<{ ok: boolean; reason: string | null }> {
+    if (!this.allowed()) return { ok: false, reason: "vote_blocked" };
+    if (
+      this.manualPending ||
+      this.votes.busy() ||
+      this.state.voteOpen ||
+      this.state.step !== "listening"
+    )
+      return { ok: false, reason: "vote_busy" };
+    this.manualPending = true;
+    const controller = new AbortController();
+    this.manualController = controller;
+    try {
+      const names = this.activity.names(this.clock.now());
+      if (this.options.channelName) names.push(this.options.channelName);
+      const checked = await this.votes.manual(a, b, names, controller.signal);
+      if (!checked.proposal) return { ok: false, reason: checked.reason };
+      if (!this.allowed()) return { ok: false, reason: "vote_blocked" };
+      if (this.state.step !== "listening" || this.state.voteOpen || this.votes.busy())
+        return { ok: false, reason: "vote_busy" };
+      const line: BeatLine = {
+        text: checked.proposal.text,
+        dissent: null,
+        dissentPct: null,
+        pct: 0,
+        voices: 0,
+        mood: "chill",
+        question: this.state.question,
+        answersQuestion: true,
+        templated: true,
+        showAgreement: false,
+        citedNames: [],
+        citedExemplars: [],
+        raidName: null,
+      };
+      this.dispatch({ type: "manualVote", line });
+      const beat = this.state.current;
+      if (beat?.purpose !== "split") return { ok: false, reason: "vote_cancelled" };
+      this.voteProposals.set(beat.id, { choices: checked.proposal.choices, manual: true });
+      return { ok: true, reason: null };
+    } finally {
+      this.manualPending = false;
+      this.manualController = null;
+    }
+  }
   private finishVote(result: ReturnType<ChatVote["result"]> | null) {
     if (!result) {
       this.dispatch({ type: "voteFinished", line: null });
@@ -732,16 +819,18 @@ export class BeatRunner {
       this.dispatch({ type: "voteFinished", line });
     }, "voteResult");
   }
-  private async verifyTemplate(text: string): Promise<boolean> {
+  private async verifyTemplate(text: string, signal?: AbortSignal): Promise<boolean> {
+    if (signal?.aborted) return false;
     const checked = verifyTemplated(text, {
       blocklist: this.options.blocklist,
       moderation: { status: "ok", flagged: false },
     });
     if (!checked.ok) return false;
     try {
-      const result = await this.options.moderation.moderate([text]);
+      const result = await this.options.moderation.moderate([text], signal);
       const item = result.results[0];
       return (
+        !signal?.aborted &&
         result.results.length === 1 &&
         !!item &&
         verifyTemplated(text, {
@@ -821,7 +910,7 @@ export class BeatRunner {
             controller.signal,
           );
           if (!proposal || !this.current(effect.beatId)) return null;
-          this.voteProposals.set(effect.beatId, proposal.choices);
+          this.voteProposals.set(effect.beatId, { choices: proposal.choices, manual: false });
           return proposal;
         },
         onWindow: (_window, clusters) => {

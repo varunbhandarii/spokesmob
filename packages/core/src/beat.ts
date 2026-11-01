@@ -472,6 +472,20 @@ export function reduce(input: BeatState, event: BeatEvent, now: number): BeatRed
       eligible(true);
       break;
     }
+    case "manualVote": {
+      if (
+        state.step !== "listening" ||
+        state.voteOpen ||
+        state.heldBy.length ||
+        !state.gates.enabled
+      )
+        break;
+      mark();
+      state.current = activeBeat("consensus", null);
+      state.current.purpose = "split";
+      preview(event.line);
+      break;
+    }
     case "voteFinished": {
       if (!state.voteOpen) break;
       state.voteOpen = false;

@@ -134,6 +134,7 @@ export async function createBeatApplication(options: {
       ...(options.clock ? { clock: options.clock } : {}),
     });
     runner = new BeatRunner({
+      channelName: config.channel,
       clips,
       bus: twitch.bus,
       online: twitch.online,
