@@ -1,8 +1,105 @@
 # Spokesmob
 
-Your chat, one voice.
+Your chat, one voice. Spokesmob turns Twitch chat into a spoken summary that only says what many chatters agree on. The vote count stays on screen with a softer dissent whisper, and the streamer sees every line in a private preview with a Veto before anyone hears it. It brings a busy room together and gives a chat of three to five people something they can shape together.
 
-Spokesmob turns Twitch chat into one spoken voice with visible agreement and an OBS browser-source overlay.
+## Try it free in 2 minutes
+
+Install Node 24, then run these from the repository:
+
+```powershell
+npm install
+npm run demo
+```
+
+No keys or Twitch account required. The repeating showcase opens the overlay and dock in your browser, using synthetic chat and a locally generated simulated voice. Click **Click to enable sound** if the browser asks. Both views label the simulation. Use `npm run demo -- --no-open` to keep browser opening off. Press Ctrl+C in the terminal to stop.
+
+## What you can try
+
+- Consensus lines with agreement counted from distinct authors, plus a quieter dissent voice.
+- Question rounds, automatic split-decision votes and streamer-started chat votes. Type `!mob vote Gary | Milo` as broadcaster/moderator, or use the dock's **Start vote** form.
+- Laugh-triggered clips and independent stream markers, with support scaled for small chats.
+- Small-chat support: two laughers in a small room, a 2-2 split and two-voter results when the configured minimum permits.
+- Raid and Hype Train reactions, live mood, captions and chatter-name particles.
+- Wide, compact and stage layouts; stage includes a QR that takes viewers to the channel.
+- An OBS dock with the private preview, Veto, Mute and Kill. Every spoken unit keeps its preview hold.
+
+## Safety in plain words
+
+Raw chat is never read aloud. Only verified summaries and safe templates can reach audio. Input exemplars and ballots receive individual moderation results, and generated output is moderated too. A deterministic verifier checks support, wording, the blocklist and usernames. Chatter usernames are never spoken; raid templates may name the incoming channel. Preview and Veto apply before every spoken unit, and Mute/Kill cancel audio within 200 ms. Recorded paid evals passed all 20/20 prompt-injection safety samples (100%); the offline harness checks wiring without making model-quality claims.
+
+## How it works
+
+```mermaid
+flowchart LR
+  A[Twitch EventSub] --> B[Windows and author-counted clusters]
+  B --> C[Consensus model]
+  C --> D[Verifier and moderation]
+  D --> E[Preview and veto]
+  E --> F[Realtime voice and transcript verification]
+  F --> G[OBS overlay]
+  G --> H[Chat post and confirmed pin]
+```
+
+Voice also passes usable-audio checks before PCM leaves the server. Main and dissent form one spoken unit; a failed or cancelled unit cannot post as spoken. A split/vote prompt hides the agreement meter, then the live vote plate and verified result show their own counts.
+
+## Live setup in under 10 minutes
+
+Bring **Node 24 (24.15+)**, npm, **OBS 33**, an OpenAI project API key and a Confidential Twitch app with its client ID and secret. The free demo only needs Node and a browser. Twitch sign-in uses the broadcaster account; no Twitch Polls are needed for chat voting.
+
+1. Run `npm install`. Copy `.env.example` to `.env` and fill the Twitch app credentials, channel login and OpenAI key yourself. Keep credentials private. Choose a spend cap before a live run; the default is USD 5 per stream.
+2. Run `npm run setup`, complete Twitch activation and approve the listed permissions. For captures, enable **Clips** and **Store past broadcasts** in Twitch Creator Dashboard's Stream settings.
+3. Run `npm run build`, then `npm start`. A live channel plus an active audio client enables paid consensus/voice calls; the dock holds the loop for offline, muted, killed or capped states.
+4. In another terminal, run `npm run voice -- --copy-url`. Paste into exactly one OBS Browser source at **1920 x 1080**, enable **Control audio via OBS**, clear **Custom CSS**, and turn off source shutdown/refresh on scene changes.
+5. In OBS Advanced Audio Properties, leave the source unmuted and check Audio Monitoring **Enable**. Choose headphones as the Monitoring Device and disable Desktop Audio when it captures that same device.
+6. Run `npm run voice -- --copy-url control` and add the copied address as an OBS Custom Browser Dock. Choose the layout and check the cap, minimum voices and Auto/On-demand mode there.
+7. Make a short OBS recording and run `npm run voice -- --tone`. Confirm exactly one beep in headphones and the recording. Ask a question, then let chat answer; keep Veto, Mute and Kill within reach.
+
+The [OBS audio setup](#obs-audio-setup) below has the full routing and troubleshooting instructions. Private overlay/dock addresses are copied without printing their tokens.
+
+### Measured running cost
+
+A measured three-minute mock-Twitch run with real consensus and voice cost about **USD 0.032** for 21 spoken beats, including 11 dissent beats: approximately **USD 0.64/hour at that cadence**. Its end-to-end latency was p50 **2.65 s**, p95 **2.95 s**. Cost varies with cadence, line length, dissent and retries. The free demo costs **USD 0** in API calls, and the dock enforces the configured spend cap.
+
+## Twitch integrations actually used
+
+All realtime ingest uses EventSub WebSocket. These are the requested subscriptions; poll/reward notifications are ingested without creating native Twitch Polls or rewards:
+
+| EventSub subscription | Version |
+| --- | --- |
+| `channel.chat.message` | 1 |
+| `channel.chat.notification` | 1 |
+| `channel.chat.message_delete` | 1 |
+| `channel.chat.clear_user_messages` | 1 |
+| `channel.chat.clear` | 1 |
+| `channel.raid` (incoming) | 1 |
+| `channel.hype_train.begin` | 2 |
+| `channel.hype_train.progress` | 2 |
+| `channel.hype_train.end` | 2 |
+| `stream.online` | 1 |
+| `stream.offline` | 1 |
+| `channel.poll.end` | 1 |
+| `channel.channel_points_custom_reward_redemption.add` | 1 |
+
+Helix calls used by the runtime and live-check tools all share the rate limiter:
+
+| Method and endpoint | Use |
+| --- | --- |
+| `GET /helix/users` | Resolve the broadcaster identity |
+| `GET /helix/streams` | Confirm whether the channel is live |
+| `GET`, `POST`, `DELETE /helix/eventsub/subscriptions` | Manage WebSocket subscriptions |
+| `POST /helix/chat/messages` | Verified posts and command acknowledgments |
+| `GET`, `PUT`, `DELETE /helix/chat/pins` | Read, create and remove confirmed-message pins |
+| `POST /helix/chat/announcements` | Questions and chat-vote invitations |
+| `GET /helix/moderation/blocked_terms` | Refresh channel-specific speech protection |
+| `POST /helix/clips` | Request a 30-second laugh clip |
+| `GET /helix/clips` | Confirm clip creation |
+| `POST /helix/streams/markers` | Mark the moment independently of clipping |
+
+Ballots arrive through `channel.chat.message`, with one latest eligible choice per author. Chat votes use messages and announcements, not the Twitch Polls API. Chat sends and announcements are never retried; a pin requires a confirmed send without a drop reason.
+
+## Built with Codex
+
+[AGENTS.md](AGENTS.md) keeps the architecture, privacy and safety rules next to the code. The [eventsub-subscription](.agents/skills/eventsub-subscription/SKILL.md), [helix-call](.agents/skills/helix-call/SKILL.md) and [golden-window](.agents/skills/golden-window/SKILL.md) skills guide repeatable additions with mocks and replay coverage. The Stop hook runs `npm test` before a turn finishes. Codex built the [eval harness](eval/README.md), iterated prompts against reviewed synthetic windows, and used its results to select wording and service tier without lowering verifier thresholds. Codex cloud produced three face attempts; a best-of-3 comparison selected Round Ink. Code review and the unit, browser and hygiene checks precede releases.
 
 ## Development
 
@@ -55,7 +152,7 @@ The mode button **Captions only** runs without voice and uses `quiet` in chat co
 
 The layout selector changes the shared overlay layout. A valid explicit `layout` query parameter pins that browser source instead. Ordinary control tabs never claim audio ownership.
 
-For an offline channel check, note the current session cap and select On-demand. In Settings, save a small cap and minimum voices of 1 before enabling **Test while offline**. Use an ordinary alt account for votes; the broadcaster's own messages are excluded from agreement. Each Speak now starts a paid beat. Finish with explicit Unmute to clear any persisted Kill, Turn off, disable the test switch, restore minimum voices to 2 and the original cap, then restore Auto and save. The mock stores settings separately, so configure the real server too.
+For an offline channel check, note the current session cap and select On-demand. In Settings, save a small cap and minimum voices of 1 before enabling **Test while offline**. Use an ordinary alt account for consensus samples; the broadcaster's own messages are excluded from consensus agreement but can be ballots in chat votes. Each Speak now starts a paid beat. Finish with explicit Unmute to clear any persisted Kill, Turn off, disable the test switch, restore minimum voices to 2 and the original cap, then restore Auto and save. The mock stores settings separately, so configure the real server too.
 
 Only the broadcaster badge or moderator badge authorizes chat commands, including the broadcaster's own messages. Other accounts are ignored silently. Commands never count as votes.
 
@@ -67,6 +164,7 @@ Only the broadcaster badge or moderator badge authorizes chat commands, includin
 | `!mob mute [minutes]` | Mute for 1?60 minutes, defaulting to 5 |
 | `!mob unmute` / `!mob kill` | Clear a mute or kill until explicit unmute |
 | `!mob gag @user` / `!mob ungag @user` | Exclude or restore a user resolved from Twitch's mention fragment |
+| `!mob vote A \| B` | Start a verified 30-second vote with two safe labels |
 | `!ask <question>` / `!mob clear` | Set a moderated question of at most 100 characters, or clear it |
 
 State changes acknowledge once through the chat guard. Identical acknowledgments within 30 seconds can be suppressed. Gag acknowledgments never repeat the name. Questions reject URLs and mentions, pass the blocklist and per-item moderation, then announce in purple. Clear removes the question without a chat acknowledgment and cancels a pending question change too.
@@ -214,12 +312,18 @@ Run `npm run demo` for a repeating synthetic chat showcase. It builds missing br
 
 ### Laugh-triggered capture
 
-Auto-clip is on by default and can be switched off in the dock settings. For ten seconds after a shown line finishes, four distinct laugh authors, or at least six non-ballot messages from three distinct authors at a chat rate of at least three times the previous minute (and at least one message per second, measured with a five-second minimum denominator) can request a 30-second clip and an independent stream marker. Capture requires an online stream, allows one clip per line, and has a three-minute cooldown. Clip titles use a conservative local 100-character word-boundary cap. A title rejected by AutoMod gets exactly one title-free request; other create failures are not retried. Confirmation polls every five seconds for up to one minute. The dock logs the confirmed link and readable failures; the overlay shows a three-second Clipped badge. Capture never posts to chat.
+Auto-clip is on by default and can be switched off in the dock settings. For ten seconds after a shown line finishes, between two and four distinct laugh authors, scaled as 40% of distinct trailing-minute chatters rounded up, or at least six non-ballot messages from three authors over at least five seconds at a chat rate of at least three times the previous minute (and at least one message per second) can request a 30-second clip and an independent stream marker. Capture requires an online stream, allows one clip per line, and has a three-minute cooldown. Clip titles use a conservative local 100-character word-boundary cap. A title rejected by AutoMod gets exactly one title-free request; other create failures are not retried. Confirmation polls every five seconds for up to one minute. The dock logs the confirmed link and readable failures; the overlay shows a three-second Clipped badge. Capture never posts to chat.
 
 In Twitch Creator Dashboard, open Settings > Stream, enable Clips, and turn on Store past broadcasts for stream markers. Restricted clips, an offline stream or unavailable VODs appear in the dock log. The Twitch integrations include Create Clip, Get Clips and Create Stream Marker through the shared Helix limiter, using the existing scopes.
 
 ### Split-decision votes
 
-Split votes is on by default in the dock settings. With an active question, a close split between two clusters can ask chat to choose without Twitch Polls or additional scopes. Each side needs at least three distinct authors and the configured minimum voices, the two sides must cover at least half the window, and their shares must be within ten percentage points. Display and spoken labels use title case; ballot matching stays folded. Labels come from the shortest normalized exemplars, with at most four words and 25 characters, and pass input moderation, the blocklist and text hygiene.
+Split votes is on by default in the dock settings. With an active question, a close split between two clusters can ask chat to choose without Twitch Polls or additional scopes. Each side needs `max(minimum voices, clamp(ceil(0.25 * window voices), 2, 3))` distinct authors. Together the sides must cover at least half the window, and their shares must be within ten percentage points. Display and spoken labels use title case; ballot matching stays folded. Labels come from the shortest normalized exemplars, with at most four words and 25 characters, and pass input moderation, the blocklist and text hygiene.
 
-The verified split prompt gets the normal preview and Veto. After the unit finishes, a single announcement opens a 30-second vote, with no regular post or pin for that prompt. Type exactly 1, 2 or an option label; each author's latest eligible choice counts, including the broadcaster. Ballots never enter consensus collection. Deleted ballots and cleared users lose their votes; excluded, gagged and moderation-flagged messages cannot vote. Collection continues while other speech waits. Mute, Kill, chat clear, Clear question or going offline cancels without a result. The overlay shows the choices, distinct-voter bars and countdown; the dock logs counts and the outcome. Three or more voters produce a computed winner or tie; fewer produce "Not enough votes to call it." The result is verified, previewed and vetoable, then posts and pins normally. A question gets at most one vote attempt, with a five-minute cooldown between opened votes. Chat messages and guarded announcements provide the entire integration.
+The verified split prompt gets the normal preview and Veto. After the unit finishes, a single announcement opens a 30-second vote, with no regular post or pin for that prompt. Type exactly 1, 2 or an option label; each author's latest eligible choice counts, including the broadcaster. Ballots never enter consensus collection. Deleted ballots and cleared users lose their votes; excluded, gagged and moderation-flagged messages cannot vote. Collection continues while other speech waits. Mute, Kill, chat clear, Clear question or going offline cancels without a result. The overlay shows the choices, distinct-voter bars and countdown; the dock logs counts and the outcome. When the trailing minute has six or fewer eligible chatters, at least max(2, minimum voices) voters produce a computed winner or tie; larger rooms require three. Fewer produce "Not enough votes to call it." The result is verified, previewed and vetoable, then posts and pins normally. A question gets at most one vote attempt, with a five-minute cooldown between opened votes. Chat messages and guarded announcements provide the entire integration.
+
+### Streamer-started votes and small chats
+
+Broadcasters and moderators can type `!mob vote Gary | Milo`, or use the dock's two-field Start vote form. Labels are title-cased, must contain at most four words and 25 characters, and pass the same blocklist, username/hygiene, input moderation and template verification as automatic split labels. Invalid requests produce a readable dock error or guarded chat acknowledgment. Command messages never become ballots or consensus votes.
+
+A manual vote works with or without a question and skips automatic split cooldown and question-attempt limits. It can be explicitly requested even when automatic Split votes is switched off. Wait for the current unit, cooldown or vote to finish before starting another. The prompt uses the same preview, veto, safety gates and voice checks; its announcement, ballots, cancellation and verified result follow the normal chat-vote path. Neither automatic nor manual vote prompts post or pin. A four-person room can trigger an automatic 2-2 split, and a small room can call a result with two voters when the configured minimum allows it.
