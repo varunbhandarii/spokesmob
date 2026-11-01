@@ -393,3 +393,40 @@ test("rolling rate limits constrain bursts and respect platform exhaustion", asy
   await vi.advanceTimersByTimeAsync(1);
   await paused;
 });
+
+test("clips and stream markers match the local Helix contract without retrying writes", async () => {
+  const f = await fixture();
+  f.mock.setStreamLive(true);
+  const clip = await f.client.createClip("Gary wins");
+  expect((await f.client.getClips(clip.id))[0]?.url).toBe(`https://clips.twitch.tv/${clip.id}`);
+  expect(await f.client.createStreamMarker("Spokesmob: Gary wins")).toEqual({
+    id: expect.any(String),
+  });
+  const create = f.mock.calls.find(
+    (call) => call.path === "/helix/clips" && call.method === "POST",
+  );
+  expect(create?.query).toEqual(
+    expect.objectContaining({
+      broadcaster_id: f.mock.auth.userId,
+      duration: "30",
+      title: "Gary wins",
+    }),
+  );
+  f.mock.failNext({
+    path: "/helix/clips",
+    method: "POST",
+    status: 400,
+    body: { message: "The title did not pass AutoMod checks." },
+  });
+  await expect(f.client.createClip("Milo")).rejects.toMatchObject({
+    status: 400,
+    reason: "clip_title_rejected",
+  });
+  const before = f.mock.calls.length;
+  await expect(f.client.createClip("x".repeat(101))).rejects.toThrow();
+  await expect(f.client.createStreamMarker("x".repeat(141))).rejects.toThrow();
+  expect(f.mock.calls).toHaveLength(before);
+  f.mock.failNext({ path: "/helix/streams/markers", method: "POST", status: 500 });
+  await expect(f.client.createStreamMarker("Gary")).rejects.toMatchObject({ status: 500 });
+  expect(f.mock.calls.filter((call) => call.path === "/helix/streams/markers")).toHaveLength(2);
+});

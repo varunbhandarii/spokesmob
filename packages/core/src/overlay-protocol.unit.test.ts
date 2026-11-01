@@ -31,6 +31,29 @@ const state: BeatView = {
   mood: null,
   hype: null,
 };
+
+test("clip visuals contain no IDs or links and capture links belong only to the dock", () => {
+  expect(serverOverlayMessageSchema.safeParse({ type: "event", kind: "clip" }).success).toBe(true);
+  expect(
+    serverOverlayMessageSchema.safeParse({
+      type: "event",
+      kind: "clip",
+      url: "https://clips.twitch.tv/example",
+    }).success,
+  ).toBe(false);
+  const activity = {
+    type: "activity",
+    kind: "clip",
+    at: 1,
+    text: "Clipped",
+    url: "https://clips.twitch.tv/example",
+  };
+  expect(serverControlMessageSchema.safeParse(activity).success).toBe(true);
+  expect(serverOverlayMessageSchema.safeParse(activity).success).toBe(false);
+  expect(
+    serverControlMessageSchema.safeParse({ ...activity, url: "https://example.com/" }).success,
+  ).toBe(false);
+});
 const line = {
   dissentPct: null,
   type: "line",

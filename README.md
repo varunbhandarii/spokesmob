@@ -211,3 +211,9 @@ Public badge categories and emote identifiers are preserved so replay retains th
 ### Free demo
 
 Run `npm run demo` for a repeating synthetic chat showcase. It builds missing browser assets, opens the overlay with sound and the dock in your default browser, and keeps the usual local token location so an existing OBS source can connect. Use `npm run demo -- --no-open` to keep the browsers closed. This command never loads `.env`, strips application credentials from its child environment and rejects paid flags. The voice is a local speech-shaped tone, not speech or a model call; both views label it "Demo · simulated voice". Click "Click to enable sound" if a normal browser blocks autoplay. OBS never shows that button. Headless mock load tests retain simulated playback reports.
+
+### Laugh-triggered capture
+
+Auto-clip is on by default and can be switched off in the dock settings. For ten seconds after a shown line finishes, four distinct laugh authors or a chat rate of at least three times the previous minute (and at least one message per second) can request a 30-second clip and an independent stream marker. Capture requires an online stream, allows one clip per line, and has a three-minute cooldown. Clip titles use a conservative local 100-character word-boundary cap. A title rejected by AutoMod gets exactly one title-free request; other create failures are not retried. Confirmation polls every five seconds for up to one minute. The dock logs the confirmed link and readable failures; the overlay shows a three-second Clipped badge. Capture never posts to chat.
+
+In Twitch Creator Dashboard, open Settings > Stream, enable Clips, and turn on Store past broadcasts for stream markers. Restricted clips, an offline stream or unavailable VODs appear in the dock log. The Twitch integrations include Create Clip, Get Clips and Create Stream Marker through the shared Helix limiter, using the existing scopes.

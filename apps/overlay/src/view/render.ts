@@ -78,6 +78,8 @@ export function createRenderer(options: {
   const bubble = slot("preview-bubble");
   const raid = slot("raid-banner");
   const hype = slot("hype-chip");
+  const clipped = slot("clipped-badge");
+  write(clipped.plate, "Clipped");
   const demo = slot("demo-tag");
   write(demo.plate, "Demo · simulated voice");
   const stateTag = slot("state-tag");
@@ -107,6 +109,7 @@ export function createRenderer(options: {
     if (options.sample) store.sample(options.sample());
     const view = store.view();
     const zones = LAYOUTS[view.layout];
+    clipped.host.hidden = !view.clipped;
     demo.host.hidden = !view.simulatedVoice;
     particles.draw(
       now,
@@ -127,6 +130,11 @@ export function createRenderer(options: {
       layout = view.layout;
       fitted = false;
       place(faceHost, zones.face);
+      place(clipped.host, {
+        ...zones.badge,
+        y: zones.badge.y + zones.badge.height + 6,
+        width: 160,
+      });
       place(demo.host, { x: zones.margin, y: zones.margin, width: 400, height: 42, fontSize: 22 });
       for (const [node, zone] of [
         [caption.host, zones.caption],

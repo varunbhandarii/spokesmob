@@ -2,6 +2,15 @@ import { expect, test } from "vitest";
 import { sceneLine, sceneState } from "./scenes.js";
 import { createViewStore } from "./store.js";
 
+test("confirmed clip badge expires after three seconds", () => {
+  let now = 0;
+  const store = createViewStore(null, () => now);
+  store.receive({ type: "event", kind: "clip" });
+  expect(store.view().clipped).toBe(true);
+  now = 3000;
+  expect(store.view().clipped).toBe(false);
+});
+
 function fixture() {
   const store = createViewStore();
   store.receive({

@@ -87,7 +87,9 @@ function fixture(
   const overlay: OverlayMessage[] = [];
   const overlayAt: { message: OverlayMessage; at: number }[] = [];
   const controls: ControlMessage[] = [];
+  const clips = { capture: vi.fn(async (_text: string) => undefined), stop: vi.fn() };
   const runner = new BeatRunner({
+    clips,
     bus,
     online: { snapshot: () => ({ known: true, online: true }), onChange: () => () => undefined },
     store,
@@ -172,7 +174,7 @@ function fixture(
     bus.emit(event);
     return event;
   };
-  return { runner, store, voice, calls, overlay, overlayAt, controls, bus, chat };
+  return { clips, runner, store, voice, calls, overlay, overlayAt, controls, bus, chat };
 }
 
 test("the shell completes one verified unit, posts once, pins and records actual first-audio timing", async () => {
@@ -462,3 +464,50 @@ test("main caption-only never plays or posts and insufficient reservation room c
   expect(capped.voice.prepared).toEqual([]);
   expect(capped.calls).toEqual([]);
 });
+
+test.each([false, true])(
+  "a completed shown unit arms laugh capture, with quiet=%s",
+  async (quiet) => {
+    const f = fixture({ quiet });
+    f.chat("one", "blue");
+    f.chat("two", "blue");
+    await vi.advanceTimersByTimeAsync(13000);
+    expect(f.store.beatLog.recent(1)[0]?.status).toBe(quiet ? "caption_only" : "spoken");
+    for (let i = 0; i < 4; i++) f.chat(`laugh${i}`, "LUL");
+    await vi.advanceTimersByTimeAsync(0);
+    expect(f.clips.capture).toHaveBeenCalledTimes(1);
+    expect(f.clips.capture).toHaveBeenCalledWith(expect.stringContaining("blue"));
+    for (let i = 0; i < 4; i++) f.chat(`later${i}`, "LUL");
+    await vi.advanceTimersByTimeAsync(0);
+    expect(f.clips.capture).toHaveBeenCalledTimes(1);
+  },
+);
+test("vetoed previews and muted completed lines cannot arm laugh capture", async () => {
+  const f = fixture();
+  f.chat("one", "blue");
+  f.chat("two", "blue");
+  await vi.advanceTimersByTimeAsync(8500);
+  f.runner.dispatch({ type: "veto" });
+  await vi.advanceTimersByTimeAsync(3000);
+  for (let i = 0; i < 4; i++) f.chat(`laugh${i}`, "LUL");
+  await vi.advanceTimersByTimeAsync(0);
+  expect(f.clips.capture).not.toHaveBeenCalled();
+});
+
+test.each(["mute", "kill", "off", "offline", "disabled"] as const)(
+  "laugh capture is cleared or disabled by %s",
+  async (action) => {
+    const f = fixture();
+    f.chat("one", "blue");
+    f.chat("two", "blue");
+    await vi.advanceTimersByTimeAsync(11000);
+    if (action === "mute") f.runner.dispatch({ type: "mute", minutes: 1 });
+    else if (action === "offline") f.runner.dispatch({ type: "gate", changes: { online: false } });
+    else if (action === "disabled")
+      f.runner.dispatch({ type: "settings", changes: { autoClip: false } });
+    else f.runner.dispatch({ type: action });
+    for (let i = 0; i < 4; i++) f.chat(`laugh${i}`, "LUL");
+    await vi.advanceTimersByTimeAsync(0);
+    expect(f.clips.capture).not.toHaveBeenCalled();
+  },
+);

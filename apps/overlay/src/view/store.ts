@@ -53,6 +53,7 @@ export interface OverlayView {
   rms: number;
   audioChannel: AudioChannel | null;
   newestName: string | null;
+  clipped: boolean;
   raid: { name: string; viewers: number } | null;
   particles: readonly ParticleCue[];
 }
@@ -101,6 +102,7 @@ export function createViewStore(
             next,
           ];
   };
+  let clippedUntil = 0;
   let raid: { name: string; viewers: number; until: number } | null = null;
   const revealed = new Set<number>();
   const prepared = new Map<number, PreparedTake>();
@@ -252,6 +254,10 @@ export function createViewStore(
           }
           break;
         case "event":
+          if (event.kind === "clip") {
+            clippedUntil = now() + 3000;
+            break;
+          }
           if (event.kind === "raid")
             raid = { name: event.name, viewers: event.viewers, until: now() + 6000 };
           break;
@@ -390,6 +396,7 @@ export function createViewStore(
         rms,
         audioChannel,
         newestName,
+        clipped: at < clippedUntil,
         simulatedVoice,
         raid: raid && at < raid.until ? { name: raid.name, viewers: raid.viewers } : null,
         particles: particleCues,

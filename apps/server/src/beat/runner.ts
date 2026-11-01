@@ -19,6 +19,7 @@ import {
   createEventLineState,
   reduceEventLine,
 } from "../../../../packages/core/src/event-lines.js";
+import { LaughDetector } from "../../../../packages/core/src/laugh.js";
 import type {
   ControlMessage,
   OverlayMessage,
@@ -38,6 +39,7 @@ import type { TwitchEvent } from "../twitch/events.js";
 import type { StreamStatus } from "../twitch/online.js";
 import type { PlaybackReport, VoiceManager, VoiceTake } from "../voice/manager.js";
 import type { VoiceUsage } from "../voice/types.js";
+import type { ClipCapture } from "./clips.js";
 import type { ChatOutput } from "./output.js";
 import { BeatRecords } from "./records.js";
 
@@ -63,10 +65,13 @@ export interface BeatRunnerOptions {
   paidModel: boolean;
   paidVoice: boolean;
   simulated?: boolean;
+  clips?: Pick<ClipCapture, "capture" | "stop">;
   apiFailure?(source: "model" | "voice"): void;
 }
 export class BeatRunner {
   state: BeatState;
+  private readonly laughs = new LaughDetector();
+  private readonly shownEnds = new Map<number, number>();
   private readonly clock: Clock;
   private readonly collector: ConsensusCollector;
   private readonly moderation: ModerationGate;
@@ -185,6 +190,11 @@ export class BeatRunner {
   }
   dispatch(event: BeatEvent) {
     if (this.stopped) return;
+    if (
+      ["mute", "kill", "off", "veto", "invalidate"].includes(event.type) ||
+      (event.type === "gate" && event.changes.online === false)
+    )
+      this.laughs.cancel();
     this.events.push(event);
     if (this.draining) return;
     this.draining = true;
@@ -297,6 +307,24 @@ export class BeatRunner {
         }
       }
     } else if (event.kind === "chat") {
+      if (
+        !event.self &&
+        !event.text.trimStart().startsWith("!") &&
+        !this.options.store.gags.list().includes(event.author.id)
+      ) {
+        const capture = this.laughs.observe(
+          event.author.id,
+          event.fragments,
+          this.clock.now(),
+          this.state.settings.autoClip,
+          this.state.gates.online,
+        );
+        if (capture && this.options.clips)
+          this.task(
+            () => this.options.clips?.capture(capture.text) ?? Promise.resolve(),
+            "capture",
+          );
+      }
       if (
         !this.state.collection ||
         event.self ||
@@ -500,7 +528,9 @@ export class BeatRunner {
           if (!take || !book) return;
           if (effect.channel === "main") book.playAt = this.clock.now();
           await take.play();
-          await take.ended;
+          const playback = await take.ended;
+          if (playback.reason === "ended") this.shownEnds.set(effect.beatId, this.clock.now());
+          else this.shownEnds.delete(effect.beatId);
           if (this.current(effect.beatId))
             this.dispatch({
               type: "voiceEnded",
@@ -585,6 +615,18 @@ export class BeatRunner {
         });
         break;
       case "log":
+        if (
+          (effect.status === "spoken" && this.shownEnds.has(effect.beat.id)) ||
+          effect.status === "caption_only"
+        ) {
+          if (effect.beat.line)
+            this.laughs.shown(
+              this.records.key(effect.beat.id),
+              effect.beat.line.text,
+              this.shownEnds.get(effect.beat.id) ?? effect.at,
+            );
+        }
+        this.shownEnds.delete(effect.beat.id);
         this.closedBeats++;
         this.records.write(
           effect.beat,
@@ -823,6 +865,7 @@ export class BeatRunner {
     if (this.stopped) return;
     this.dispatch({ type: "off" });
     this.stopped = true;
+    this.options.clips?.stop();
     for (const cleanup of this.cleanup.splice(0)) cleanup();
     for (const interval of this.intervals) this.clock.clearInterval(interval);
     for (const cancel of this.timers.values()) cancel();

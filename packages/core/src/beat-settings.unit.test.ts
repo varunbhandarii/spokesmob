@@ -8,6 +8,7 @@ import {
 
 test("beat settings pin defaults and stored values override environment seeds", () => {
   expect(beatSettingsSchema.parse({})).toEqual({
+    autoClip: true,
     mode: "auto",
     windowS: 8,
     minVoices: 2,

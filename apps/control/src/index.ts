@@ -128,7 +128,10 @@ settingsForm.addEventListener("input", () => {
 });
 settingsForm.addEventListener("submit", (event) => {
   event.preventDefault();
-  const values: Record<string, unknown> = { postLines: settingInput("postLines").value };
+  const values: Record<string, unknown> = {
+    postLines: settingInput("postLines").value,
+    autoClip: (settingInput("autoClip") as HTMLInputElement).checked,
+  };
   for (const field of fields) values[field.key] = Number(settingInput(field.key).value);
   const parsed = beatSettingsPatchSchema.safeParse(values);
   if (!parsed.success) {
@@ -290,6 +293,24 @@ function render() {
       health.append(li);
     }
   }
+  const activities = element("activity-log");
+  activities.replaceChildren(
+    ...model.activities.map((row) => {
+      const item = document.createElement("p");
+      item.textContent = row.text;
+      if (row.url) {
+        const link = document.createElement("a");
+        link.href = row.url;
+        link.textContent = " Open clip";
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        item.append(link);
+      }
+      return item;
+    }),
+  );
+  if (!draft.dirty)
+    (settingInput("autoClip") as HTMLInputElement).checked = model.settings.autoClip;
   renderLog();
 }
 async function resync(includeLog: boolean) {

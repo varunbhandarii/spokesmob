@@ -79,6 +79,7 @@ function json(body: unknown, status = 200, headers: Record<string, string> = {})
 export function createMockServices(options: MockServiceOptions = {}) {
   const now = options.clock?.now ?? (() => Date.now());
   const clientId = options.clientId ?? "mock-client";
+  const clips = new Map<string, { id: string; url: string; title: string; duration: number }>();
   const user = options.user ?? { id: "100000001", login: "spokesmob_demo", name: "Spokesmob Demo" };
   const calls: MockCall[] = [];
   const sessions = new Set<string>();
@@ -392,6 +393,48 @@ export function createMockServices(options: MockServiceOptions = {}) {
         };
         return json(null, 204);
       }
+    }
+    if (route === "/clips") {
+      if (method === "POST") {
+        if (!online) return error(404, "Broadcaster is offline");
+        const title = url.searchParams.get("title") ?? "Mock clip";
+        const duration = Number(url.searchParams.get("duration") ?? 30);
+        if (
+          !url.searchParams.get("broadcaster_id") ||
+          [...title].length > 100 ||
+          duration < 5 ||
+          duration > 60
+        )
+          return error(400, "Invalid clip parameters");
+        const id = `clip-${++sequence}`;
+        clips.set(id, { id, url: `https://clips.twitch.tv/${id}`, title, duration });
+        return json(
+          { data: [{ id, edit_url: `https://www.twitch.tv/spokesmob_demo/clip/${id}` }] },
+          202,
+        );
+      }
+      if (method === "GET") {
+        const clip = clips.get(url.searchParams.get("id") ?? "");
+        return json({ data: clip ? [clip] : [] });
+      }
+    }
+    if (route === "/streams/markers" && method === "POST") {
+      if (!online) return error(404, "Broadcaster is offline or VOD unavailable");
+      if (
+        body.user_id !== user.id ||
+        typeof body.description !== "string" ||
+        [...body.description].length > 140
+      )
+        return error(400, "Invalid marker");
+      return json({
+        data: [
+          {
+            id: `marker-${++sequence}`,
+            created_at: new Date(now()).toISOString(),
+            position_seconds: 30,
+          },
+        ],
+      });
     }
     if (route === "/chat/announcements" && method === "POST") return json(null, 204);
     if (route === "/chat/settings") {

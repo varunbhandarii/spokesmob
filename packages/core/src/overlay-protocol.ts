@@ -170,6 +170,7 @@ export const revealMessageSchema = z.strictObject({
 });
 export const vetoMessageSchema = z.strictObject({ type: z.literal("veto"), take: takeIdSchema });
 export const eventMessageSchema = z.discriminatedUnion("kind", [
+  z.strictObject({ type: z.literal("event"), kind: z.literal("clip") }),
   eventNoticeSchema.options[0].extend({ type: z.literal("event") }),
   eventNoticeSchema.options[1].extend({ type: z.literal("event") }),
 ]);
@@ -196,6 +197,16 @@ export const healthMessageSchema = z.strictObject({
   realtime: z.strictObject({ main: realtimeHealthSchema, dissent: realtimeHealthSchema }),
   audioClient: z.strictObject({ connected: z.boolean(), active: z.boolean() }),
   e2eMs: z.number().nonnegative().nullable(),
+});
+export const activityMessageSchema = z.strictObject({
+  type: z.literal("activity"),
+  kind: z.enum(["clip", "vote"]),
+  at: z.number().nonnegative(),
+  text: z.string().max(2500),
+  url: z
+    .url()
+    .regex(/^https:\/\/(?:clips\.twitch\.tv|(?:www\.)?twitch\.tv)\//u)
+    .nullable(),
 });
 export const logMessageSchema = z.strictObject({
   type: z.literal("log"),
@@ -252,6 +263,7 @@ export const serverOverlayMessageSchema = z.union([
 ]);
 export const serverControlMessageSchema = z.union([
   controlHelloReplySchema,
+  activityMessageSchema,
   stateMessageSchema,
   previewMessageSchema,
   logMessageSchema,

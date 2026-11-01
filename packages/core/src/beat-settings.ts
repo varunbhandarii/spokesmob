@@ -3,6 +3,7 @@ import { z } from "zod";
 export const beatModeSchema = z.enum(["auto", "demand", "quiet"]);
 export type BeatMode = z.infer<typeof beatModeSchema>;
 const fields = {
+  autoClip: z.boolean(),
   mode: beatModeSchema,
   windowS: z.number().min(5).max(20),
   minVoices: z.number().int().min(1).max(10),
@@ -15,6 +16,7 @@ const fields = {
   logRetentionDays: z.number().int().min(0).max(30),
 };
 export const beatSettingsSchema = z.strictObject({
+  autoClip: fields.autoClip.default(true),
   mode: fields.mode.default("auto"),
   windowS: fields.windowS.default(8),
   minVoices: fields.minVoices.default(2),

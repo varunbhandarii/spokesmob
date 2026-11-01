@@ -12,6 +12,7 @@ import { createTwitchRuntime, type TwitchRuntime } from "../twitch/runtime.js";
 import { createVoiceRuntime } from "../voice/runtime.js";
 import type { RealtimeFactory } from "../voice/transport.js";
 import { recordedModeration } from "./billing.js";
+import { ClipCapture } from "./clips.js";
 import { CommandRouter } from "./commands.js";
 import { syntheticVoiceAllowed } from "./demo-signal.js";
 import { FakeVoice } from "./fakes.js";
@@ -121,7 +122,19 @@ export async function createBeatApplication(options: {
         )
       : null;
     const output = new ChatOutput(twitch.helix, log);
+    const clips = new ClipCapture({
+      helix: twitch.helix,
+      online: () => {
+        const value = twitch.online.snapshot();
+        return value.known && value.online;
+      },
+      overlay: (message) => hub.emitOverlay(message),
+      control: (message) => hub.emitControl(message),
+      log,
+      ...(options.clock ? { clock: options.clock } : {}),
+    });
     runner = new BeatRunner({
+      clips,
       bus: twitch.bus,
       online: twitch.online,
       store,

@@ -77,6 +77,7 @@ export class HelixError extends Error {
     readonly status: number,
     readonly endpoint: string,
     readonly transportLimit = false,
+    readonly reason: "clip_title_rejected" | "clips_disabled" | "vod_unavailable" | null = null,
   ) {
     super(`Twitch request failed (${status}) at ${endpoint}`);
     this.name = "HelixError";
@@ -179,7 +180,18 @@ export class HelixClient {
       }
       // Provider error text is inspected only for this flag and is never propagated to logs.
       const transportLimit = response.status === 429 && /transports/i.test(JSON.stringify(body));
-      throw new HelixError(response.status, path, transportLimit);
+      const detail = JSON.stringify(body);
+      const reason =
+        path === "/clips" &&
+        response.status === 400 &&
+        /title.*automod|automod.*title/i.test(detail)
+          ? "clip_title_rejected"
+          : path === "/clips" && response.status === 403 && /disabled|not.*enabled/i.test(detail)
+            ? "clips_disabled"
+            : path === "/streams/markers" && /vod|past broadcasts/i.test(detail)
+              ? "vod_unavailable"
+              : null;
+      throw new HelixError(response.status, path, transportLimit, reason);
     }
   }
 
@@ -196,6 +208,61 @@ export class HelixClient {
     return (await this.request<Page<User>>("GET", "/users", { query, idempotent: true })).data;
   }
 
+  async createClip(title?: string): Promise<{ id: string }> {
+    if (title !== undefined && (!title.trim() || [...title].length > 100))
+      throw new Error("Clip title must contain 1-100 characters");
+    const query = { broadcaster_id: this.channel(), duration: "30", ...(title ? { title } : {}) };
+    const response = await this.request<unknown>("POST", "/clips", {
+      query,
+      kind: "general",
+      idempotent: false,
+    });
+    return z
+      .object({ data: z.array(z.object({ id: z.string().min(1) })).length(1) })
+      .parse(response).data[0] as { id: string };
+  }
+  async getClips(id: string): Promise<{ id: string; url: string }[]> {
+    if (!id || id.length > 200) throw new Error("Invalid clip ID");
+    const response = await this.request<unknown>("GET", "/clips", {
+      query: { id },
+      kind: "general",
+      idempotent: true,
+    });
+    const rows = z
+      .object({
+        data: z
+          .array(
+            z.object({
+              id: z.string().min(1),
+              url: z.url().refine((value) => {
+                const url = new URL(value);
+                return (
+                  url.protocol === "https:" &&
+                  ["clips.twitch.tv", "www.twitch.tv", "twitch.tv"].includes(url.hostname) &&
+                  !url.username &&
+                  !url.password
+                );
+              }),
+            }),
+          )
+          .max(1),
+      })
+      .parse(response).data;
+    if (rows.some((row) => row.id !== id)) throw new Error("Invalid clip response");
+    return rows;
+  }
+  async createStreamMarker(description: string): Promise<{ id: string }> {
+    if (!description.trim() || [...description].length > 140)
+      throw new Error("Marker description must contain 1-140 characters");
+    const response = await this.request<unknown>("POST", "/streams/markers", {
+      body: { user_id: this.channel(), description },
+      kind: "general",
+      idempotent: false,
+    });
+    return z
+      .object({ data: z.array(z.object({ id: z.string().min(1) })).length(1) })
+      .parse(response).data[0] as { id: string };
+  }
   async getStreams(): Promise<Stream[]> {
     const broadcasterId = this.channel();
     if (!/^\d+$/.test(broadcasterId))

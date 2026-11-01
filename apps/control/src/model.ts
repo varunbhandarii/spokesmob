@@ -15,6 +15,7 @@ export interface ControlModel {
   cost: Cost | null;
   health: Health | null;
   settings: BeatSettings;
+  activities: Extract<ControlMessage, { type: "activity" }>[];
   logs: BeatLogRecord[];
 }
 export const createControlModel = (): ControlModel => ({
@@ -24,6 +25,7 @@ export const createControlModel = (): ControlModel => ({
   cost: null,
   health: null,
   settings: { ...DEFAULT_BEAT_SETTINGS },
+  activities: [],
   logs: [],
 });
 
@@ -48,6 +50,8 @@ export function receiveControl(
       const { type: _type, ...state } = message;
       return { ...next, state };
     }
+    case "activity":
+      return { ...next, activities: [message, ...model.activities].slice(0, LOG_LIMIT) };
     case "log":
       return { ...next, logs: mergeLogs(model.logs, [message.row]) };
     case "cost":
