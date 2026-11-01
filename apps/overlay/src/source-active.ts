@@ -19,3 +19,7 @@ export function sourceActive(current: boolean, event: unknown): boolean {
 export function sourceAudioStatus(allowed: boolean, authorized: boolean, active: boolean): string {
   return !allowed || !authorized ? "preview, silent" : active ? "audio ready" : "source inactive";
 }
+
+export function overlayStatusVisible(connection: string, audio: string): boolean {
+  return connection !== "connected" || audio !== "audio ready";
+}

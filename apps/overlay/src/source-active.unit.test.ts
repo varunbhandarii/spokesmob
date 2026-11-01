@@ -1,5 +1,13 @@
 import { expect, test } from "vitest";
-import { sourceActive, sourceAudioStatus } from "./source-active.js";
+import { overlayStatusVisible, sourceActive, sourceAudioStatus } from "./source-active.js";
+
+test("only connected and ready audio hides the production status", () => {
+  expect(overlayStatusVisible("connected", "audio ready")).toBe(false);
+  for (const connection of ["connecting", "disconnected", "unavailable"])
+    expect(overlayStatusVisible(connection, "audio ready")).toBe(true);
+  for (const audio of ["waiting for audio", "preview, silent", "audio blocked", "source inactive"])
+    expect(overlayStatusVisible("connected", audio)).toBe(true);
+});
 
 test("OBS output status never changes source activity", () => {
   const status = {

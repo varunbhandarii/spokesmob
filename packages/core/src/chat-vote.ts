@@ -7,10 +7,19 @@ import { verifyTemplated } from "./verify.js";
 import { formatVoiceCount } from "./voice-count.js";
 
 export type VoteChoices = readonly [string, string];
+export function titleVoteLabel(text: string): string {
+  return fold(text)
+    .trim()
+    .replace(/\s+/gu, " ")
+    .replace(/\p{L}[\p{L}\p{M}'’]*/gu, (word) => {
+      const [first, ...rest] = [...word];
+      return (first?.toUpperCase() ?? "") + rest.join("");
+    });
+}
 export function ballotChoice(text: string, choices: VoteChoices): 0 | 1 | null {
   const value = fold(text).trim().replace(/\s+/gu, " ");
-  if (value === "1" || value === choices[0]) return 0;
-  if (value === "2" || value === choices[1]) return 1;
+  if (value === "1" || value === fold(choices[0])) return 0;
+  if (value === "2" || value === fold(choices[1])) return 1;
   return null;
 }
 export function splitChoices(
@@ -62,7 +71,13 @@ export function splitChoices(
       })
     )
       return null;
-    return value;
+    const display = titleVoteLabel(value);
+    if (
+      [...display].length > 25 ||
+      !verifyTemplated(display, { blocklist, moderation: { status: "ok", flagged: false } }).ok
+    )
+      return null;
+    return display;
   };
   const first = label(a),
     second = label(b);

@@ -533,6 +533,15 @@ test("split replay opens after the hold without a post; ballots bypass consensus
   ).toBe(false);
   await vi.advanceTimersByTimeAsync(4500);
   expect(f.runner.state.voteOpen).toBe(true);
+  expect(f.controls.find((message) => message.type === "preview")).toMatchObject({
+    text: "Chat is split. Type 1 for Gary, or 2 for Milo.",
+  });
+  expect(f.calls.filter((call) => call.action === "announce")[1]?.text).toBe(
+    "Vote now: type 1 for Gary or 2 for Milo, 30 seconds.",
+  );
+  expect(
+    f.overlay.find((message) => message.type === "event" && message.kind === "vote_begin"),
+  ).toMatchObject({ choices: ["Gary", "Milo"] });
   expect(f.calls.filter((call) => ["send", "pin"].includes(call.action))).toHaveLength(0);
   expect(f.calls.filter((call) => call.action === "announce")).toHaveLength(2);
   f.chat("voter1", "1", "ballot1");
@@ -545,7 +554,7 @@ test("split replay opens after the hold without a post; ballots bypass consensus
   await vi.advanceTimersByTimeAsync(33500);
   const posts = f.calls.filter((call) => call.action === "send");
   expect(posts).toHaveLength(1);
-  expect(posts[0]?.text).toContain("gary wins, 67% of 3 voices.");
+  expect(posts[0]?.text).toContain("Gary wins, 67% of 3 voices.");
   expect(posts[0]?.text).toContain("(67% of 3 voices)");
   expect(f.calls.filter((call) => call.action === "pin")).toHaveLength(1);
   expect(f.runner.state.voteOpen).toBe(false);
@@ -617,10 +626,10 @@ test.each(["tie", "few", "deleted", "cleared"] as const)(
     const post = f.calls.find((call) => call.action === "send")?.text;
     expect(post).toContain(
       outcome === "tie"
-        ? "It's a tie between gary and milo."
+        ? "It's a tie between Gary and Milo."
         : outcome === "few"
           ? "Not enough votes to call it."
-          : "gary wins, 67% of 3 voices.",
+          : "Gary wins, 67% of 3 voices.",
     );
   },
 );
@@ -630,13 +639,13 @@ test("a rejected option label leaves the normal beat path intact", async () => {
     quiet: true,
     moderation: new FakeModerationPort((texts) =>
       texts.map((text) =>
-        text === "gary" ? { ...clearModeration(), flagged: true } : clearModeration(),
+        text === "Name Gary" ? { ...clearModeration(), flagged: true } : clearModeration(),
       ),
     ),
   });
   f.runner.dispatch({ type: "question", question: "Name the cat?" });
   for (let i = 0; i < 3; i++) {
-    f.chat(`gary${i}`, "Gary");
+    f.chat(`gary${i}`, "name gary");
     f.chat(`milo${i}`, "Milo");
   }
   await vi.advanceTimersByTimeAsync(10000);
@@ -702,4 +711,16 @@ test("a stopped unit awaiting chat output clears its laugh window", async () => 
   await vi.advanceTimersByTimeAsync(0);
   expect(f.clips.capture).not.toHaveBeenCalled();
   await vi.advanceTimersByTimeAsync(5000);
+});
+
+test("ballots never contribute to the ordinary-message laugh burst", async () => {
+  const f = splitFixture();
+  await vi.advanceTimersByTimeAsync(10000);
+  for (let i = 0; i < 5; i++) f.chat(`reply${i}`, "nice choice", `reply${i}`);
+  for (let i = 0; i < 20; i++) f.chat(`voter${i}`, "1", `ballot${i}`);
+  await vi.advanceTimersByTimeAsync(0);
+  expect(f.clips.capture).not.toHaveBeenCalled();
+  f.chat("sixth", "nice choice");
+  await vi.advanceTimersByTimeAsync(0);
+  expect(f.clips.capture).toHaveBeenCalledTimes(1);
 });

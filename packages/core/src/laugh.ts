@@ -19,6 +19,7 @@ export class LaughDetector {
     at: number;
     baseline: number;
     authors: Set<string>;
+    messageAuthors: Set<string>;
     messages: number;
   } | null = null;
   private cooldownUntil = 0;
@@ -30,6 +31,7 @@ export class LaughDetector {
       at,
       baseline: this.history.length / 60,
       authors: new Set(),
+      messageAuthors: new Set(),
       messages: 0,
     };
   }
@@ -49,12 +51,18 @@ export class LaughDetector {
     if (!candidate || at < candidate.at || at - candidate.at > 10000) return null;
     if (!enabled || !online || at < this.cooldownUntil) return null;
     candidate.messages++;
+    candidate.messageAuthors.add(author);
     if (cleanText(fragments).laughTokens.length) candidate.authors.add(author);
     const seconds = (at - candidate.at) / 1000;
-    const rate = candidate.messages / Math.max(1, seconds);
+    const rate = candidate.messages / Math.max(5, seconds);
     if (
       candidate.authors.size < 4 &&
-      !(seconds >= 1 && rate >= 1 && rate >= 3 * candidate.baseline)
+      !(
+        candidate.messages >= 6 &&
+        candidate.messageAuthors.size >= 3 &&
+        rate >= 1 &&
+        rate >= 3 * candidate.baseline
+      )
     )
       return null;
     this.candidate = null;

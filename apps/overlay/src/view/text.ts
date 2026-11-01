@@ -1,3 +1,5 @@
+import type { LineMessage } from "../../../../packages/core/src/overlay-protocol.js";
+
 export const captionLingerMs = (text: string) => Math.max(2500, Array.from(text).length * 55);
 
 export function captionWords(text: string): string[] {
@@ -18,4 +20,11 @@ export function countUp(value: number, ageMs: number): number {
 
 export function dissentCopy(pct: number | null, text: string | null): string {
   return pct === null || !text ? "" : `${String(pct)}% \u00b7 ${text}`;
+}
+
+export function needsMeanwhile(
+  line: Pick<LineMessage, "templated" | "answersQuestion"> | null | undefined,
+  question: string | null,
+): boolean {
+  return !!line && !line.templated && !!question && !line.answersQuestion;
 }

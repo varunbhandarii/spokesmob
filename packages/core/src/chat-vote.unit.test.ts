@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 import { createBlocklist } from "./blocklist.js";
-import { ballotChoice, ChatVote, splitChoices } from "./chat-vote.js";
+import { ballotChoice, ChatVote, splitChoices, titleVoteLabel } from "./chat-vote.js";
 import type { Cluster } from "./types.js";
 
 const cluster = (key: string, authors: string[], exemplars = [key]): Cluster => ({
@@ -16,12 +16,19 @@ const cluster = (key: string, authors: string[], exemplars = [key]): Cluster => 
   names: [],
   weight: authors.length,
 });
+
+test("display labels are title case while matching remains folded", () => {
+  expect(titleVoteLabel("captain FLUFFINGTON")).toBe("Captain Fluffington");
+  expect(ballotChoice("CAPTAIN fluffington", ["Captain Fluffington", "Milo"])).toBe(0);
+  expect(ballotChoice("gary", ["Gary", "Milo"])).toBe(0);
+  expect(ballotChoice("MILO", ["Gary", "Milo"])).toBe(1);
+});
 test("close supported splits use deterministic shortest normalized labels", () => {
   const clusters = [
     cluster("gary", ["a", "b", "c", "d"], ["name him Gary", "Gary"]),
     cluster("milo", ["e", "f", "g", "h"]),
   ];
-  expect(splitChoices(clusters, 8, 2, [], createBlocklist())).toEqual(["gary", "milo"]);
+  expect(splitChoices(clusters, 8, 2, [], createBlocklist())).toEqual(["Gary", "Milo"]);
   expect(splitChoices(clusters, 8, 5, [], createBlocklist())).toBeNull();
   expect(splitChoices(clusters, 20, 2, [], createBlocklist())).toBeNull();
   expect(
@@ -62,7 +69,7 @@ test("labels reject blocked terms, usernames, URLs, mentions and long digit runs
     ).toBeNull();
 });
 test("latest eligible ballot per author wins, and deletes remove only the current ballot", () => {
-  const vote = new ChatVote(["gary", "milo"]);
+  const vote = new ChatVote(["Gary", "Milo"]);
   vote.cast("a", "one", 0, 1);
   vote.cast("a", "two", 1, 2);
   vote.cast("a", "old", 0, 0);
@@ -79,12 +86,12 @@ test("latest eligible ballot per author wins, and deletes remove only the curren
   expect(ballotChoice("!mob 1", vote.choices)).toBeNull();
 });
 test("results count distinct voters, round percentages and handle ties and tiny votes", () => {
-  const vote = new ChatVote(["gary", "milo"]);
+  const vote = new ChatVote(["Gary", "Milo"]);
   expect(vote.result().text).toBe("Not enough votes to call it.");
   vote.cast("a", "a", 0, 1);
   vote.cast("b", "b", 0, 1);
   vote.cast("c", "c", 1, 1);
-  expect(vote.result()).toMatchObject({ n: 3, pct: 67, text: "gary wins, 67% of 3 voices." });
+  expect(vote.result()).toMatchObject({ n: 3, pct: 67, text: "Gary wins, 67% of 3 voices." });
   vote.cast("d", "d", 1, 1);
-  expect(vote.result().text).toBe("It's a tie between gary and milo.");
+  expect(vote.result().text).toBe("It's a tie between Gary and Milo.");
 });

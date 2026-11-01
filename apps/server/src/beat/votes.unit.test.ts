@@ -53,9 +53,9 @@ function fixture() {
 }
 test("ballots bypass consensus, include the broadcaster and publish at most four count updates per second", async () => {
   const f = fixture();
-  f.votes.open(["gary", "milo"]);
+  f.votes.open(["Gary", "Milo"]);
   expect(f.announce).toHaveBeenCalledExactlyOnceWith(
-    "Vote now: type 1 for gary or 2 for milo, 30 seconds.",
+    "Vote now: type 1 for Gary or 2 for Milo, 30 seconds.",
   );
   expect(f.votes.acceptsChat(f.chat("a", "other chat"))).toBe(true);
   for (let i = 0; i < 20; i++) {
@@ -69,7 +69,7 @@ test("ballots bypass consensus, include the broadcaster and publish at most four
 });
 test("gags, moderation flags, deletion and user clears invalidate ballots, including pending checks", async () => {
   const f = fixture();
-  f.votes.open(["gary", "milo"]);
+  f.votes.open(["Gary", "Milo"]);
   f.gagged.mockReturnValue(true);
   f.votes.acceptsChat(f.chat("gagged", "1"));
   f.gagged.mockReturnValue(false);
@@ -88,7 +88,7 @@ test("gags, moderation flags, deletion and user clears invalidate ballots, inclu
 test("cancellation clears the vote without a result, and failed announcements are not retried", async () => {
   const f = fixture();
   f.announce.mockRejectedValue(new Error("unavailable"));
-  f.votes.open(["gary", "milo"]);
+  f.votes.open(["Gary", "Milo"]);
   f.votes.cancel("muted");
   await vi.advanceTimersByTimeAsync(31000);
   expect(f.finish).toHaveBeenCalledExactlyOnceWith(null);
@@ -113,15 +113,15 @@ test("proposals require a question, obey label moderation and consume one attemp
   expect(await f.votes.propose(window, clusters, 2, null, signal)).toBeNull();
   f.resolve.mockResolvedValueOnce(
     new Map([
-      ["gary", { ...clearModeration(), flagged: true }],
-      ["milo", clearModeration()],
+      ["Gary", { ...clearModeration(), flagged: true }],
+      ["Milo", clearModeration()],
     ]),
   );
   expect(await f.votes.propose(window, clusters, 2, "Name the cat?", signal)).toBeNull();
   const proposal = await f.votes.propose(window, clusters, 2, "Name the cat?", signal);
-  expect(proposal?.choices).toEqual(["gary", "milo"]);
+  expect(proposal?.choices).toEqual(["Gary", "Milo"]);
   expect(await f.votes.propose(window, clusters, 2, "Name the cat?", signal)).toBeNull();
-  f.votes.open(["gary", "milo"]);
+  f.votes.open(["Gary", "Milo"]);
   await vi.advanceTimersByTimeAsync(30000);
   f.votes.finishComplete();
   f.votes.questionChanged();

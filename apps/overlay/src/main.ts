@@ -1,7 +1,7 @@
 import { type AudioPlayer, createAudioPlayer } from "./audio/player.js";
 import { audioAllowed, decodeAudioFrame, parseControl } from "./protocol.js";
 import { needsSoundGesture } from "./sound-gesture.js";
-import { sourceActive, sourceAudioStatus } from "./source-active.js";
+import { overlayStatusVisible, sourceActive, sourceAudioStatus } from "./source-active.js";
 import { createRenderer } from "./view/render.js";
 import { createViewStore } from "./view/store.js";
 import { connectOverlay } from "./ws.js";
@@ -17,6 +17,10 @@ sound.hidden = true;
 document.body.append(sound);
 const updateSound = () => {
   sound.hidden = !needsSoundGesture(obs, authorized, player?.state() ?? "closed");
+  audioState = sourceAudioStatus(allowed, authorized, active);
+  if (allowed && authorized && active && player?.state() !== "running")
+    audioState = "audio blocked";
+  showStatus();
 };
 sound.addEventListener("click", () => {
   void player?.resume().then(updateSound).catch(updateSound);
@@ -41,7 +45,10 @@ const renderer = createRenderer({
   },
 });
 const showStatus = () => {
-  if (status) status.textContent = `${connectionState} · ${audioState}`;
+  if (status) {
+    status.textContent = `${connectionState} \u00b7 ${audioState}`;
+    status.hidden = !overlayStatusVisible(connectionState, audioState);
+  }
 };
 
 try {
@@ -100,8 +107,7 @@ try {
     renderer.setActive(active);
     player?.enabled(authorized && active);
     connection.send({ type: "active", active });
-    audioState = sourceAudioStatus(allowed, authorized, active);
-    showStatus();
+    updateSound();
   });
   window.addEventListener("pagehide", () => {
     connection.close();

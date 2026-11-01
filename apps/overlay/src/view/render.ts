@@ -6,7 +6,7 @@ import { createFrameLoop, type FrameClock } from "./loop.js";
 import { createParticleCanvas } from "./particle-canvas.js";
 import { createChannelQr } from "./qr.js";
 import type { ViewStore } from "./store.js";
-import { captionWords, countUp, dissentCopy } from "./text.js";
+import { captionWords, countUp, dissentCopy, needsMeanwhile } from "./text.js";
 import "./view.css";
 
 const place = (node: HTMLElement, zone: Zone) => {
@@ -80,7 +80,14 @@ export function createRenderer(options: {
   const hype = slot("hype-chip");
   const vote = slot("vote-plate");
   const voteTitle = make("vote-title", vote.plate);
-  const voteBars = [make("vote-bar", vote.plate), make("vote-bar", vote.plate)];
+  const voteRows = [0, 1].map(() => {
+    const row = make("vote-row", vote.plate);
+    const label = make("vote-label", row);
+    const track = make("vote-track", row);
+    const bar = make("vote-bar", track);
+    const count = make("vote-count", row);
+    return { label, bar, count };
+  });
   const voteCounts = make("vote-counts", vote.plate);
   const clipped = slot("clipped-badge");
   write(clipped.plate, "Clipped");
@@ -98,6 +105,7 @@ export function createRenderer(options: {
   let qrChannel = "";
   let layout = "";
   let captionKey = "";
+  let voteKey = "";
   let wordNodes: HTMLSpanElement[] = [];
   let fitted = false;
   let alive = true;
@@ -105,6 +113,7 @@ export function createRenderer(options: {
   void document.fonts.ready.then(() => {
     if (alive) {
       fitted = false;
+      voteKey = "";
       particles.invalidate();
     }
   });
@@ -113,17 +122,23 @@ export function createRenderer(options: {
     if (options.sample) store.sample(options.sample());
     const view = store.view();
     const zones = LAYOUTS[view.layout];
+    const voteZone = {
+      ...zones.caption,
+      height: 1080 - zones.margin - zones.caption.y,
+      fontSize: Math.min(40, zones.caption.fontSize * 0.65),
+    };
     vote.host.hidden = !view.vote;
     if (view.vote) {
-      write(voteTitle, `Vote: 1 ${view.vote.choices[0]} · 2 ${view.vote.choices[1]}`);
-      write(
-        voteCounts,
-        `${view.vote.counts[0]} / ${view.vote.counts[1]} · ${Math.ceil(view.vote.remainingMs / 1000)}s`,
-      );
+      write(voteTitle, "Vote");
+      write(voteCounts, `${Math.ceil(view.vote.remainingMs / 1000)}s remaining`);
       const total = Math.max(1, view.vote.counts[0] + view.vote.counts[1]);
       for (let i = 0; i < 2; i++) {
-        const bar = voteBars[i];
-        if (bar) bar.style.transform = `scaleX(${(view.vote.counts[i] ?? 0) / total})`;
+        const row = voteRows[i];
+        if (row) {
+          write(row.label, `${i + 1} ${view.vote.choices[i] ?? ""}`);
+          write(row.count, String(view.vote.counts[i] ?? 0));
+          row.bar.style.transform = `scaleX(${(view.vote.counts[i] ?? 0) / total})`;
+        }
       }
     }
     clipped.host.hidden = !view.clipped;
@@ -147,16 +162,8 @@ export function createRenderer(options: {
       layout = view.layout;
       fitted = false;
       place(faceHost, zones.face);
-      place(vote.host, {
-        ...zones.caption,
-        height: Math.max(160, zones.caption.height),
-        fontSize: zones.caption.fontSize * 0.7,
-      });
-      place(clipped.host, {
-        ...zones.badge,
-        y: zones.badge.y + zones.badge.height + 6,
-        width: 160,
-      });
+      place(vote.host, voteZone);
+
       place(demo.host, { x: zones.margin, y: zones.margin, width: 400, height: 42, fontSize: 22 });
       for (const [node, zone] of [
         [caption.host, zones.caption],
@@ -171,12 +178,19 @@ export function createRenderer(options: {
       if (zones.bar) place(bar, zones.bar);
       bar.hidden = !zones.bar;
       qr.hidden = !zones.qr;
-      place(bubble.host, {
+      const bubbleZone = {
         x: zones.face.x + zones.face.width - 18,
         y: zones.face.y + 40,
         width: 100,
         height: 70,
         fontSize: 48,
+      };
+      place(bubble.host, bubbleZone);
+      place(clipped.host, {
+        ...zones.badge,
+        y: Math.max(zones.badge.y + zones.badge.height, bubbleZone.y + bubbleZone.height) + 12,
+        width: 160,
+        height: 48,
       });
       place(stateTag.host, {
         x: view.layout === "stage" ? zones.face.x + zones.face.width + 16 : zones.face.x,
@@ -200,6 +214,13 @@ export function createRenderer(options: {
       place(raid.host, { x: 360, y: 184, width: 1200, height: 96, fontSize: 42 });
       place(hype.host, { x: 1460, y: 48, width: 396, height: 80, fontSize: 28 });
     }
+    const nextVoteKey = view.vote
+      ? JSON.stringify([layout, view.vote.choices, view.vote.counts])
+      : "";
+    if (nextVoteKey !== voteKey) {
+      voteKey = nextVoteKey;
+      if (view.vote) fitPlate(vote.plate, voteZone, 8);
+    }
     if (qrChannel !== view.channel) {
       qrChannel = view.channel;
       qr.querySelector("svg")?.remove();
@@ -212,7 +233,7 @@ export function createRenderer(options: {
     const aside = visible?.dissent
       ? dissentCopy(line?.dissentPct ?? null, line?.dissent ?? null)
       : "";
-    const meanwhile = !!line && !!view.state.question && !line.answersQuestion;
+    const meanwhile = needsMeanwhile(line, view.state.question);
     const key = line ? `${line.text}|${aside}|${String(meanwhile)}|${layout}` : "";
     if (key !== captionKey) {
       captionKey = key;

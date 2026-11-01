@@ -1,6 +1,22 @@
 import { expect, test } from "vitest";
 import { formatVoiceCount } from "../../../../packages/core/src/voice-count.js";
-import { captionLingerMs, captionWords, countUp, dissentCopy, highlightedWord } from "./text.js";
+import {
+  captionLingerMs,
+  captionWords,
+  countUp,
+  dissentCopy,
+  highlightedWord,
+  needsMeanwhile,
+} from "./text.js";
+
+test("templated raid and train captions never use the off-topic preface", () => {
+  for (const text of ["Welcome Friendly Channel.", "Hype train level two."]) {
+    const line = { text, templated: true, answersQuestion: false };
+    expect(needsMeanwhile(line, "Name the cat?")).toBe(false);
+  }
+  expect(needsMeanwhile({ templated: false, answersQuestion: false }, "Name the cat?")).toBe(true);
+  expect(needsMeanwhile({ templated: false, answersQuestion: true }, "Name the cat?")).toBe(false);
+});
 
 test("caption words retain their source spacing and progress follows playback duration", () => {
   const line = "Chat wants Gary.";

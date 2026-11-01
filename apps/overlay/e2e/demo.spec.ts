@@ -17,6 +17,14 @@ test("the mock demo reveals only on local playback, moves its mouth and identifi
     runtime.url.searchParams.set("audio", "1");
     await page.addInitScript((search) => {
       history.replaceState(null, "", location.pathname + search);
+      const NativeContext = AudioContext;
+      class ObservedContext extends NativeContext {
+        constructor(options?: AudioContextOptions) {
+          super(options);
+          Object.assign(window, { demoAudioContext: this });
+        }
+      }
+      Object.defineProperty(window, "AudioContext", { value: ObservedContext });
       const result = { started: false, ended: false, early: false, caption: false, mouth: 0 };
       Object.assign(window, { demoObservation: result });
       const send = WebSocket.prototype.send;
@@ -51,6 +59,7 @@ test("the mock demo reveals only on local playback, moves its mouth and identifi
       throw new Error("Local demo navigation failed");
     }
     await expect(page.locator("#status")).toContainText("audio ready");
+    await expect(page.locator("#status")).toBeHidden();
     await expect(page.locator(".demo-tag")).toBeVisible();
     await expect(page.locator(".demo-tag")).toHaveText("Demo · simulated voice");
     await page.evaluate(() => document.fonts.ready.then(() => undefined));
@@ -85,6 +94,14 @@ test("the mock demo reveals only on local playback, moves its mouth and identifi
     expect(result.early).toBe(false);
     expect(result.caption).toBe(true);
     expect(result.mouth).toBeGreaterThan(0.1);
+    await page.evaluate(() =>
+      (window as unknown as { demoAudioContext: AudioContext }).demoAudioContext.suspend(),
+    );
+    await expect(page.locator("#status")).toBeVisible();
+    await expect(page.locator("#status")).toContainText("audio blocked");
+    await page.getByRole("button", { name: "Click to enable sound" }).click();
+    await expect(page.locator("#status")).toBeHidden();
+    await expect(page.getByRole("button", { name: "Click to enable sound" })).toBeHidden();
     expect(errors).toEqual([]);
   } finally {
     control?.close();

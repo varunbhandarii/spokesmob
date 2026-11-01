@@ -2,6 +2,73 @@ import { expect, test } from "@playwright/test";
 import { sceneLine } from "../src/view/scenes.js";
 
 for (const layout of ["wide", "stage", "compact"]) {
+  test(`clip disclosure and preview remain separate above particles in ${layout}`, async ({
+    page,
+  }) => {
+    const errors: string[] = [];
+    page.on("pageerror", () => errors.push("script error"));
+    page.on("console", (message) => {
+      if (message.type() === "error") errors.push("console error");
+    });
+    await page.goto(`/overlay/scene.html?scene=preview&layout=${layout}`);
+    await page.waitForFunction(() => !!window.scene);
+    await page.evaluate(async () => {
+      await document.fonts.ready;
+      window.scene.seek(700);
+      window.scene.message({ type: "event", kind: "clip" });
+    });
+    await page.waitForTimeout(300);
+    for (const selector of [".clipped-badge", ".preview-bubble", ".ai-badge"])
+      await expect(page.locator(selector)).toBeVisible();
+    const geometry = await page.evaluate(() => {
+      const selectors = [".clipped-badge", ".preview-bubble", ".ai-badge"];
+      const boxes = selectors.map((selector) => {
+        const node = document.querySelector<HTMLElement>(selector);
+        if (!node) throw new Error("Missing disclosure");
+        const box = node.getBoundingClientRect();
+        const slot = node.parentElement?.getBoundingClientRect();
+        return {
+          left: box.left,
+          right: box.right,
+          top: box.top,
+          bottom: box.bottom,
+          fits: !!slot && box.width <= slot.width + 1 && box.height <= slot.height + 1,
+        };
+      });
+      const separate = boxes.every((a, i) =>
+        boxes
+          .slice(i + 1)
+          .every(
+            (b) => a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top,
+          ),
+      );
+      const canvas = document.querySelector<HTMLElement>(".particle-canvas");
+      const face = document.querySelector<HTMLElement>(".face-host");
+      if (!canvas || !face) throw new Error("Missing visual layer");
+      const particleLayer = Number(getComputedStyle(canvas).zIndex);
+      const faceBelowParticles = Number(getComputedStyle(face).zIndex) < particleLayer;
+      const platesAboveParticles = [...document.querySelectorAll<HTMLElement>(".text-slot")].every(
+        (slot) => Number(getComputedStyle(slot).zIndex) > particleLayer,
+      );
+      return {
+        separate,
+        fits: boxes.every(
+          (box) =>
+            box.fits && box.left >= 0 && box.top >= 0 && box.right <= 1920 && box.bottom <= 1080,
+        ),
+        faceBelowParticles,
+        platesAboveParticles,
+      };
+    });
+    expect(geometry).toEqual({
+      separate: true,
+      fits: true,
+      faceBelowParticles: true,
+      platesAboveParticles: true,
+    });
+    expect(errors).toEqual([]);
+  });
+
   test(`fitted text and disclosure stay inside their zones in ${layout}`, async ({
     page,
   }, info) => {
@@ -72,6 +139,28 @@ for (const layout of ["wide", "stage", "compact"]) {
     expect(errors).toEqual([]);
   });
 }
+
+test("raid and train captions retain the question without an off-topic preface", async ({
+  page,
+}) => {
+  await page.goto("/overlay/scene.html?scene=speaking&layout=wide");
+  await page.waitForFunction(() => !!window.scene);
+  for (const [index, text] of ["Welcome Friendly Channel.", "Hype train level two."].entries()) {
+    await page.evaluate(
+      ({ line, text, take }) => {
+        window.scene.seek(1800);
+        window.scene.message({ ...line, take, text, templated: true, answersQuestion: false });
+        window.scene.message({ type: "prepare", take, channel: "main", text });
+        window.scene.message({ type: "play", take, durationMs: 2000 });
+        window.scene.playback({ type: "started", take });
+      },
+      { line: sceneLine, text, take: 99 + index },
+    );
+    await expect(page.locator(".caption-words")).toHaveText(text);
+    await expect(page.locator(".caption-lead")).toBeHidden();
+    await expect(page.locator(".question")).toHaveText("Name the cat?");
+  }
+});
 
 test("preview shows only a bubble and production never renders harness labels", async ({
   page,
