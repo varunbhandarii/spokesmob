@@ -1,6 +1,31 @@
 import { expect, test } from "@playwright/test";
 import { sceneLine } from "../src/view/scenes.js";
 
+test("split prompts hide agreement while vote results retain their computed counts", async ({
+  page,
+}) => {
+  await page.goto("/overlay/scene.html?scene=speaking&layout=wide");
+  await page.waitForFunction(() => !!window.scene);
+  await page.evaluate((line) => {
+    window.scene.seek(1800);
+    const text = "Chat is split. Type 1 for Gary, or 2 for Milo.";
+    window.scene.message({ ...line, take: 80, text, templated: true, showAgreement: false });
+    window.scene.message({ type: "prepare", take: 80, channel: "main", text });
+    window.scene.playback({ type: "started", take: 80 });
+  }, sceneLine);
+  await expect(page.locator(".caption")).toContainText("Chat is split");
+  await expect(page.locator(".agreement")).toBeHidden();
+  await page.evaluate((line) => {
+    const text = "Gary wins, 67% of 3 voices.";
+    window.scene.message({ ...line, take: 81, text, pct: 67, voices: 3, templated: true });
+    window.scene.message({ type: "prepare", take: 81, channel: "main", text });
+    window.scene.playback({ type: "started", take: 81 });
+  }, sceneLine);
+  await expect(page.locator(".agreement")).toBeVisible();
+  await expect(page.locator(".agreement")).toHaveAttribute("data-pct", "67");
+  await expect(page.locator(".caption")).toContainText("67% of 3 voices");
+});
+
 for (const layout of ["wide", "stage", "compact"]) {
   test(`clip disclosure and preview remain separate above particles in ${layout}`, async ({
     page,

@@ -259,7 +259,7 @@ export function createRenderer(options: {
     const pct = countUp(line?.pct ?? 0, visible?.ageMs ?? 0);
     const voices = countUp(line?.voices ?? 0, visible?.ageMs ?? 0);
     const meterChanged = write(meter.plate, `${String(pct)}% of ${formatVoiceCount(voices)}`);
-    meter.host.hidden = !line || line.voices === 0;
+    meter.host.hidden = !line || line.voices === 0 || line.showAgreement === false;
     counter.host.hidden = !meter.host.hidden;
     meter.plate.dataset.pct = String(line?.pct ?? 0);
     const dissentChanged = write(dissent.plate, aside);

@@ -138,6 +138,7 @@ export const particlesMessageSchema = z.strictObject({
 });
 export const particlesClearMessageSchema = z.strictObject({ type: z.literal("particles_clear") });
 export const lineMessageSchema = z.strictObject({
+  showAgreement: z.boolean().optional(),
   type: z.literal("line"),
   take: takeIdSchema,
   text: z.string().min(1).max(2000),

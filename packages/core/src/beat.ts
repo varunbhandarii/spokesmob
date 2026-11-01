@@ -509,6 +509,7 @@ export function reduce(input: BeatState, event: BeatEvent, now: number): BeatRed
           question: state.question,
           answersQuestion: result.answersQuestion && state.current.question === state.question,
           templated: !!result.templateKind,
+          showAgreement: !result.templateKind,
           citedNames: result.citedNames,
           citedExemplars: event.citedExemplars,
           raidName: null,

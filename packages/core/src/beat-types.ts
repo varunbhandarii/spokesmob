@@ -68,6 +68,7 @@ export interface QueuedEventLine {
   text: string;
 }
 export interface BeatLine {
+  showAgreement?: boolean;
   dissentPct: number | null;
   text: string;
   dissent: string | null;

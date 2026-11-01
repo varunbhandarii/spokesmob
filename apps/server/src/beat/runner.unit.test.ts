@@ -532,6 +532,9 @@ test("split replay opens after the hold without a post; ballots bypass consensus
     f.overlay.some((message) => message.type === "event" && message.kind === "vote_begin"),
   ).toBe(false);
   await vi.advanceTimersByTimeAsync(4500);
+  expect(f.overlay.find((message) => message.type === "line")).toMatchObject({
+    showAgreement: false,
+  });
   expect(f.runner.state.voteOpen).toBe(true);
   expect(f.controls.find((message) => message.type === "preview")).toMatchObject({
     text: "Chat is split. Type 1 for Gary, or 2 for Milo.",
