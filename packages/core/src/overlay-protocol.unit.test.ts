@@ -54,6 +54,23 @@ test("clip visuals contain no IDs or links and capture links belong only to the 
     serverControlMessageSchema.safeParse({ ...activity, url: "https://example.com/" }).success,
   ).toBe(false);
 });
+
+test("vote events validate on both visual and control boundaries", () => {
+  const events = [
+    { type: "event", kind: "vote_begin", choices: ["gary", "milo"], durationS: 30 },
+    { type: "event", kind: "vote_update", counts: [3, 2] },
+    { type: "event", kind: "vote_end" },
+  ];
+  for (const schema of [serverOverlayMessageSchema, serverControlMessageSchema]) {
+    for (const event of events) expect(schema.safeParse(event).success).toBe(true);
+    expect(schema.safeParse({ ...events[0], choices: ["x".repeat(26), "milo"] }).success).toBe(
+      false,
+    );
+    expect(schema.safeParse({ ...events[1], counts: [-1, 0] }).success).toBe(false);
+    expect(schema.safeParse({ ...events[1], counts: [0.5, 0] }).success).toBe(false);
+    expect(schema.safeParse({ ...events[2], text: "extra" }).success).toBe(false);
+  }
+});
 const line = {
   dissentPct: null,
   type: "line",

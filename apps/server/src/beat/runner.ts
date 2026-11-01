@@ -13,6 +13,7 @@ import {
   beatViewSchema,
 } from "../../../../packages/core/src/beat-types.js";
 import type { Blocklist } from "../../../../packages/core/src/blocklist.js";
+import type { ChatVote, VoteChoices } from "../../../../packages/core/src/chat-vote.js";
 import { modelCost } from "../../../../packages/core/src/cost.js";
 import {
   beatMoodSignals,
@@ -42,6 +43,7 @@ import type { VoiceUsage } from "../voice/types.js";
 import type { ClipCapture } from "./clips.js";
 import type { ChatOutput } from "./output.js";
 import { BeatRecords } from "./records.js";
+import { SplitVotes } from "./votes.js";
 
 export interface BeatRunnerOptions {
   bus: TwitchBus;
@@ -70,6 +72,8 @@ export interface BeatRunnerOptions {
 }
 export class BeatRunner {
   state: BeatState;
+  private readonly votes: SplitVotes;
+  private readonly voteProposals = new Map<number, VoteChoices>();
   private readonly laughs = new LaughDetector();
   private readonly shownEnds = new Map<number, number>();
   private readonly clock: Clock;
@@ -127,7 +131,20 @@ export class BeatRunner {
       },
     });
     this.moderation = new ModerationGate({ port: options.moderation, clock: this.clock });
+    this.votes = new SplitVotes({
+      enabled: () => this.state.settings.splitVotes,
+      gagged: (id) => this.options.store.gags.list().includes(id),
+      blocklist: options.blocklist,
+      moderation: this.moderation,
+      safeTemplate: (text) => this.verifyTemplate(text),
+      overlay: options.overlay,
+      control: (message) => options.control?.(message),
+      announce: (text) => options.output.announceVote(text),
+      finish: (result) => this.finishVote(result),
+      clock: this.clock,
+    });
     this.collector = new ConsensusCollector({
+      acceptChat: (event) => this.votes.acceptsChat(event),
       bus: options.bus,
       moderation: this.moderation,
       blocklist: options.blocklist,
@@ -195,6 +212,17 @@ export class BeatRunner {
       (event.type === "gate" && event.changes.online === false)
     )
       this.laughs.cancel();
+    if (event.type === "question") {
+      this.votes.questionChanged();
+      if (this.state.current?.purpose === "split")
+        this.dispatch({ type: "invalidate", reason: "question_changed" });
+    } else if (
+      ["mute", "kill", "off"].includes(event.type) ||
+      (event.type === "gate" &&
+        (event.changes.online === false || event.changes.capped === true)) ||
+      (event.type === "settings" && event.changes.splitVotes === false)
+    )
+      this.votes.cancel(event.type);
     this.events.push(event);
     if (this.draining) return;
     this.draining = true;
@@ -214,6 +242,7 @@ export class BeatRunner {
     this.dispatch({ type: "gate", changes: this.options.clients() });
   }
   invalidateGag(userId: string) {
+    this.votes.removeAuthor(userId);
     this.particleNames = [];
     this.options.overlay({ type: "particles_clear" });
     const source = this.state.current
@@ -307,6 +336,7 @@ export class BeatRunner {
         }
       }
     } else if (event.kind === "chat") {
+      if (this.votes.isBallot(event.text)) return;
       if (
         !event.self &&
         !event.text.trimStart().startsWith("!") &&
@@ -340,6 +370,9 @@ export class BeatRunner {
       event.kind === "chatClearUser" ||
       event.kind === "chatClear"
     ) {
+      if (event.kind === "chatClear") this.votes.cancel("chat cleared");
+      else if (event.kind === "chatClearUser") this.votes.removeAuthor(event.userId);
+      else this.votes.removeMessage(event.messageId);
       this.particleNames = [];
       this.options.overlay({ type: "particles_clear" });
       const source = this.state.current
@@ -382,6 +415,16 @@ export class BeatRunner {
   }
   private effect(effect: BeatEffect) {
     switch (effect.type) {
+      case "shown":
+        if (effect.status === "caption_only" || this.shownEnds.has(effect.beatId))
+          this.laughs.shown(this.records.key(effect.beatId), effect.line.text, effect.at);
+        break;
+      case "openVote": {
+        const choices = this.voteProposals.get(effect.beatId);
+        if (choices) this.votes.open(choices);
+        else this.dispatch({ type: "voteFinished", line: null });
+        break;
+      }
       case "openWindow":
         this.collector.open(effect.window.startAt);
         break;
@@ -529,6 +572,14 @@ export class BeatRunner {
           if (effect.channel === "main") book.playAt = this.clock.now();
           await take.play();
           const playback = await take.ended;
+          if (
+            playback.reason !== "ended" &&
+            this.state.current?.id === effect.beatId &&
+            this.state.current.purpose === "split"
+          ) {
+            this.dispatch({ type: "invalidate", reason: "playback_stopped" });
+            return;
+          }
           if (playback.reason === "ended") this.shownEnds.set(effect.beatId, this.clock.now());
           else this.shownEnds.delete(effect.beatId);
           if (this.current(effect.beatId))
@@ -541,6 +592,7 @@ export class BeatRunner {
         }, "play");
         break;
       case "cancelVoice": {
+        this.laughs.cancel();
         this.options.voice.cancelAll();
         if (effect.beatId !== null) this.takes.delete(effect.beatId);
         else this.takes.clear();
@@ -615,17 +667,7 @@ export class BeatRunner {
         });
         break;
       case "log":
-        if (
-          (effect.status === "spoken" && this.shownEnds.has(effect.beat.id)) ||
-          effect.status === "caption_only"
-        ) {
-          if (effect.beat.line)
-            this.laughs.shown(
-              this.records.key(effect.beat.id),
-              effect.beat.line.text,
-              this.shownEnds.get(effect.beat.id) ?? effect.at,
-            );
-        }
+        this.voteProposals.delete(effect.beat.id);
         this.shownEnds.delete(effect.beat.id);
         this.closedBeats++;
         this.records.write(
@@ -656,6 +698,37 @@ export class BeatRunner {
         break;
       }
     }
+  }
+  private finishVote(result: ReturnType<ChatVote["result"]> | null) {
+    if (!result) {
+      this.dispatch({ type: "voteFinished", line: null });
+      return;
+    }
+    const version = this.votes.version();
+    this.task(async () => {
+      const safe = await this.verifyTemplate(result.text);
+      if (version !== this.votes.version()) return;
+      this.votes.finishComplete();
+      if (!this.state.voteOpen) return;
+      const line: BeatLine | null =
+        safe && this.allowed()
+          ? {
+              text: result.text,
+              dissent: null,
+              dissentPct: null,
+              pct: result.pct,
+              voices: result.n,
+              mood: "chill",
+              question: this.state.question,
+              answersQuestion: true,
+              templated: true,
+              citedNames: [],
+              citedExemplars: [],
+              raidName: null,
+            }
+          : null;
+      this.dispatch({ type: "voteFinished", line });
+    }, "voteResult");
   }
   private async verifyTemplate(text: string): Promise<boolean> {
     const checked = verifyTemplated(text, {
@@ -737,6 +810,18 @@ export class BeatRunner {
         serviceTier: this.options.tier ?? "fast",
         moodContext: { raidActive: mood.raid_active, hypeLevel: mood.hype_level },
         onProcessing: (ms) => this.trackProcessing(ms),
+        chooseTemplate: async (window, clusters) => {
+          const proposal = await this.votes.propose(
+            window,
+            clusters,
+            this.state.settings.minVoices,
+            effect.question,
+            controller.signal,
+          );
+          if (!proposal || !this.current(effect.beatId)) return null;
+          this.voteProposals.set(effect.beatId, proposal.choices);
+          return proposal;
+        },
         onWindow: (_window, clusters) => {
           exemplars = new Map(
             clusters.map((cluster) => [cluster.key, cluster.exemplars.map((item) => item.text)]),
@@ -866,6 +951,7 @@ export class BeatRunner {
     this.dispatch({ type: "off" });
     this.stopped = true;
     this.options.clips?.stop();
+    this.votes.cancel("server stopped");
     for (const cleanup of this.cleanup.splice(0)) cleanup();
     for (const interval of this.intervals) this.clock.clearInterval(interval);
     for (const cancel of this.timers.values()) cancel();

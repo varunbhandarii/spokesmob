@@ -133,6 +133,7 @@ export interface StageLatency {
   total: number;
 }
 export interface SynthesisResult {
+  templateKind?: "split";
   dissentPct: number | null;
   selectedCandidate?: "line" | "alternate_line" | "fallback";
   rejectedCandidates?: CandidateRejection[];

@@ -15,6 +15,7 @@ export interface ControlModel {
   cost: Cost | null;
   health: Health | null;
   settings: BeatSettings;
+  vote: { choices: [string, string]; counts: [number, number] } | null;
   activities: Extract<ControlMessage, { type: "activity" }>[];
   logs: BeatLogRecord[];
 }
@@ -25,6 +26,7 @@ export const createControlModel = (): ControlModel => ({
   cost: null,
   health: null,
   settings: { ...DEFAULT_BEAT_SETTINGS },
+  vote: null,
   activities: [],
   logs: [],
 });
@@ -45,11 +47,23 @@ export function receiveControl(
   const next = preview === model.preview ? model : { ...model, preview };
   switch (message.type) {
     case "hello":
-      return { ...next, state: message.state, simulatedVoice: !!message.simulatedVoice };
+      return {
+        ...next,
+        vote: null,
+        state: message.state,
+        simulatedVoice: !!message.simulatedVoice,
+      };
     case "state": {
       const { type: _type, ...state } = message;
       return { ...next, state };
     }
+    case "event":
+      if (message.kind === "vote_begin")
+        return { ...next, vote: { choices: message.choices, counts: [0, 0] } };
+      if (message.kind === "vote_update" && model.vote)
+        return { ...next, vote: { ...model.vote, counts: message.counts } };
+      if (message.kind === "vote_end") return { ...next, vote: null };
+      return next;
     case "activity":
       return { ...next, activities: [message, ...model.activities].slice(0, LOG_LIMIT) };
     case "log":

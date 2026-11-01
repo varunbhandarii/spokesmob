@@ -36,6 +36,7 @@ export class ConsensusCollector {
       seed?: number;
       log?: Pick<Logger, "warn">;
       windowOptions?: () => Partial<WindowOptions>;
+      acceptChat?(event: Extract<TwitchEvent, { kind: "chat" }>): boolean;
       onProcessing?(milliseconds: number): void;
     },
   ) {
@@ -109,6 +110,7 @@ export class ConsensusCollector {
     if (this.startAt === undefined) return;
     switch (event.kind) {
       case "chat":
+        if (this.options.acceptChat && !this.options.acceptChat(event)) break;
         this.messages.push(fromTwitchChat(event));
         break;
       case "chatDelete":

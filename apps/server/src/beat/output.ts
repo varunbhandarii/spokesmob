@@ -49,6 +49,9 @@ export class ChatOutput {
   async ack(text: string) {
     return this.helix.sendChatMessage({ text });
   }
+  async announceVote(text: string) {
+    await this.helix.sendAnnouncement(text, "purple");
+  }
   async announce(question: string) {
     await this.helix.sendAnnouncement(formatAnnouncement(question), "purple");
   }

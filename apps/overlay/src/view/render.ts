@@ -78,6 +78,10 @@ export function createRenderer(options: {
   const bubble = slot("preview-bubble");
   const raid = slot("raid-banner");
   const hype = slot("hype-chip");
+  const vote = slot("vote-plate");
+  const voteTitle = make("vote-title", vote.plate);
+  const voteBars = [make("vote-bar", vote.plate), make("vote-bar", vote.plate)];
+  const voteCounts = make("vote-counts", vote.plate);
   const clipped = slot("clipped-badge");
   write(clipped.plate, "Clipped");
   const demo = slot("demo-tag");
@@ -109,6 +113,19 @@ export function createRenderer(options: {
     if (options.sample) store.sample(options.sample());
     const view = store.view();
     const zones = LAYOUTS[view.layout];
+    vote.host.hidden = !view.vote;
+    if (view.vote) {
+      write(voteTitle, `Vote: 1 ${view.vote.choices[0]} · 2 ${view.vote.choices[1]}`);
+      write(
+        voteCounts,
+        `${view.vote.counts[0]} / ${view.vote.counts[1]} · ${Math.ceil(view.vote.remainingMs / 1000)}s`,
+      );
+      const total = Math.max(1, view.vote.counts[0] + view.vote.counts[1]);
+      for (let i = 0; i < 2; i++) {
+        const bar = voteBars[i];
+        if (bar) bar.style.transform = `scaleX(${(view.vote.counts[i] ?? 0) / total})`;
+      }
+    }
     clipped.host.hidden = !view.clipped;
     demo.host.hidden = !view.simulatedVoice;
     particles.draw(
@@ -130,6 +147,11 @@ export function createRenderer(options: {
       layout = view.layout;
       fitted = false;
       place(faceHost, zones.face);
+      place(vote.host, {
+        ...zones.caption,
+        height: Math.max(160, zones.caption.height),
+        fontSize: zones.caption.fontSize * 0.7,
+      });
       place(clipped.host, {
         ...zones.badge,
         y: zones.badge.y + zones.badge.height + 6,

@@ -562,3 +562,12 @@ test("the reducer is deterministic and never mutates a frozen input state", () =
   expect(reduce(input, event, 10000)).toEqual(reduce(input, event, 10000));
   expect(input.current?.main.status).toBe("playing");
 });
+
+test("an open chat vote blocks automatic windows and on-demand speech", () => {
+  let state = { ...start(), voteOpen: true };
+  state = reduce(state, { type: "speak" }, 9000).state;
+  const result = window(state, 10000, 20);
+  expect(types(result)).not.toContain("synthesize");
+  expect(types(result)).not.toContain("verifyEvent");
+  expect(result.state.current).toBeNull();
+});

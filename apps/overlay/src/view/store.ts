@@ -53,6 +53,11 @@ export interface OverlayView {
   rms: number;
   audioChannel: AudioChannel | null;
   newestName: string | null;
+  vote: {
+    choices: readonly [string, string];
+    counts: readonly [number, number];
+    remainingMs: number;
+  } | null;
   clipped: boolean;
   raid: { name: string; viewers: number } | null;
   particles: readonly ParticleCue[];
@@ -102,6 +107,7 @@ export function createViewStore(
             next,
           ];
   };
+  let vote: { choices: [string, string]; counts: [number, number]; until: number } | null = null;
   let clippedUntil = 0;
   let raid: { name: string; viewers: number; until: number } | null = null;
   const revealed = new Set<number>();
@@ -153,6 +159,7 @@ export function createViewStore(
         highestSeen = Math.max(highestSeen, event.take);
       switch (event.type) {
         case "hello":
+          vote = null;
           simulatedVoice = !!event.simulatedVoice;
           cancelled.clear();
           revealed.clear();
@@ -254,6 +261,22 @@ export function createViewStore(
           }
           break;
         case "event":
+          if (event.kind === "vote_begin") {
+            vote = {
+              choices: event.choices,
+              counts: [0, 0],
+              until: now() + event.durationS * 1000,
+            };
+            break;
+          }
+          if (event.kind === "vote_update") {
+            if (vote) vote.counts = event.counts;
+            break;
+          }
+          if (event.kind === "vote_end") {
+            vote = null;
+            break;
+          }
           if (event.kind === "clip") {
             clippedUntil = now() + 3000;
             break;
@@ -352,6 +375,7 @@ export function createViewStore(
       if (!value) stop("all");
     },
     disconnected() {
+      vote = null;
       stop("all");
       state = { ...state, heldBy: [...new Set([...state.heldBy, "no_audio_client" as const])] };
     },
@@ -389,13 +413,20 @@ export function createViewStore(
         layout: resolveOverlayLayout(queryLayout, state.layout),
         channel,
         pose: blocked ? "muted" : held() ? "asleep" : pose,
-        caption: blocked || held() ? null : visible,
+        caption: blocked || held() || vote ? null : visible,
         voices,
         messages,
         active,
         rms,
         audioChannel,
         newestName,
+        vote: vote
+          ? {
+              choices: vote.choices,
+              counts: vote.counts,
+              remainingMs: Math.max(0, vote.until - at),
+            }
+          : null,
         clipped: at < clippedUntil,
         simulatedVoice,
         raid: raid && at < raid.until ? { name: raid.name, viewers: raid.viewers } : null,

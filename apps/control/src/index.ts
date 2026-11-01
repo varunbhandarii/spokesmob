@@ -131,6 +131,7 @@ settingsForm.addEventListener("submit", (event) => {
   const values: Record<string, unknown> = {
     postLines: settingInput("postLines").value,
     autoClip: (settingInput("autoClip") as HTMLInputElement).checked,
+    splitVotes: (settingInput("splitVotes") as HTMLInputElement).checked,
   };
   for (const field of fields) values[field.key] = Number(settingInput(field.key).value);
   const parsed = beatSettingsPatchSchema.safeParse(values);
@@ -293,6 +294,11 @@ function render() {
       health.append(li);
     }
   }
+  const vote = element("vote-live");
+  vote.hidden = !model.vote;
+  vote.textContent = model.vote
+    ? `Vote: 1 ${model.vote.choices[0]} (${model.vote.counts[0]}) · 2 ${model.vote.choices[1]} (${model.vote.counts[1]})`
+    : "";
   const activities = element("activity-log");
   activities.replaceChildren(
     ...model.activities.map((row) => {
@@ -309,8 +315,10 @@ function render() {
       return item;
     }),
   );
-  if (!draft.dirty)
+  if (!draft.dirty) {
     (settingInput("autoClip") as HTMLInputElement).checked = model.settings.autoClip;
+    (settingInput("splitVotes") as HTMLInputElement).checked = model.settings.splitVotes;
+  }
   renderLog();
 }
 async function resync(includeLog: boolean) {
@@ -396,6 +404,7 @@ try {
     location: window.location,
     state: (value) => {
       connected = value === "connected";
+      if (!connected) model = { ...model, vote: null };
       const badge = element("connection");
       badge.textContent = value;
       badge.dataset.connected = String(connected);

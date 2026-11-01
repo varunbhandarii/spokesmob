@@ -219,3 +219,20 @@ body {
 .demo-tag {
   color: #d5ef9c;
 }
+
+.vote-plate {
+  min-width: 420px;
+  text-align: center;
+}
+.vote-bar {
+  height: 10px;
+  margin: 6px 0;
+  background: #d5ef9c;
+  transform-origin: left;
+}
+.vote-bar:nth-child(3) {
+  background: #b5c6fa;
+}
+.vote-counts {
+  font-size: 70%;
+}

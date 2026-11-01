@@ -48,14 +48,14 @@
       <section class="card log-card" aria-labelledby="log-title">
         <div class="card-heading"><h2 id="log-title">Beat log</h2><button type="button" id="export-log" class="text-button">Export log</button></div>
         <p class="small muted-text">Newest 200 shown. Export includes retained history.</p>
-        <div id="activity-log" class="beat-log"></div>
+        <p id="vote-live" hidden></p><div id="activity-log" class="beat-log"></div>
         <div id="beat-log" class="beat-log"><p class="empty-state">Completed beats will appear here.</p></div>
       </section>
       <section class="card settings-card" aria-labelledby="settings-title">
         <details><summary><h2 id="settings-title">Settings</h2><span class="small muted-text">Timing, output &amp; budget</span></summary>
           <label class="setting-row">Overlay layout<select id="layout"><option value="wide">Wide</option><option value="stage">Stage</option><option value="compact">Compact</option></select></label>
           <p class="small muted-text">An overlay with its own layout URL setting keeps that layout.</p>
-          <form id="settings-form"><div id="settings-fields" class="settings-fields"></div><label class="setting-row">Post lines<select name="postLines"><option value="every">Every completed line</option><option value="off">Off</option></select></label><label class="setting-row">Auto-clip<input type="checkbox" name="autoClip"></label><button type="submit" class="accent">Save settings</button><p id="settings-draft" class="small muted-text" hidden>Unsaved changes</p></form>
+          <form id="settings-form"><div id="settings-fields" class="settings-fields"></div><label class="setting-row">Post lines<select name="postLines"><option value="every">Every completed line</option><option value="off">Off</option></select></label><label class="setting-row">Split votes<input type="checkbox" name="splitVotes"></label><label class="setting-row">Auto-clip<input type="checkbox" name="autoClip"></label><button type="submit" class="accent">Save settings</button><p id="settings-draft" class="small muted-text" hidden>Unsaved changes</p></form>
         </details>
       </section>
     </main>

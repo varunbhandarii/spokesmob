@@ -40,6 +40,7 @@ export function createBeatState(
 ): BeatState {
   const settings = resolveBeatSettings(options.settings);
   const state: BeatState = {
+    voteOpen: false,
     step: "off",
     mode: settings.mode,
     settings,
@@ -133,6 +134,7 @@ export function reduce(input: BeatState, event: BeatEvent, now: number): BeatRed
       effects.push({ type: "log", beat: state.current, at: now, status, gate, reason });
   };
   const cancel = (reason: string, status: BeatLogStatus) => {
+    state.voteOpen = false;
     effects.push({ type: "abortSynthesis", beatId: state.current?.id ?? null });
     effects.push({ type: "cancelVoice", beatId: state.current?.id ?? null, reason });
     log(status, "control", reason);
@@ -141,7 +143,7 @@ export function reduce(input: BeatState, event: BeatEvent, now: number): BeatRed
     for (const kind of ["hold", "reading", "cooldown"] as const) dropTimer(kind);
   };
   const armWindow = () => {
-    if (!state.collection || state.timers.window) return;
+    if (state.voteOpen || !state.collection || state.timers.window) return;
     const start = state.collection.startAt;
     timer(
       "window",
@@ -178,6 +180,15 @@ export function reduce(input: BeatState, event: BeatEvent, now: number): BeatRed
     const beat = state.current;
     if (beat?.output !== "idle") return;
     beat.outcome = status;
+    if (beat.line)
+      effects.push({ type: "shown", beatId: beat.id, line: beat.line, status, at: now });
+    if (beat.purpose === "split") {
+      state.voteOpen = true;
+      dropTimer("window");
+      effects.push({ type: "openVote", beatId: beat.id });
+      settle();
+      return;
+    }
     if (
       allowPost &&
       beat.kind === "consensus" &&
@@ -258,7 +269,8 @@ export function reduce(input: BeatState, event: BeatEvent, now: number): BeatRed
     question: state.question,
   });
   const eligible = (speak = false) => {
-    if (state.step !== "listening" || state.heldBy.length || !state.collection) return;
+    if (state.voteOpen || state.step !== "listening" || state.heldBy.length || !state.collection)
+      return;
     if (state.queuedEvent) {
       const queued = state.queuedEvent;
       state.queuedEvent = null;
@@ -400,6 +412,7 @@ export function reduce(input: BeatState, event: BeatEvent, now: number): BeatRed
         break;
       mark();
       state.gates = { ...state.gates, ...event.changes };
+      if (event.changes.online === false) state.voteOpen = false;
       if (!state.gates.enabled) {
         const stopped = reduce(state, { type: "off" }, now);
         return stopped;
@@ -459,6 +472,19 @@ export function reduce(input: BeatState, event: BeatEvent, now: number): BeatRed
       eligible(true);
       break;
     }
+    case "voteFinished": {
+      if (!state.voteOpen) break;
+      state.voteOpen = false;
+      mark();
+      if (event.line && !state.heldBy.length && state.gates.enabled) {
+        dropTimer("cooldown");
+        state.current = activeBeat("consensus", null);
+        state.current.purpose = "vote_result";
+        preview(event.line);
+      }
+      armWindow();
+      break;
+    }
     case "synthDone": {
       if (
         state.step !== "synthesizing" ||
@@ -468,6 +494,7 @@ export function reduce(input: BeatState, event: BeatEvent, now: number): BeatRed
         break;
       mark();
       const result = event.result;
+      if (result.templateKind) state.current.purpose = result.templateKind;
       if (result.status !== "verified" || !result.line || !result.mood) {
         log("suppressed", result.gate, result.reason ?? "invalid_result");
         cooldown();
@@ -481,7 +508,7 @@ export function reduce(input: BeatState, event: BeatEvent, now: number): BeatRed
           mood: result.mood,
           question: state.question,
           answersQuestion: result.answersQuestion && state.current.question === state.question,
-          templated: false,
+          templated: !!result.templateKind,
           citedNames: result.citedNames,
           citedExemplars: event.citedExemplars,
           raidName: null,
@@ -627,6 +654,7 @@ export function reduce(input: BeatState, event: BeatEvent, now: number): BeatRed
       if (state.question === event.question) break;
       mark();
       state.question = event.question;
+      state.voteOpen = false;
       state.questionChanged = true;
       if (event.question) effects.push({ type: "announce", question: event.question });
       break;

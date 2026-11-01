@@ -102,3 +102,15 @@ test("a save acknowledgment preserves edits made while it was in flight and igno
   );
   expect(clean).toEqual({ revision: 0, dirty: false, pending: null });
 });
+
+test("the dock follows vote counts and clears its vote after the result", () => {
+  let model = receiveControl(createControlModel(), {
+    type: "event",
+    kind: "vote_begin",
+    choices: ["gary", "milo"],
+    durationS: 30,
+  });
+  model = receiveControl(model, { type: "event", kind: "vote_update", counts: [3, 2] });
+  expect(model.vote).toEqual({ choices: ["gary", "milo"], counts: [3, 2] });
+  expect(receiveControl(model, { type: "event", kind: "vote_end" }).vote).toBeNull();
+});

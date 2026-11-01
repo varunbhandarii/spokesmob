@@ -44,6 +44,10 @@ export interface SynthesisOptions {
   signal?: AbortSignal;
   clock?: Clock;
   log?: Pick<Logger, "info">;
+  chooseTemplate?: (
+    window: Window,
+    clusters: readonly Cluster[],
+  ) => Promise<{ text: string; pct: number } | null>;
   onWindow?: (window: Window, clusters: readonly Cluster[]) => void;
   onVerification?: (attempt: VerificationAttempt) => void;
   onFallback?: () => void;
@@ -164,6 +168,19 @@ export async function synthesize(options: SynthesisOptions): Promise<SynthesisRe
     if (window.voices < minVoices) return finish("input_moderation", "not_enough_voices");
   }
   options.onWindow?.(window, clusters);
+  const template = await options.chooseTemplate?.(window, clusters);
+  if (aborted()) return finish("aborted", "aborted");
+  if (template) {
+    Object.assign(result, {
+      status: "verified",
+      line: template.text,
+      pct: template.pct,
+      mood: "chill",
+      answersQuestion: true,
+      templateKind: "split",
+    });
+    return finish(null, null);
+  }
   const names = window.moodMessages.flatMap((message) => [
     message.authorName,
     ...(message.authorLogin ? [message.authorLogin] : []),

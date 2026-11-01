@@ -11,6 +11,21 @@ test("confirmed clip badge expires after three seconds", () => {
   expect(store.view().clipped).toBe(false);
 });
 
+test("the vote view follows server lifecycle and counts while its countdown uses local time", () => {
+  let now = 0;
+  const store = createViewStore(null, () => now);
+  store.receive({ type: "event", kind: "vote_begin", choices: ["gary", "milo"], durationS: 30 });
+  store.receive({ type: "event", kind: "vote_update", counts: [3, 2] });
+  now = 5000;
+  expect(store.view().vote).toEqual({
+    choices: ["gary", "milo"],
+    counts: [3, 2],
+    remainingMs: 25000,
+  });
+  store.receive({ type: "event", kind: "vote_end" });
+  expect(store.view().vote).toBeNull();
+});
+
 function fixture() {
   const store = createViewStore();
   store.receive({

@@ -99,6 +99,7 @@ export interface BeatTimer {
   at: number;
 }
 export interface ActiveBeat {
+  purpose?: "split" | "vote_result";
   id: number;
   kind: "consensus" | "event";
   windowId: number | null;
@@ -124,6 +125,7 @@ export interface BeatGates {
   overlayConnected: boolean;
 }
 export interface BeatState extends BeatView {
+  voteOpen: boolean;
   settings: BeatSettings;
   gates: BeatGates;
   collection: BeatWindow | null;
@@ -238,6 +240,7 @@ export const beatLogRecordSchema = z.strictObject({
 export type BeatLogRecord = z.infer<typeof beatLogRecordSchema>;
 
 export type BeatEvent =
+  | { type: "voteFinished"; line: BeatLine | null }
   | { type: "tick"; timer: BeatTimerKind; id: number }
   | { type: "windowReady"; windowId: number; voices: number; messages: number }
   | {
@@ -270,6 +273,8 @@ export type BeatEvent =
     };
 
 export type BeatEffect =
+  | { type: "shown"; beatId: number; line: BeatLine; status: "spoken" | "caption_only"; at: number }
+  | { type: "openVote"; beatId: number }
   | { type: "openWindow"; window: BeatWindow }
   | { type: "slideWindow"; windowId: number; startAt: number }
   | { type: "closeWindow"; windowId: number; nextWindow: BeatWindow | null; at: number }

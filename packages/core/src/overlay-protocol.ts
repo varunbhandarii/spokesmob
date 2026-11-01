@@ -169,6 +169,20 @@ export const revealMessageSchema = z.strictObject({
   take: takeIdSchema,
 });
 export const vetoMessageSchema = z.strictObject({ type: z.literal("veto"), take: takeIdSchema });
+export const voteEventSchema = z.discriminatedUnion("kind", [
+  z.strictObject({
+    type: z.literal("event"),
+    kind: z.literal("vote_begin"),
+    choices: z.tuple([z.string().min(1).max(25), z.string().min(1).max(25)]),
+    durationS: z.literal(30),
+  }),
+  z.strictObject({
+    type: z.literal("event"),
+    kind: z.literal("vote_update"),
+    counts: z.tuple([z.number().int().nonnegative(), z.number().int().nonnegative()]),
+  }),
+  z.strictObject({ type: z.literal("event"), kind: z.literal("vote_end") }),
+]);
 export const eventMessageSchema = z.discriminatedUnion("kind", [
   z.strictObject({ type: z.literal("event"), kind: z.literal("clip") }),
   eventNoticeSchema.options[0].extend({ type: z.literal("event") }),
@@ -259,11 +273,13 @@ export const serverOverlayMessageSchema = z.union([
   revealMessageSchema,
   vetoMessageSchema,
   eventMessageSchema,
+  voteEventSchema,
   audioControlSchema,
 ]);
 export const serverControlMessageSchema = z.union([
   controlHelloReplySchema,
   activityMessageSchema,
+  voteEventSchema,
   stateMessageSchema,
   previewMessageSchema,
   logMessageSchema,
