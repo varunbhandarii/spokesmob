@@ -117,12 +117,14 @@ export const overlayHelloReplySchema = z.strictObject({
   audio: z.boolean(),
   channel: z.string().regex(/^[a-z0-9_]{1,25}$/),
   state: beatViewSchema,
+  simulatedVoice: z.boolean().optional(),
 });
 export const controlHelloReplySchema = z.strictObject({
   type: z.literal("hello"),
   role: z.literal("control"),
   audio: z.literal(false),
   state: beatViewSchema,
+  simulatedVoice: z.boolean().optional(),
 });
 export const listeningMessageSchema = z.strictObject({
   type: z.literal("listening"),

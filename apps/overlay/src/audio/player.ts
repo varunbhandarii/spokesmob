@@ -12,6 +12,8 @@ interface ChannelGraph {
   spectrum: Float32Array<ArrayBuffer>;
 }
 export interface AudioPlayer {
+  state(): AudioContextState;
+  resume(): Promise<void>;
   control(message: AudioControl): void;
   append(chunk: AudioChunk): void;
   enabled(value: boolean): void;
@@ -23,6 +25,7 @@ export interface AudioPlayer {
 
 export async function createAudioPlayer(
   report: (event: PlaybackReport) => void,
+  stateChanged: () => void = () => undefined,
 ): Promise<AudioPlayer> {
   const context = new AudioContext({ sampleRate: 24000, latencyHint: "interactive" });
   if (context.sampleRate !== 24000) {
@@ -31,11 +34,12 @@ export async function createAudioPlayer(
   }
   try {
     await context.audioWorklet.addModule(workletUrl);
-    await context.resume();
+    void context.resume().catch(() => undefined);
   } catch {
     await context.close();
     throw new Error("Audio initialization failed");
   }
+  context.addEventListener("statechange", stateChanged);
   const graphs = {} as Record<AudioChannel, ChannelGraph>;
   const takes = new Map<number, AudioChannel>();
   let permitted = false;
@@ -80,6 +84,8 @@ export async function createAudioPlayer(
       send(channel, { type: "stop", take: "all" });
   };
   return {
+    state: () => context.state,
+    resume: () => context.resume(),
     control(message) {
       if (message.type === "stop") {
         if (message.take === "all") stop();

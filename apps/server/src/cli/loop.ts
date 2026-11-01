@@ -145,7 +145,7 @@ export async function runLoop(
     output(
       liveVoice
         ? "Live voice enabled; waiting for an active audio overlay."
-        : "Voice is simulated; no generated PCM is sent. Beat records are marked simulated.",
+        : "Voice is simulated; browser playback uses a local demo signal. Headless playback uses simulated reports. Beat records are marked simulated.",
     );
     if (!liveModel)
       output("Consensus uses an offline stub; quality and model latency are not measured.");

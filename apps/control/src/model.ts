@@ -10,6 +10,7 @@ type Cost = Extract<ControlMessage, { type: "cost" }>;
 type Health = Extract<ControlMessage, { type: "health" }>;
 export interface ControlModel {
   state: BeatView | null;
+  simulatedVoice: boolean;
   preview: PreviewState;
   cost: Cost | null;
   health: Health | null;
@@ -18,6 +19,7 @@ export interface ControlModel {
 }
 export const createControlModel = (): ControlModel => ({
   state: null,
+  simulatedVoice: false,
   preview: createPreviewState(),
   cost: null,
   health: null,
@@ -41,7 +43,7 @@ export function receiveControl(
   const next = preview === model.preview ? model : { ...model, preview };
   switch (message.type) {
     case "hello":
-      return { ...next, state: message.state };
+      return { ...next, state: message.state, simulatedVoice: !!message.simulatedVoice };
     case "state": {
       const { type: _type, ...state } = message;
       return { ...next, state };

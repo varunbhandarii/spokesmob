@@ -1,5 +1,6 @@
 import { type AudioPlayer, createAudioPlayer } from "./audio/player.js";
 import { audioAllowed, decodeAudioFrame, parseControl } from "./protocol.js";
+import { needsSoundGesture } from "./sound-gesture.js";
 import { sourceActive, sourceAudioStatus } from "./source-active.js";
 import { createRenderer } from "./view/render.js";
 import { createViewStore } from "./view/store.js";
@@ -9,6 +10,17 @@ const status = document.querySelector<HTMLOutputElement>("#status");
 const obs = "obsstudio" in window && window.obsstudio !== undefined;
 const allowed = audioAllowed(obs, window.location.search);
 let player: AudioPlayer | null = null;
+const sound = document.createElement("button");
+sound.className = "sound-enable plate";
+sound.textContent = "Click to enable sound";
+sound.hidden = true;
+document.body.append(sound);
+const updateSound = () => {
+  sound.hidden = !needsSoundGesture(obs, authorized, player?.state() ?? "closed");
+};
+sound.addEventListener("click", () => {
+  void player?.resume().then(updateSound).catch(updateSound);
+});
 let active = true;
 let authorized = false;
 let connectionState = "connecting";
@@ -44,6 +56,7 @@ try {
     },
     disconnect: () => {
       authorized = false;
+      updateSound();
       store.disconnected();
       player?.enabled(false);
       audioState = allowed ? "waiting for audio" : "preview, silent";
@@ -66,10 +79,11 @@ try {
           player = await createAudioPlayer((event) => {
             store.playback(event);
             connection.send(event);
-          });
+          }, updateSound);
         player?.enabled(authorized && active);
         audioState = sourceAudioStatus(allowed, authorized, active);
         showStatus();
+        updateSound();
         return;
       }
       if (

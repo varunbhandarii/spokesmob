@@ -28,7 +28,7 @@ async function stopChild(child: ChildProcess) {
     await until(() => child.exitCode !== null || child.signalCode !== null, 3000);
   }
 }
-export async function startMockLoop() {
+export async function startMockLoop(demo = false) {
   const folder = await mkdtemp(join(tmpdir(), "spokesmob-browser-"));
   const target = resolve(folder);
   const expectedParent = resolve(tmpdir());
@@ -67,7 +67,7 @@ export async function startMockLoop() {
       "200",
       "--minutes",
       "1",
-      "--headless",
+      ...(demo ? [] : ["--headless"]),
       "--port",
       "0",
     ],
@@ -143,6 +143,9 @@ export async function controlClient(url: URL) {
     await until(() => messages.some((message) => message.type === "hello"));
     return {
       messages,
+      command(command: unknown) {
+        socket.send(JSON.stringify({ type: "command", request: "browser-command", command }));
+      },
       tone() {
         socket.send(
           JSON.stringify({ type: "voice_command", request: "browser-tone", mode: "tone" }),

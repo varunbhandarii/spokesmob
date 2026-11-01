@@ -207,3 +207,7 @@ In a 40-line calibration, all lines verified with one discarded transcript misma
 Use `npm run record -- --anonymize <input> <output> --replace-text` to create a fixture with deterministic fake identities and synthetic chat text. Without `--replace-text`, message text remains and requires each author's consent before publication. Anonymization removes reply bodies, colors and emote owner IDs. Output files must be new; existing files are not overwritten.
 
 Public badge categories and emote identifiers are preserved so replay retains their meaning.
+
+### Free demo
+
+Run `npm run demo` for a repeating synthetic chat showcase. It builds missing browser assets, opens the overlay with sound and the dock in your default browser, and keeps the usual local token location so an existing OBS source can connect. Use `npm run demo -- --no-open` to keep the browsers closed. This command never loads `.env`, strips application credentials from its child environment and rejects paid flags. The voice is a local speech-shaped tone, not speech or a model call; both views label it "Demo · simulated voice". Click "Click to enable sound" if a normal browser blocks autoplay. OBS never shows that button. Headless mock load tests retain simulated playback reports.

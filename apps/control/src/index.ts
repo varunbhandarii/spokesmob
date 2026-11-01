@@ -220,6 +220,7 @@ function renderLog() {
 }
 function render() {
   previewCard.update(model, connected);
+  element("demo-tag").hidden = !model.simulatedVoice;
   const state = model.state;
   element("beat-step").textContent = state?.step ?? "waiting";
   const online = element("online");

@@ -31,7 +31,8 @@
     "voice": "node --env-file-if-exists=.env --import tsx apps/server/src/cli/voice.ts",
     "loop": "node --env-file-if-exists=.env --import tsx apps/server/src/cli/loop.ts",
     "pretest:e2e": "npm run build",
-    "posttypecheck": "tsc -p apps/overlay/e2e/tsconfig.json"
+    "posttypecheck": "tsc -p apps/overlay/e2e/tsconfig.json",
+    "demo": "node --import tsx apps/server/src/cli/demo.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.3",

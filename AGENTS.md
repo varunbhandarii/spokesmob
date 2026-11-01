@@ -110,6 +110,7 @@ Spokesmob is a local Node 24 + TypeScript service plus an OBS browser-source ove
 8. Offensive test fixtures and the built-in blocklist are stored base64-encoded and decoded at load, never in plain text.
 
 ## Commands
+- `npm run demo`: free synthetic showcase; no env-file loading or inherited application credentials. Only local mock Twitch plus stub voice can send the demo signal. Real browser playback drives captions and lip sync; headless load tests retain simulated reports. `--no-open` skips browser opening.
 - `npm run dev`: reserved development command; currently a stub.
 - `npm run build`: build the overlay and control assets before starting the local server.
 - `npm start`: real Twitch listener, automatic beat loop and local overlay/control server with a single-instance lock. Eligible beats make paid consensus/voice calls; obtain approval before a live check.

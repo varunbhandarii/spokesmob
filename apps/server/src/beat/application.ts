@@ -13,6 +13,7 @@ import { createVoiceRuntime } from "../voice/runtime.js";
 import type { RealtimeFactory } from "../voice/transport.js";
 import { recordedModeration } from "./billing.js";
 import { CommandRouter } from "./commands.js";
+import { syntheticVoiceAllowed } from "./demo-signal.js";
 import { FakeVoice } from "./fakes.js";
 import { publishHealth } from "./health.js";
 import { ChatOutput } from "./output.js";
@@ -102,8 +103,22 @@ export async function createBeatApplication(options: {
     });
     const hub = voice.http.hub;
     const voiceManager = voice.manager;
+    const simulatedVoice = syntheticVoiceAllowed({
+      stubVoice: !!options.stubVoice,
+      headless: !!options.headless,
+      eventsubUrl: config.eventsubUrl,
+      helixUrl: config.helixUrl,
+      authUrl: config.authUrl,
+    });
+    hub.setSimulatedVoice(simulatedVoice);
     const fakeVoice = options.stubVoice
-      ? new FakeVoice(options.clock, 1000, 300, () => voiceManager.nextTakeId())
+      ? new FakeVoice(
+          options.clock,
+          1000,
+          300,
+          () => voiceManager.nextTakeId(),
+          simulatedVoice ? hub : undefined,
+        )
       : null;
     const output = new ChatOutput(twitch.helix, log);
     runner = new BeatRunner({
@@ -155,7 +170,10 @@ export async function createBeatApplication(options: {
     });
     hub.setSnapshot(() => beat.view());
     hub.onAction((command) => router.execute(command));
-    const unobserve = hub.observe((event) => beat.report(event));
+    const unobserve = hub.observe((event) => {
+      fakeVoice?.report(event);
+      beat.report(event);
+    });
     const unclients = hub.onClients(() => {
       beat.refreshClients();
       beat.publishCost();

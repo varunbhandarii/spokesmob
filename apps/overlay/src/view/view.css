@@ -203,3 +203,19 @@ body {
   white-space: nowrap;
   overflow-wrap: normal;
 }
+
+.sound-enable {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  z-index: 5;
+  font: 22px sans-serif;
+  color: white;
+  padding: 12px 20px;
+  border: 2px solid #d5ef9c;
+  cursor: pointer;
+}
+.demo-tag {
+  color: #d5ef9c;
+}

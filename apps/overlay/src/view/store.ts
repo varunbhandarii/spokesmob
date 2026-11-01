@@ -42,6 +42,7 @@ interface PreparedTake {
 }
 export interface OverlayView {
   state: BeatView;
+  simulatedVoice: boolean;
   layout: Layout;
   channel: string;
   pose: FacePose;
@@ -75,6 +76,7 @@ export function createViewStore(
 ) {
   let state = { ...initial };
   let channel = "spokesmob";
+  let simulatedVoice = false;
   let pose: FacePose = "asleep";
   let active = true;
   let pending: LineMessage | null = null;
@@ -149,6 +151,7 @@ export function createViewStore(
         highestSeen = Math.max(highestSeen, event.take);
       switch (event.type) {
         case "hello":
+          simulatedVoice = !!event.simulatedVoice;
           cancelled.clear();
           revealed.clear();
           raid = null;
@@ -387,6 +390,7 @@ export function createViewStore(
         rms,
         audioChannel,
         newestName,
+        simulatedVoice,
         raid: raid && at < raid.until ? { name: raid.name, viewers: raid.viewers } : null,
         particles: particleCues,
       };
