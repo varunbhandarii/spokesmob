@@ -5,6 +5,7 @@ import {
 import type { BeatLogRecord } from "../../../packages/core/src/beat-types.js";
 import { layoutSchema } from "../../../packages/core/src/beat-types.js";
 import type { ControlAction } from "../../../packages/core/src/overlay-protocol.js";
+import { formatVoiceCount } from "../../../packages/core/src/voice-count.js";
 import { collectLog, createControlApi } from "./api.js";
 import { type ControlConnection, connectControl } from "./connection.js";
 import {
@@ -196,7 +197,7 @@ function renderLog() {
     const detail = document.createElement("div");
     detail.className = "log-detail";
     for (const value of [
-      `${row.pct}% of ${row.voices} voices · ${row.mode} · ${row.kind}`,
+      `${row.pct}% of ${formatVoiceCount(row.voices)} · ${row.mode} · ${row.kind}`,
       `Gate: ${codeLabel(row.gate)} · Reason: ${codeLabel(row.reason)}`,
       row.dissent ? `Dissent: ${row.dissent}` : null,
       row.costUsd === null

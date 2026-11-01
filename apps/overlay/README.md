@@ -50,7 +50,7 @@ Coordinates use a transparent 1920 x 1080 stage; values live in `src/view/layout
 | stage   | 600 px at 660,150 | 1500 px wide at x210; main 72 px, dissent 44 px                      | Margin 64; meter 56 px; counter 120 px below header; question y64/font64; QR280 right; full-screen particles         |
 | compact | 180 px at 40,870  | x250..1600 at 36 px                                                  | Margin32; bottom bar; right meter/counter; bar-only particles                                                        |
 
-Screenshots are layout probes and are never committed. Reload the OBS source once after rebuilding to load a changed renderer.
+Screenshots are layout probes and are never committed. Reload the OBS source once after rebuilding to load a changed renderer. In the Browser source properties, clear **Custom CSS**: the overlay already has a transparent background, and OBS's default injected CSS is blocked by its strict content security policy.
 
 The agreement tag reads "71% of 312 voices"; dissent reads "18% · Some prefer Milo." after dissent playback starts. Stage labels its large counter and invites viewers to type; smaller chats get the same invitation in the other layouts. Preview shows an ellipsis bubble without line text. Unrelated speech retains the question header and adds "Meanwhile, chat says". Raid banners last six seconds, while the Hype Train chip follows persistent state. The AI voice badge sits at the face's upper right. Face-name and synthetic-scene labels belong only to the harness pages; the production entry never renders them.
 

@@ -31,6 +31,12 @@ test("only dissent is shortened and an oversized main line is never truncated", 
   expect(text).toContain(beat.text);
   expect(formatPost({ ...beat, text: "a".repeat(500) })).toBe(null);
 });
+
+test("a one-person post uses the singular voice count", () => {
+  expect(formatPost({ ...beat, text: "Chat says blue.", pct: 100, voices: 1, dissent: null })).toBe(
+    'The mob says: "Chat says blue." (100% of 1 voice)',
+  );
+});
 test("command acknowledgments do not echo gagged names or reply to veto and speak", () => {
   expect(formatAck({ action: "kill" })).toBe("Spokesmob muted");
   expect(formatAck({ action: "gag" })).toBe("Got it");

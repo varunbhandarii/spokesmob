@@ -13,6 +13,13 @@ const notice: PreviewNotice = {
   holdMs: 1000,
   quiet: false,
 };
+test("a one-person preview uses a singular voice count", () => {
+  const preview = receivePreview(createPreviewState(), { ...notice, voices: 1, pct: 100 }, 0);
+  expect(previewView(preview, { ...view, step: "preview" }, true, 100).summary).toBe(
+    "100% of 1 voice",
+  );
+});
+
 test("preview metadata arriving before state starts one bounded countdown", () => {
   const preview = receivePreview(createPreviewState(), notice, 100);
   expect(previewView(preview, view, true, 200).kind).toBe("hidden");

@@ -1,3 +1,4 @@
+import { formatVoiceCount, voiceLabel } from "../../../../packages/core/src/voice-count.js";
 import { createFace } from "../face/index.js";
 import { LAYOUTS, type Zone } from "./layout.js";
 import { createLipSync, particleGaze } from "./lip-sync.js";
@@ -202,14 +203,14 @@ export function createRenderer(options: {
       wordNodes[i]?.classList.toggle("is-current", i === visible?.highlighted);
     const pct = countUp(line?.pct ?? 0, visible?.ageMs ?? 0);
     const voices = countUp(line?.voices ?? 0, visible?.ageMs ?? 0);
-    const meterChanged = write(meter.plate, `${String(pct)}% of ${String(voices)} voices`);
+    const meterChanged = write(meter.plate, `${String(pct)}% of ${formatVoiceCount(voices)}`);
     meter.host.hidden = !line || line.voices === 0;
     counter.host.hidden = !meter.host.hidden;
     meter.plate.dataset.pct = String(line?.pct ?? 0);
     const dissentChanged = write(dissent.plate, aside);
     dissent.host.hidden = !aside || layout === "compact";
     write(counterNumber, String(view.voices));
-    write(counterLabel, view.voices === 1 ? "voice" : "voices");
+    write(counterLabel, voiceLabel(view.voices));
     const questionChanged = write(question.plate, view.state.question ?? "");
     question.host.hidden = !view.state.question;
     write(join.plate, "Type in chat to join");

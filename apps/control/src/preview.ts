@@ -1,5 +1,6 @@
 import type { BeatView } from "../../../packages/core/src/beat-types.js";
 import type { ControlMessage } from "../../../packages/core/src/overlay-protocol.js";
+import { formatVoiceCount } from "../../../packages/core/src/voice-count.js";
 
 export type PreviewNotice = Extract<ControlMessage, { type: "preview" }>;
 export interface PreviewState {
@@ -60,7 +61,7 @@ export function previewView(
           ? notice.dissent
           : `${String(notice.dissentPct)}% \u00b7 ${notice.dissent}`
         : null,
-    summary: showing ? `${String(notice.pct)}% of ${String(notice.voices)} voices` : "",
+    summary: showing ? `${String(notice.pct)}% of ${formatVoiceCount(notice.voices)}` : "",
     quiet: showing && notice.quiet,
     remainingMs,
     progress: notice ? remainingMs / notice.holdMs : 0,

@@ -1,9 +1,10 @@
 import type { BeatLine } from "./beat-types.js";
+import { formatVoiceCount } from "./voice-count.js";
 
 export function formatPost(beat: BeatLine): string | null {
   const prefix =
     beat.question && !beat.answersQuestion ? "Meanwhile, the mob says" : "The mob says";
-  const base = `${prefix}: "${beat.text}" (${beat.pct}% of ${beat.voices} voices)`;
+  const base = `${prefix}: "${beat.text}" (${beat.pct}% of ${formatVoiceCount(beat.voices)})`;
   if (base.length > 500) return null;
   if (!beat.dissent) return base;
   const label = ' · dissent: "';

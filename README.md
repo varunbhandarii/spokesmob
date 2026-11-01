@@ -176,9 +176,9 @@ The [overlay guide](apps/overlay/README.md) covers the rig, text, layouts and sy
 
 Run `npm run build`, then `npm start` and leave the server running. Startup saves the complete overlay URL beside the local token file and prints only its file path. In another terminal, run `npm run voice -- --copy-url` to copy the URL without displaying its token.
 
-In OBS 33, add exactly one Spokesmob Browser source. Paste the copied URL, use 1920 × 1080, and enable **Control audio via OBS**. Turn off **Shutdown source when not visible** and **Refresh browser when scene becomes active**. Remove leftover Spokesmob browser sources: a hidden source keeps running and can take over audio.
+In OBS 33, add exactly one Spokesmob Browser source. Paste the copied URL, use 1920 × 1080, and enable **Control audio via OBS**. Turn off **Shutdown source when not visible** and **Refresh browser when scene becomes active**. Remove leftover Spokesmob browser sources: a hidden source keeps running and can take over audio. Clear the source's **Custom CSS** box completely. The overlay already has a transparent background; OBS's default injected CSS is blocked by its strict content security policy and otherwise logs a harmless console error.
 
-In **Advanced Audio Properties**, check Audio Monitoring **Enable**, keep the source unmuted and select your recording track. In **Settings → Audio → Advanced**, select your headphones as the monitoring device. Disable or mute **Desktop Audio** when it captures that same output; otherwise OBS records both the source and its monitored copy, producing doubled sound or an echo.
+In **Advanced Audio Properties**, check Audio Monitoring **Enable**, keep the source unmuted and select your recording track. In **Settings → Audio → Advanced**, select your headphones as the monitoring device. Set **Desktop Audio** to **Disabled** when it captures the monitoring device. Leaving that capture enabled can cause doubled audio or OBS audio deduplication to drop the overlay from the output.
 
 Start a short recording and run `npm run voice -- --tone`. It generates a free one-second beep through the same take, socket and audio-player path. Confirm the headphones, source meter and recording each have one clean beep. A regular Chrome tab with the same URL shows **preview, silent** and produces no audio. Audio is enabled only in OBS or with an explicit `audio=1` URL setting; keep just one audio-playing client.
 
@@ -193,6 +193,12 @@ Spokesmob uses an **AI-generated voice**. Disclose that to viewers. Dissent is a
 To check dissent, run `npm run voice -- --say "Some of chat still says blue." --dissent --yes`. Record the main line, kill test and dissent in OBS: speech should play once, the kill test should stop within 200 ms, and dissent should be softer but intelligible. CLI results include verified-ready time, playback start, trim metrics and the kill test's `silenceMs`.
 
 In a 40-line calibration, all lines verified with one discarded transcript mismatch and retry, no usable-audio rejection and mean cost USD 0.000985 per line. First audio was p50/p95 336/481 ms, complete generation 491/689 ms, and verified-ready 496/767 ms. A separate live check after restart had first audio at 927 ms, verified-ready at 1,189 ms and playback at 1,295 ms; a subsequent line reached first audio at 428 ms. The audible kill check stopped in 1 ms according to the overlay report. These are observed timings; check the first line after restart during rehearsal.
+
+### Troubleshooting
+
+**Monitoring device unavailable at startup.** If OBS starts before the headphones are available, overlay monitoring can fail silently with "Failed to activate device" in the OBS log. Connect the headphones, choose them under **Settings → Audio → Advanced → Monitoring Device**, then restart OBS. Changing the device after startup does not repair the failed monitor. If Desktop Audio captures that same device, set **Desktop Audio** to **Disabled** so OBS audio deduplication does not drop the overlay from the stream or recording.
+
+**Windows console selection pauses the server.** Clicking inside the console running Spokesmob can start a QuickEdit selection and pause the process until **Esc** or **Enter** clears it. Avoid clicking in that window while live, or open the console's **Properties → Options** and turn off **QuickEdit Mode**.
 
 ## Local recordings
 
