@@ -98,6 +98,7 @@ Helix calls used by the runtime and live-check tools all share the rate limiter:
 Ballots arrive through `channel.chat.message`, with one latest eligible choice per author. Chat votes use messages and announcements, not the Twitch Polls API. Chat sends and announcements are never retried; a pin requires a confirmed send without a drop reason.
 
 Vote displays restore after a reconnect or refresh. Question changes, clears and removed ballots cancel a pending result, including queued output. Diagnostic voice checks stay unavailable until the vote and its result settle.
+Votes and live chat windows use receipt time; Twitch timestamps order ballots and moderator clears, so PC clock skew does not shorten voting or exclude fresh chat.
 
 ## Built with Codex
 

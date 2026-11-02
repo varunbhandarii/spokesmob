@@ -145,7 +145,8 @@ export class BeatRunner {
       enabled: () => this.state.settings.splitVotes,
       resultMinimum: () =>
         voteMinimum(this.state.settings.minVoices, this.activity.distinct(this.clock.now())),
-      onBallot: (event) => this.activity.observe(fromTwitchChat(event)),
+      onBallot: (event, receivedAt) =>
+        this.activity.observe({ ...fromTwitchChat(event), at: receivedAt }),
       gagged: (id) => this.options.store.gags.list().includes(id),
       blocklist: options.blocklist,
       moderation: this.moderation,
@@ -265,7 +266,7 @@ export class BeatRunner {
     this.dispatch({ type: "gate", changes: this.options.clients() });
   }
   invalidateGag(userId: string) {
-    this.votes.removeAuthor(userId, this.clock.now(), true);
+    this.votes.removeAuthor(userId);
     this.activity.removeAuthor(userId);
     this.particleNames = [];
     this.options.overlay({ type: "particles_clear" });
@@ -378,7 +379,7 @@ export class BeatRunner {
         !event.text.trimStart().startsWith("!") &&
         !this.options.store.gags.list().includes(event.author.id)
       )
-        this.activity.observe(fromTwitchChat(event));
+        this.activity.observe({ ...fromTwitchChat(event), at: this.clock.now() });
       if (
         !event.self &&
         !event.text.trimStart().startsWith("!") &&

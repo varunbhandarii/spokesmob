@@ -88,7 +88,7 @@ test.each(["deleted", "cleared", "gagged"] as const)(
     const admission = f.votes.resultAdmission();
     expect(admission?.allowed()).toBe(true);
     if (action === "deleted") f.votes.removeMessage("a");
-    else f.votes.removeAuthor("a", Date.now(), action === "gagged");
+    else f.votes.removeAuthor("a", action === "gagged" ? undefined : Date.now());
     expect(f.finish).toHaveBeenLastCalledWith(null);
     expect(admission?.signal.aborted).toBe(true);
     expect(admission?.allowed()).toBe(false);
@@ -114,45 +114,77 @@ test("settled results release provenance and cancelled invitations never retain 
   expect(f.votes.busy()).toBe(false);
 });
 
-test("event times exclude pre-vote and pre-clear ballots even when moderation completes later", async () => {
-  const f = fixture();
-  vi.setSystemTime(10000);
-  f.votes.open(["Gary", "Milo"]);
-  expect(f.votes.acceptsChat({ ...f.chat("old", "1"), at: new Date(9999).toISOString() })).toBe(
-    false,
-  );
-  vi.setSystemTime(11000);
-  f.votes.acceptsChat(f.chat("a", "1"));
-  await vi.advanceTimersByTimeAsync(0);
-  expect(f.votes.snapshot()?.counts).toEqual([1, 0]);
-  vi.setSystemTime(12000);
-  f.votes.removeAuthor("a", 12000);
-  f.votes.acceptsChat({ ...f.chat("a", "2"), at: new Date(11999).toISOString() });
-  let release = () => {};
-  f.resolve.mockImplementationOnce(async (texts) => {
-    await new Promise<void>((resolve) => {
-      release = resolve;
+test.each([-30000, 30000])(
+  "ballots count by arrival throughout the vote with Twitch skew %s",
+  async (skew) => {
+    const f = fixture();
+    f.votes.open(["Gary", "Milo"]);
+    for (const [id, elapsed] of [
+      ["start", 0],
+      ["middle", 15000],
+      ["end", 14999],
+    ] as const) {
+      await vi.advanceTimersByTimeAsync(elapsed);
+      f.votes.acceptsChat({ ...f.chat(id, "1"), at: new Date(Date.now() + skew).toISOString() });
+      await vi.advanceTimersByTimeAsync(0);
+    }
+    expect(f.votes.snapshot()?.counts).toEqual([3, 0]);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(f.finish).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ n: 3 }));
+    const requests = f.resolve.mock.calls.length;
+    f.votes.acceptsChat({
+      ...f.chat("late", "2"),
+      at: new Date(Date.now() + skew - 10000).toISOString(),
     });
-    return new Map(texts.map((text) => [text, clearModeration()]));
-  });
-  f.votes.acceptsChat(f.chat("pending", "1"));
-  f.votes.removeAuthor("pending", 12001);
-  release();
-  await vi.advanceTimersByTimeAsync(0);
-  expect(f.votes.snapshot()?.counts).toEqual([0, 0]);
-  vi.setSystemTime(13000);
-  f.votes.acceptsChat(f.chat("a", "2"));
-  await vi.advanceTimersByTimeAsync(0);
-  // A delayed clear must not remove a genuinely newer ballot.
-  f.votes.removeAuthor("a", 12000);
-  expect(f.votes.snapshot()).toEqual({
-    choices: ["Gary", "Milo"],
-    counts: [0, 1],
-    remainingMs: 27000,
-  });
-  f.votes.cancel("finished");
-  expect(f.votes.snapshot()).toBeNull();
-});
+    await vi.advanceTimersByTimeAsync(0);
+    expect(f.resolve).toHaveBeenCalledTimes(requests);
+    expect(f.finish).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ n: 3 }));
+  },
+);
+
+test.each([-30000, 30000])(
+  "clear cutoffs and pending ballots use only Twitch time with skew %s",
+  async (skew) => {
+    const f = fixture();
+    const chat = (id: string, text: string, at = Date.now()) => ({
+      ...f.chat(id, text),
+      at: new Date(at + skew).toISOString(),
+    });
+    vi.setSystemTime(10000);
+    f.votes.open(["Gary", "Milo"]);
+    vi.setSystemTime(11000);
+    f.votes.acceptsChat(chat("a", "1"));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(f.votes.snapshot()?.counts).toEqual([1, 0]);
+    vi.setSystemTime(12000);
+    f.votes.removeAuthor("a", 12000 + skew);
+    f.votes.acceptsChat(chat("a", "2", 11999));
+    let release = () => {};
+    f.resolve.mockImplementationOnce(async (texts) => {
+      await new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      return new Map(texts.map((text) => [text, clearModeration()]));
+    });
+    f.votes.acceptsChat(chat("pending", "1"));
+    f.votes.removeAuthor("pending", 12001 + skew);
+    release();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(f.votes.snapshot()?.counts).toEqual([0, 0]);
+    vi.setSystemTime(13000);
+    f.votes.acceptsChat(chat("a", "2"));
+    await vi.advanceTimersByTimeAsync(0);
+    // A delayed clear must not remove a genuinely newer ballot.
+    f.votes.removeAuthor("a", 12000 + skew);
+    expect(f.votes.snapshot()).toEqual({
+      choices: ["Gary", "Milo"],
+      counts: [0, 1],
+      remainingMs: 27000,
+    });
+    f.votes.cancel("finished");
+    expect(f.votes.snapshot()).toBeNull();
+  },
+);
 test("gags, moderation flags, deletion and user clears invalidate ballots, including pending checks", async () => {
   const f = fixture();
   f.votes.open(["Gary", "Milo"]);
@@ -165,12 +197,37 @@ test("gags, moderation flags, deletion and user clears invalidate ballots, inclu
   f.votes.acceptsChat(f.chat("deleted", "1"));
   f.votes.removeMessage("deleted");
   f.votes.acceptsChat(f.chat("cleared", "1"));
-  f.votes.removeAuthor("cleared");
+  f.votes.removeAuthor("cleared", Date.now());
   await vi.advanceTimersByTimeAsync(30000);
   expect(f.finish).toHaveBeenCalledWith(
     expect.objectContaining({ n: 0, text: "Not enough votes to call it." }),
   );
 });
+
+test.each([-30000, 30000])(
+  "gag removal never creates a local-time clear cutoff with skew %s",
+  async (skew) => {
+    const f = fixture();
+    const chat = (id: string) => ({
+      ...f.chat("a", "1"),
+      id,
+      at: new Date(Date.now() + skew).toISOString(),
+    });
+    f.votes.open(["Gary", "Milo"]);
+    f.votes.acceptsChat(chat("before"));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(f.votes.snapshot()?.counts).toEqual([1, 0]);
+    f.gagged.mockReturnValue(true);
+    f.votes.removeAuthor("a");
+    f.votes.acceptsChat(chat("gagged"));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(f.votes.snapshot()?.counts).toEqual([0, 0]);
+    f.gagged.mockReturnValue(false);
+    f.votes.acceptsChat(chat("ungagged"));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(f.votes.snapshot()?.counts).toEqual([1, 0]);
+  },
+);
 test("cancellation clears the vote without a result, and failed announcements are not retried", async () => {
   const f = fixture();
   f.announce.mockRejectedValue(new Error("unavailable"));

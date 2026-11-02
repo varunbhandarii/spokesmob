@@ -56,6 +56,7 @@ function fixture(
     sendDelayMs?: number;
     minVoices?: number;
     admissionDelayMs?: number;
+    eventSkewMs?: number;
   } = {},
 ) {
   const db = openStorage(":memory:");
@@ -165,7 +166,7 @@ function fixture(
       kind: "chat",
       id: messageId,
       channelId: "1",
-      at: new Date(Date.now()).toISOString(),
+      at: new Date(Date.now() + (options.eventSkewMs ?? 0)).toISOString(),
       self: false,
       author: {
         id,
@@ -186,6 +187,24 @@ function fixture(
   };
   return { clips, runner, store, voice, calls, overlay, overlayAt, controls, bus, chat };
 }
+
+test.each([-30000, 30000])(
+  "the trailing-minute chatter count uses arrival time with Twitch skew %s",
+  async (skew) => {
+    const f = fixture({ eventSkewMs: skew });
+    f.runner.dispatch({ type: "settings", changes: { mode: "demand" } });
+    for (let i = 0; i < 7; i++) f.chat(`guest${i}`, "hello");
+    if (skew > 0) await vi.advanceTimersByTimeAsync(31000);
+    expect(await f.runner.startVote("Gary", "Milo")).toMatchObject({ ok: true });
+    await vi.advanceTimersByTimeAsync(2200);
+    f.chat("guest0", "1", "ballot0");
+    f.chat("guest1", "1", "ballot1");
+    await vi.advanceTimersByTimeAsync(34000);
+    expect(f.calls.find((call) => call.action === "send")?.text).toContain(
+      skew > 0 ? "Gary wins, 100% of 2 voices." : "Not enough votes to call it.",
+    );
+  },
+);
 
 test("the shell completes one verified unit, posts once, pins and records actual first-audio timing", async () => {
   const f = fixture();

@@ -17,7 +17,7 @@ export interface CollectorSnapshot {
 export class ConsensusCollector {
   private readonly clock: Clock;
   private readonly unsubscribe: () => void;
-  private messages: ChatMessage[] = [];
+  private messages: (ChatMessage & { receivedAt: number })[] = [];
   private deletedIds = new Set<string>();
   private clearedUsers = new Set<string>();
   private clearBefore: number | undefined;
@@ -54,14 +54,21 @@ export class ConsensusCollector {
 
   snapshot(overrides: Partial<WindowOptions> = {}): CollectorSnapshot {
     return {
-      messages: structuredClone(this.messages),
+      // Windows use local arrivals; clear ordering stays in Twitch event time.
+      messages: structuredClone(
+        this.messages.map(({ receivedAt, ...message }) => ({ ...message, at: receivedAt })),
+      ),
       windowOptions: {
         seed: this.options.seed ?? 1,
-        deletedIds: new Set(this.deletedIds),
+        deletedIds: new Set([
+          ...this.deletedIds,
+          ...this.messages
+            .filter((message) => message.at <= (this.clearBefore ?? -Infinity))
+            .map((message) => message.id),
+        ]),
         clearedUsers: new Set(this.clearedUsers),
         endAt: this.clock.now(),
         ...(this.startAt === undefined ? {} : { startAt: this.startAt }),
-        ...(this.clearBefore === undefined ? {} : { clearBefore: this.clearBefore }),
         ...this.options.windowOptions?.(),
         ...overrides,
       },
@@ -83,7 +90,9 @@ export class ConsensusCollector {
   slide(startAt: number): void {
     if (this.startAt === undefined) return;
     this.startAt = Math.max(this.startAt, startAt);
-    this.messages = this.messages.filter((message) => message.at >= (this.startAt ?? startAt));
+    this.messages = this.messages.filter(
+      (message) => message.receivedAt >= (this.startAt ?? startAt),
+    );
     const retained = new Set(this.messages.map((message) => message.id));
     this.deletedIds = new Set([...this.deletedIds].filter((id) => retained.has(id)));
   }
@@ -111,7 +120,7 @@ export class ConsensusCollector {
     switch (event.kind) {
       case "chat":
         if (this.options.acceptChat && !this.options.acceptChat(event)) break;
-        this.messages.push(fromTwitchChat(event));
+        this.messages.push({ ...fromTwitchChat(event), receivedAt: this.clock.now() });
         break;
       case "chatDelete":
         this.deletedIds.add(event.messageId);

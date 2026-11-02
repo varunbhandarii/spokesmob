@@ -14,6 +14,7 @@ interface Connection {
   id?: string;
   welcomed: boolean;
   keepalive: number;
+  time?: { serverAt: number; receivedAt: number };
   watchdog?: ReturnType<typeof setTimeout>;
 }
 const sessionSchema = z
@@ -168,7 +169,7 @@ export class EventSubClient {
         break;
       }
       case "notification":
-        this.notification(frame);
+        this.notification(connection, frame);
         break;
       case "revocation": {
         const result = z
@@ -199,6 +200,10 @@ export class EventSubClient {
       return;
     }
     connection.welcomed = true;
+    connection.time = {
+      serverAt: Date.parse(frame.metadata.message_timestamp),
+      receivedAt: this.clock.now(),
+    };
     connection.id = session.data.id;
     connection.keepalive =
       (session.data.keepalive_timeout_seconds ?? (this.active?.keepalive ?? 30_000) / 1000) * 1000;
@@ -279,11 +284,15 @@ export class EventSubClient {
     }, 60_000);
   }
 
-  private notification(frame: EventSubFrame): void {
+  private notification(connection: Connection, frame: EventSubFrame): void {
     const now = this.clock.now();
+    const reference = connection.time;
+    if (!reference) return;
+    // Advance the welcome's Twitch time by local elapsed time, independent of wall-clock offset.
+    const serverNow = reference.serverAt + (now - reference.receivedAt);
     for (const [messageId, expires] of this.seen) if (expires <= now) this.seen.delete(messageId);
     if (
-      now - Date.parse(frame.metadata.message_timestamp) > 600_000 ||
+      serverNow - Date.parse(frame.metadata.message_timestamp) > 600_000 ||
       this.seen.has(frame.metadata.message_id)
     )
       return;

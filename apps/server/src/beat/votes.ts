@@ -20,7 +20,6 @@ import type { TwitchEvent } from "../twitch/events.js";
 
 type Session = {
   book: ChatVote;
-  openedAt: number;
   closesAt: number;
   invitation: AbortController;
   result: AbortController;
@@ -43,7 +42,7 @@ export class SplitVotes {
     private readonly options: {
       enabled(): boolean;
       resultMinimum?(): number;
-      onBallot?(event: Extract<TwitchEvent, { kind: "chat" }>): void;
+      onBallot?(event: Extract<TwitchEvent, { kind: "chat" }>, receivedAt: number): void;
       gagged(id: string): boolean;
       blocklist: Blocklist;
       moderation: Pick<ModerationGate, "resolve">;
@@ -152,7 +151,6 @@ export class SplitVotes {
     }
     const session: Session = {
       book: new ChatVote(choices),
-      openedAt: this.clock.now(),
       closesAt: this.clock.now() + 30000,
       invitation: new AbortController(),
       result: new AbortController(),
@@ -238,11 +236,12 @@ export class SplitVotes {
         }
       : null;
   }
-  removeAuthor(id: string, cutoff = this.clock.now(), force = false) {
+  removeAuthor(id: string, cutoff?: number) {
     const session = this.active ?? this.pending;
     if (session) {
-      const removed = session.book.removeAuthor(id, force ? Infinity : cutoff);
-      session.cleared.set(id, Math.max(session.cleared.get(id) ?? -Infinity, cutoff));
+      const removed = session.book.removeAuthor(id, cutoff ?? Infinity);
+      if (cutoff !== undefined)
+        session.cleared.set(id, Math.max(session.cleared.get(id) ?? -Infinity, cutoff));
       if (removed && this.pending === session) this.cancel("ballot author removed");
     }
   }
@@ -265,12 +264,11 @@ export class SplitVotes {
     if (!session || event.text.trimStart().startsWith("!")) return true;
     const choice = ballotChoice(event.text, session.book.choices);
     if (choice === null) return true;
+    const receivedAt = this.clock.now();
     const at = Date.parse(event.at);
     if (
       this.active !== session ||
       !Number.isFinite(at) ||
-      at < session.openedAt ||
-      at >= session.closesAt ||
       at <= (session.cleared.get(event.author.id) ?? -Infinity)
     )
       return false;
@@ -290,7 +288,7 @@ export class SplitVotes {
         )
           return;
         session.book.cast(event.author.id, event.id, choice, at);
-        this.options.onBallot?.(event);
+        this.options.onBallot?.(event, receivedAt);
       })
       .catch(() => undefined);
     return false;

@@ -113,9 +113,8 @@ test("moderator replay excludes deleted and cleared messages before clustering a
   );
   const final = f.collector.close();
   expect(clusteredMessages(final).map((message) => message.text)).toEqual(["Choose the white cat"]);
-  expect(final.windowOptions.deletedIds?.size).toBe(1);
+  expect(final.windowOptions.deletedIds?.size).toBe(4);
   expect(final.windowOptions.clearedUsers?.size).toBe(1);
-  expect(final.windowOptions.clearBefore).toBeDefined();
   expect(f.collector.snapshot()).toEqual({
     messages: [],
     windowOptions: { seed: 17, deletedIds: new Set(), clearedUsers: new Set(), endAt: Date.now() },
@@ -129,33 +128,61 @@ test("moderator replay excludes deleted and cleared messages before clustering a
   expect(clusteredMessages(f.collector.snapshot()).map((message) => message.id)).toEqual(["fresh"]);
 });
 
-test("late chat respects deletion targets and out-of-order clear timestamps", async () => {
-  const f = fixture();
-  f.collector.open();
-  const start = Date.now();
-  await vi.advanceTimersByTimeAsync(1000);
-  const deleted = f.events[2];
-  const original = f.events[0];
-  if (deleted?.kind !== "chatDelete" || original?.kind !== "chat")
-    throw new Error("Expected delete");
-  f.bus.emit(deleted);
-  f.bus.emit(original);
-  expect(clusteredMessages(f.collector.snapshot())).toEqual([]);
-  f.bus.emit({
-    kind: "chatClear",
-    at: new Date(start + 600).toISOString(),
-    channelId: "100000001",
-  });
-  f.bus.emit({
-    kind: "chatClear",
-    at: new Date(start + 200).toISOString(),
-    channelId: "100000001",
-  });
-  f.bus.emit(f.chat("late", "Old content", start + 400));
-  f.bus.emit(f.chat("fresh", "Fresh content", start + 700));
-  expect(f.collector.snapshot().windowOptions.clearBefore).toBe(start + 600);
-  expect(clusteredMessages(f.collector.snapshot()).map((message) => message.id)).toEqual(["fresh"]);
-});
+test.each([-30000, 30000])(
+  "late chat respects Twitch clear ordering with event skew %s",
+  async (skew) => {
+    const f = fixture();
+    f.collector.open();
+    const start = Date.now();
+    await vi.advanceTimersByTimeAsync(1000);
+    const deleted = f.events[2];
+    const original = f.events[0];
+    if (deleted?.kind !== "chatDelete" || original?.kind !== "chat")
+      throw new Error("Expected delete");
+    f.bus.emit(deleted);
+    f.bus.emit(original);
+    expect(clusteredMessages(f.collector.snapshot())).toEqual([]);
+    f.bus.emit({
+      kind: "chatClear",
+      at: new Date(start + 600 + skew).toISOString(),
+      channelId: "100000001",
+    });
+    f.bus.emit({
+      kind: "chatClear",
+      at: new Date(start + 200 + skew).toISOString(),
+      channelId: "100000001",
+    });
+    f.bus.emit(f.chat("late", "Old content", start + 400 + skew));
+    f.bus.emit(f.chat("fresh", "Fresh content", start + 700 + skew));
+    expect(f.collector.snapshot().windowOptions.deletedIds?.has("late")).toBe(true);
+    expect(clusteredMessages(f.collector.snapshot()).map((message) => message.id)).toEqual([
+      "fresh",
+    ]);
+  },
+);
+
+test.each([-30000, 30000])(
+  "live windows, premoderation and sliding use arrival time with event skew %s",
+  async (skew) => {
+    const f = fixture();
+    f.collector.open();
+    const start = Date.now();
+    f.bus.emit(f.chat("first", "Choose orange", Date.now() + skew));
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(f.premoderate).toHaveBeenCalledWith(["Choose orange"], expect.any(AbortSignal));
+    f.bus.emit(f.chat("second", "Choose white", Date.now() + skew));
+    expect(clusteredMessages(f.collector.snapshot())).toHaveLength(2);
+    f.collector.slide(start + 1000);
+    expect(clusteredMessages(f.collector.snapshot()).map((message) => message.id)).toEqual([
+      "second",
+    ]);
+    expect(f.collector.roll().messages[0]?.at).toBe(Date.now());
+    f.bus.emit(f.chat("third", "Choose gray", Date.now() + skew));
+    expect(clusteredMessages(f.collector.snapshot()).map((message) => message.id)).toEqual([
+      "third",
+    ]);
+  },
+);
 
 test("provisional moderation includes at most twelve clusters and thirty-six exemplars", async () => {
   const f = fixture();

@@ -40,8 +40,11 @@ export async function flushUntil(condition: () => boolean): Promise<void> {
   throw new Error("Mock I/O did not reach the expected state");
 }
 
-async function fixture(options: { subscriptions?: boolean } = {}) {
-  const server = await createMockServer({ clock: systemClock, autoPlay: false });
+async function fixture(options: { subscriptions?: boolean; serverSkewMs?: number } = {}) {
+  const server = await createMockServer({
+    clock: { ...systemClock, now: () => Date.now() + (options.serverSkewMs ?? 0) },
+    autoPlay: false,
+  });
   const config = loadConfig({
     TWITCH_CLIENT_ID: "mock-client",
     TWITCH_CLIENT_SECRET: "mock-secret",
@@ -125,6 +128,32 @@ test("welcome creates every subscription immediately and typed notifications ded
   for (let i = 0; i < 20; i++) await immediate();
   expect(f.collected.events).toHaveLength(1);
 });
+
+test.each([-30000, 30000])(
+  "the ten-minute stale-frame cutoff uses Twitch time with server skew %s",
+  async (skew) => {
+    const f = await fixture({ serverSkewMs: skew });
+    f.client.start();
+    await flushUntil(() => f.client.state === "ready");
+    await vi.advanceTimersByTimeAsync(5000);
+    for (const [id, age] of [
+      ["fresh", 0],
+      ["inside", 599999],
+      ["stale", 600001],
+    ] as const) {
+      const frame = chatFrame(id);
+      frame.metadata.message_timestamp = new Date(Date.now() + skew - age).toISOString();
+      f.server.inject(frame);
+    }
+    await flushUntil(() => f.collected.events.length === 2);
+    for (let i = 0; i < 20; i++) await immediate();
+    expect(f.collected.events).toHaveLength(2);
+    expect(f.collected.events.map((event) => event.at)).toEqual([
+      new Date(Date.now() + skew).toISOString(),
+      new Date(Date.now() + skew - 599999).toISOString(),
+    ]);
+  },
+);
 
 test("server reconnect uses its URL exactly, retains subscriptions and shares dedupe", async () => {
   const f = await fixture();
