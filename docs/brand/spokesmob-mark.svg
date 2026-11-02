@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Spokesmob">
+  <!-- Chat arriving: three small bubbles heading for the mouth -->
+  <g transform="translate(-34 0)"><g stroke="#13211f" stroke-width="10" stroke-linejoin="round">
+    <path d="M404 40h56a20 20 0 0 1 20 20v16a20 20 0 0 1-20 20h-30l-18 16 2-16h-10a20 20 0 0 1-20-20V60a20 20 0 0 1 20-20Z" fill="#d6ef80"/>
+    <path d="M440 132h36a16 16 0 0 1 16 16v8a16 16 0 0 1-16 16h-18l-14 12 2-12h-6a16 16 0 0 1-16-16v-8a16 16 0 0 1 16-16Z" fill="#a9d2f2"/>
+    <path d="M452 206h22a12 12 0 0 1 12 12v2a12 12 0 0 1-12 12h-10l-10 9 1-9h-3a12 12 0 0 1-12-12v-2a12 12 0 0 1 12-12Z" fill="#fbf3e0"/>
+  </g>
+  <g transform="translate(240 270) rotate(-8) scale(0.82) translate(-256 -256)">
+    <!-- Silhouette: head shell plus speech tail, drawn as one ink shape -->
+    <path d="M118 380 C98 420 70 450 30 474 C96 482 170 466 222 432 Z" fill="#13211f" stroke="#13211f" stroke-width="6" stroke-linejoin="round"/>
+    <path d="M77 182C85 120 133 88 198 91C243 94 273 64 310 74C344 83 346 114 379 129C425 149 444 190 438 242C433 282 456 308 438 347C415 398 359 427 291 430C237 447 183 432 134 408C81 391 61 352 72 305C57 260 61 217 77 182Z" fill="#13211f"/>
+    <path d="M132 382 C116 414 96 438 70 456 C116 456 166 444 204 418 Z" fill="#a7bfab"/>
+    <path d="M91 190C99 139 140 110 199 112C250 115 280 86 306 94C332 102 332 130 366 146C408 163 421 198 416 243C411 285 434 307 417 340C391 387 345 407 285 410C234 426 187 411 144 391C100 376 83 344 93 306C78 262 78 228 91 190Z" fill="#a7bfab"/>
+    <path d="M91 196C101 149 139 122 184 124" fill="none" stroke="#d6ef80" stroke-width="16" stroke-linecap="round"/>
+    <path d="M257 111C278 103 296 98 308 107" fill="none" stroke="#fbf3e0" stroke-width="10" stroke-linecap="round"/>
+    <path d="M115 350C138 386 190 407 226 407" fill="none" stroke="#13211f" stroke-width="12" stroke-linecap="round"/>
+    <g fill="#c99f8f" opacity=".55">
+      <path d="M107 292C109 278 139 276 154 284C172 295 156 312 135 311C117 312 104 304 107 292Z"/>
+      <path d="M357 286C371 277 397 282 400 294C403 308 384 316 365 310C351 306 347 295 357 286Z"/>
+    </g>
+    <!-- Eyes look up toward the incoming chat -->
+    <g transform="translate(180 236)">
+      <path d="M-51-9C-51-33-31-45-6-44C26-46 51-34 52-7C55 20 34 40 5 41C-25 44-51 27-51-9Z" fill="#fdf1d8" stroke="#13211f" stroke-width="10"/>
+      <g transform="translate(10 -8)"><path d="M-19-8C-18-24-7-31 5-27C21-24 24-10 22 5C21 24 11 32-3 29C-17 27-22 12-19-8Z" fill="#13211f"/><ellipse cx="6" cy="-12" rx="6" ry="8" fill="#fdf1d8"/></g>
+      <path d="M-36-55Q-3-70 34-60" fill="none" stroke="#13211f" stroke-width="14" stroke-linecap="round"/>
+    </g>
+    <g transform="translate(334 230)">
+      <path d="M-51-9C-51-33-31-45-6-44C26-46 51-34 52-7C55 20 34 40 5 41C-25 44-51 27-51-9Z" fill="#fdf1d8" stroke="#13211f" stroke-width="10"/>
+      <g transform="translate(10 -8)"><path d="M-19-8C-18-24-7-31 5-27C21-24 24-10 22 5C21 24 11 32-3 29C-17 27-22 12-19-8Z" fill="#13211f"/><ellipse cx="6" cy="-12" rx="6" ry="8" fill="#fdf1d8"/></g>
+      <path d="M-34-58Q2-72 36-56" fill="none" stroke="#13211f" stroke-width="14" stroke-linecap="round"/>
+    </g>
+    <!-- Open mouth: mid-word -->
+    <path d="M226 322C226 302 242 292 258 292C276 292 290 304 290 326C290 352 276 370 257 370C238 370 226 350 226 322Z" fill="#13211f"/>
+    <path d="M238 352C244 344 268 342 278 352C272 364 262 368 257 368C249 368 242 362 238 352Z" fill="#e0806a"/>
+  </g>
+</g>
+</svg>

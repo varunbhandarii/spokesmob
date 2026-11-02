@@ -1,3 +1,5 @@
+![Spokesmob: your chat, one voice](docs/brand/spokesmob-lockup.png)
+
 # Spokesmob
 
 Your chat, one voice. Spokesmob turns Twitch chat into a spoken summary that only says what many chatters agree on. The vote count stays on screen with a softer dissent whisper, and the streamer sees every line in a private preview with a Veto before anyone hears it. It brings a busy room together and gives a chat of three to five people something they can shape together.

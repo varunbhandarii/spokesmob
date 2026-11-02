@@ -136,23 +136,33 @@ footer {
   gap: 10px;
   align-items: center;
 }
-.brand p {
-  font-size: 8px;
-  letter-spacing: 1px;
-  color: var(--sage);
-  margin-top: 5px;
-}
 .brand-mark {
-  display: grid;
-  place-items: center;
-  width: 36px;
-  height: 36px;
-  background: var(--sage);
-  border: 3px solid var(--paper);
-  color: var(--ink);
-  font: 800 24px var(--voice-font);
-  border-radius: 12px 9px 13px 8px;
+  width: 46px;
+  height: 46px;
+  flex: 0 0 46px;
 }
+.wordmark {
+  display: inline-flex;
+  align-items: stretch;
+  gap: 0;
+  color: var(--paper);
+  font: 800 29px / 1.2 var(--voice-font);
+  font-variation-settings:
+    "INFM" 70,
+    "BNCE" 25;
+  letter-spacing: -0.8px;
+  white-space: nowrap;
+}
+.wordmark-mob {
+  display: inline-flex;
+  align-items: center;
+  background: var(--highlighter);
+  color: var(--ink);
+  padding: 0 5px 2px;
+  margin-left: 1px;
+  border-radius: 3px;
+}
+
 .status-pill {
   display: inline-flex;
   align-items: center;
