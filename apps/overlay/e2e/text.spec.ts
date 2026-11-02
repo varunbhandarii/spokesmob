@@ -1,5 +1,33 @@
 import { expect, test } from "@playwright/test";
-import { sceneLine } from "../src/view/scenes.js";
+import { sceneLine, sceneState } from "../src/view/scenes.js";
+
+test("the overlay restores a vote from hello during reload or audio-owner handover", async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  page.on("console", (message) => {
+    if (message.type() === "error") errors.push(message.text());
+  });
+  await page.goto("/overlay/scene.html?scene=listening&layout=wide");
+  await page.waitForFunction(() => !!window.scene);
+  await page.evaluate((state) => {
+    window.scene.seek(0);
+    window.scene.message({
+      type: "hello",
+      role: "overlay",
+      audio: false,
+      channel: "synthetic_channel",
+      state,
+      vote: { choices: ["Gary", "Milo"], counts: [6, 4], remainingMs: 12000 },
+    });
+  }, sceneState);
+  await expect(page.locator(".vote-plate")).toBeVisible();
+  await expect(page.locator(".vote-label")).toHaveText(["1 Gary", "2 Milo"]);
+  await expect(page.locator(".vote-count")).toHaveText(["6", "4"]);
+  await expect(page.locator(".vote-counts")).toHaveText("12s remaining");
+  expect(errors).toEqual([]);
+});
 
 test("split prompts hide agreement while vote results retain their computed counts", async ({
   page,

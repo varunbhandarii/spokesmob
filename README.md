@@ -97,6 +97,8 @@ Helix calls used by the runtime and live-check tools all share the rate limiter:
 
 Ballots arrive through `channel.chat.message`, with one latest eligible choice per author. Chat votes use messages and announcements, not the Twitch Polls API. Chat sends and announcements are never retried; a pin requires a confirmed send without a drop reason.
 
+Vote displays restore after a reconnect or refresh. Question changes, clears and removed ballots cancel a pending result, including queued output. Diagnostic voice checks stay unavailable until the vote and its result settle.
+
 ## Built with Codex
 
 [AGENTS.md](AGENTS.md) keeps the architecture, privacy and safety rules next to the code. The [eventsub-subscription](.agents/skills/eventsub-subscription/SKILL.md), [helix-call](.agents/skills/helix-call/SKILL.md) and [golden-window](.agents/skills/golden-window/SKILL.md) skills guide repeatable additions with mocks and replay coverage. The Stop hook runs `npm test` before a turn finishes. Codex built the [eval harness](eval/README.md), iterated prompts against reviewed synthetic windows, and used its results to select wording and service tier without lowering verifier thresholds. Codex cloud produced three face attempts; a best-of-3 comparison selected Round Ink. Code review and the unit, browser and hygiene checks precede releases.

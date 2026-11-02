@@ -1,4 +1,6 @@
-import { type Clock, sleep, systemClock } from "../clock.js";
+import { atDeadline, type Clock, systemClock } from "../clock.js";
+
+import { AdmissionCancelled } from "./admission.js";
 
 export type RateClass = "general" | "chat" | "announce";
 const limits = {
@@ -14,10 +16,11 @@ export class RateLimiter {
   private generalLimit = 600;
   constructor(private readonly clock: Clock = systemClock) {}
 
-  acquire(kind: RateClass = "general"): Promise<void> {
+  acquire(kind: RateClass = "general", signal?: AbortSignal): Promise<void> {
     const operation = this.queue.then(async () => {
       const classes: RateClass[] = kind === "general" ? ["general"] : ["general", kind];
       for (;;) {
+        if (signal?.aborted) throw new AdmissionCancelled();
         const now = this.clock.now();
         let available = Math.max(now, this.pausedUntil);
         for (const name of classes) {
@@ -35,11 +38,28 @@ export class RateLimiter {
           for (const name of classes) this.history[name].push(now);
           return;
         }
-        await sleep(this.clock, available - now);
+        await new Promise<void>((resolve, reject) => {
+          const cancel = atDeadline(this.clock, available, () => {
+            signal?.removeEventListener("abort", abort);
+            resolve();
+          });
+          const abort = () => {
+            cancel();
+            reject(new AdmissionCancelled());
+          };
+          signal?.addEventListener("abort", abort, { once: true });
+          if (signal?.aborted) abort();
+        });
       }
     });
     this.queue = operation.catch(() => undefined);
-    return operation;
+    if (!signal) return operation;
+    return new Promise<void>((resolve, reject) => {
+      const abort = () => reject(new AdmissionCancelled());
+      signal.addEventListener("abort", abort, { once: true });
+      operation.then(resolve, reject).finally(() => signal.removeEventListener("abort", abort));
+      if (signal.aborted) abort();
+    });
   }
 
   observe(headers: Headers): void {

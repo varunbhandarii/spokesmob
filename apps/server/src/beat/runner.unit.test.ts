@@ -23,6 +23,7 @@ import { openStorage } from "../store/db.js";
 import { migrate } from "../store/migrations.js";
 import { createRepositories } from "../store/repositories.js";
 import { SpendLedger } from "../store/spend.js";
+import { checkAdmission } from "../twitch/admission.js";
 import { TwitchBus } from "../twitch/bus.js";
 import type { TwitchEvent } from "../twitch/events.js";
 import { FakeVoice } from "./fakes.js";
@@ -54,6 +55,7 @@ function fixture(
     voiceReadyMs?: number;
     sendDelayMs?: number;
     minVoices?: number;
+    admissionDelayMs?: number;
   } = {},
 ) {
   const db = openStorage(":memory:");
@@ -64,7 +66,10 @@ function fixture(
   const calls: { action: string; at: number; text?: string; id?: string }[] = [];
   const output = new ChatOutput(
     {
-      sendChatMessage: async ({ text }) => {
+      sendChatMessage: async ({ text }, admission) => {
+        if (admission && options.admissionDelayMs)
+          await new Promise((resolve) => setTimeout(resolve, options.admissionDelayMs));
+        checkAdmission(admission);
         calls.push({ action: "send", at: Date.now(), text });
         if (options.sendDelayMs)
           await new Promise((resolve) => setTimeout(resolve, options.sendDelayMs));
@@ -195,6 +200,195 @@ test("the shell completes one verified unit, posts once, pins and records actual
     latency: { holdMs: 1000, voiceReadyMs: 300, preRollMs: 100 },
   });
   expect(f.overlay.some((message) => message.type === "line")).toBe(true);
+});
+
+async function pendingVoteResult(quiet: boolean, admissionDelayMs?: number) {
+  const f = fixture({ quiet, ...(admissionDelayMs ? { admissionDelayMs } : {}) });
+  expect(await f.runner.startVote("Gary", "Milo")).toMatchObject({ ok: true });
+  await vi.advanceTimersByTimeAsync(quiet ? 4000 : 2200);
+  expect(f.runner.state.voteOpen).toBe(true);
+  f.chat("a", "1", "ballot-a");
+  f.chat("b", "1", "ballot-b");
+  await vi.advanceTimersByTimeAsync(f.runner.voteSnapshot()?.remainingMs ?? 0);
+  expect(f.runner.state.current?.purpose).toBe("vote_result");
+  expect(f.runner.state.step).toBe("preview");
+  return f;
+}
+
+test("ballot provenance and diagnostic exclusion survive pending result moderation", async () => {
+  let release = () => {};
+  const pending = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const f = fixture({
+    quiet: true,
+    moderation: new FakeModerationPort(async (texts) => {
+      if (texts.some((text) => text.startsWith("Gary wins"))) await pending;
+      return texts.map(clearModeration);
+    }),
+  });
+  await f.runner.startVote("Gary", "Milo");
+  await vi.advanceTimersByTimeAsync(4000);
+  f.chat("a", "1", "ballot-a");
+  f.chat("b", "1", "ballot-b");
+  await vi.advanceTimersByTimeAsync(30000);
+  expect(f.runner.state.voteOpen).toBe(true);
+  expect(f.runner.voteSnapshot()).toBeNull();
+  expect(f.runner.canCheckVoice()).toBe(false);
+  expect(f.runner.allowVoiceAttempt(999, 1)).toBe(false);
+  f.bus.emit({
+    kind: "chatDelete",
+    channelId: "1",
+    userId: "a",
+    messageId: "ballot-a",
+    at: new Date().toISOString(),
+  });
+  release();
+  await vi.advanceTimersByTimeAsync(5000);
+  expect(f.runner.state.voteOpen).toBe(false);
+  expect(
+    f.overlay.some((message) => message.type === "line" && message.text.startsWith("Gary wins")),
+  ).toBe(false);
+  expect(f.calls.filter((call) => ["send", "pin"].includes(call.action))).toHaveLength(0);
+});
+
+test.each([
+  ["preview", null],
+  ["preview", "Another question?"],
+  ["playback", null],
+  ["playback", "Another question?"],
+  ["queued post", null],
+  ["queued post", "Another question?"],
+] as const)(
+  "question %s cancellation (%s) cannot publish a pending result",
+  async (point, question) => {
+    const f = await pendingVoteResult(
+      point !== "playback",
+      point === "queued post" ? 5000 : undefined,
+    );
+    if (point === "playback") await vi.advanceTimersByTimeAsync(1100);
+    if (point === "queued post") {
+      await vi.advanceTimersByTimeAsync(4000);
+      expect(f.runner.state.current?.output).toBe("sending");
+    }
+    const take = f.overlay.filter((message) => message.type === "line").at(-1)?.take;
+    const before = f.overlay.length;
+    const played = f.voice.played.length;
+    const cancel = vi.spyOn(f.voice, "cancelAll");
+    f.runner.dispatch({ type: "question", question });
+    await vi.advanceTimersByTimeAsync(10000);
+    expect(f.runner.state.current?.purpose).not.toBe("vote_result");
+    expect(
+      f.overlay
+        .slice(before)
+        .some((message) => message.type === "reveal" || message.type === "play"),
+    ).toBe(false);
+    expect(f.voice.played).toHaveLength(played);
+    expect(f.calls.filter((call) => ["send", "pin"].includes(call.action))).toHaveLength(0);
+    expect(cancel).toHaveBeenCalledOnce();
+    if (take !== undefined) f.runner.report({ type: "ended", take });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(f.calls.filter((call) => call.action === "pin")).toHaveLength(0);
+  },
+);
+
+test.each(["delete", "clear", "gag"] as const)(
+  "a ballot %s cancels its pending result before reveal or output",
+  async (action) => {
+    const f = await pendingVoteResult(true);
+    const before = f.overlay.length;
+    if (action === "gag") f.runner.invalidateGag("a");
+    else if (action === "clear")
+      f.bus.emit({
+        kind: "chatClearUser",
+        channelId: "1",
+        userId: "a",
+        at: new Date().toISOString(),
+      });
+    else
+      f.bus.emit({
+        kind: "chatDelete",
+        channelId: "1",
+        messageId: "ballot-a",
+        userId: "a",
+        at: new Date().toISOString(),
+      });
+    await vi.advanceTimersByTimeAsync(10000);
+    expect(f.overlay.slice(before).some((message) => message.type === "reveal")).toBe(false);
+    expect(f.calls.filter((call) => ["send", "pin"].includes(call.action))).toHaveLength(0);
+    expect(f.store.beatLog.recent(1)[0]).toMatchObject({
+      status: "blocked",
+      reason: "vote_cancelled",
+    });
+  },
+);
+
+test.each([null, "Another question?"])(
+  "a stale moderated window cannot propose a split under question %s",
+  async (question) => {
+    let release = () => {};
+    const pending = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const f = fixture({
+      quiet: true,
+      windowS: 5,
+      moderation: {
+        async moderate(texts) {
+          await pending;
+          return { results: texts.map(clearModeration), usage: null };
+        },
+      },
+    });
+    f.runner.dispatch({ type: "question", question: "Name the cat?" });
+    for (let i = 0; i < 3; i++) {
+      f.chat(`a${i}`, "Gary");
+      f.chat(`b${i}`, "Milo");
+    }
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(f.runner.state.step).toBe("synthesizing");
+    f.runner.dispatch({ type: "question", question });
+    release();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(
+      f.overlay.some(
+        (message) => message.type === "line" && message.text.startsWith("Chat is split"),
+      ),
+    ).toBe(false);
+    await vi.advanceTimersByTimeAsync(7000);
+    if (!question) f.runner.dispatch({ type: "question", question: "A new question?" });
+    for (let i = 0; i < 3; i++) {
+      f.chat(`a${i}`, "Gary", `new-a${i}`);
+      f.chat(`b${i}`, "Milo", `new-b${i}`);
+    }
+    await vi.advanceTimersByTimeAsync(18000);
+    expect(
+      f.overlay.some((message) => message.type === "event" && message.kind === "vote_begin"),
+    ).toBe(true);
+  },
+);
+
+test("diagnostic voice admission stays locked through voting and result settlement but permits the result take", async () => {
+  const f = fixture();
+  expect(f.runner.canCheckVoice()).toBe(true);
+  await f.runner.startVote("Gary", "Milo");
+  await vi.advanceTimersByTimeAsync(2200);
+  expect(f.runner.state.voteOpen).toBe(true);
+  expect(f.runner.canCheckVoice()).toBe(false);
+  expect(f.runner.allowVoiceAttempt(999, 1)).toBe(false);
+  f.chat("a", "1");
+  f.chat("b", "1");
+  await vi.advanceTimersByTimeAsync(f.runner.voteSnapshot()?.remainingMs ?? 0);
+  expect(f.runner.state.current?.purpose).toBe("vote_result");
+  expect(f.runner.canCheckVoice()).toBe(false);
+  expect(f.runner.allowVoiceAttempt(999, 1)).toBe(false);
+  expect(f.runner.allowVoiceAttempt(1, 1)).toBe(false);
+  await vi.advanceTimersByTimeAsync(300);
+  const take = f.runner.state.current?.main.take;
+  expect(take).not.toBeNull();
+  expect(f.runner.allowVoiceAttempt(take ?? -1, 1)).toBe(true);
+  await vi.advanceTimersByTimeAsync(2200);
+  expect(f.runner.canCheckVoice()).toBe(true);
 });
 
 test("window close while provisional moderation is pending still completes without a control action", async () => {

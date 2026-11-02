@@ -1,6 +1,8 @@
+import { once } from "node:events";
 import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { join, resolve, sep } from "node:path";
 import { afterEach, expect, test, vi } from "vitest";
+import { WebSocket } from "ws";
 import { createMockServer } from "../../../../tools/mock-eventsub/src/server.js";
 import { createMockServices } from "../../../../tools/mock-eventsub/src/services.js";
 import { loadConfig } from "../config.js";
@@ -16,7 +18,7 @@ afterEach(async () => {
   for (const stop of cleanup.splice(0).reverse()) await stop();
   vi.restoreAllMocks();
 });
-test("failed model and voice warm-up leaves the server, control API and Kill available", async () => {
+async function fixture() {
   const network = vi
     .spyOn(globalThis, "fetch")
     .mockRejectedValue(new Error("External network forbidden"));
@@ -86,6 +88,10 @@ test("failed model and voice warm-up leaves the server, control API and Kill ava
     origin: url.origin,
     authorization: `Bearer ${url.searchParams.get("token")}`,
   };
+  return { app, headers, url, model, factory, warn, network };
+}
+test("failed model and voice warm-up leaves the server, control API and Kill available", async () => {
+  const { app, headers, model, factory, warn, network } = await fixture();
   expect(model.warmup).toHaveBeenCalledOnce();
   expect(factory).toHaveBeenCalledTimes(2);
   expect(warn).toHaveBeenCalledWith({ source: "model" }, expect.any(String));
@@ -98,5 +104,46 @@ test("failed model and voice warm-up leaves the server, control API and Kill ava
   expect(
     (await app.voice.http.app.inject({ url: "/api/state", headers })).json().state.heldBy,
   ).toContain("killed");
+  expect(network).not.toHaveBeenCalled();
+});
+
+test("diagnostic say and kill checks are refused at the application boundary during a vote", async () => {
+  const { app, url, factory, network } = await fixture();
+  const socket = new WebSocket(`${url.origin.replace("http", "ws")}/ws${url.search}`, {
+    origin: url.origin,
+  });
+  cleanup.push(async () => {
+    socket.terminate();
+  });
+  await once(socket, "open");
+  const hello = once(socket, "message");
+  socket.send(JSON.stringify({ type: "hello", role: "control" }));
+  await hello;
+  app.runner.state.voteOpen = true;
+  for (const mode of ["say", "kill_test"] as const) {
+    const request = mode.replace("_", "-");
+    const response = new Promise<unknown>((resolve) => {
+      const receive = (data: { toString(): string }) => {
+        const value = JSON.parse(data.toString());
+        if (value.type !== "voice_result" || value.request !== request) return;
+        socket.off("message", receive);
+        resolve(value);
+      };
+      socket.on("message", receive);
+    });
+    socket.send(
+      JSON.stringify({
+        type: "voice_command",
+        request,
+        mode,
+        ...(mode === "say" ? { text: "Chat says blue." } : {}),
+      }),
+    );
+    expect(await response).toMatchObject({
+      type: "voice_result",
+      data: { status: "rejected", reason: "beat_in_progress" },
+    });
+  }
+  expect(factory).toHaveBeenCalledTimes(2);
   expect(network).not.toHaveBeenCalled();
 });

@@ -130,12 +130,14 @@ export class ChatVote {
     if (previous && previous.at > at) return;
     this.ballots.set(author, { message, choice, at });
   }
-  removeMessage(id: string) {
+  removeMessage(id: string): boolean {
     for (const [author, ballot] of this.ballots)
-      if (ballot.message === id) this.ballots.delete(author);
+      if (ballot.message === id) return this.ballots.delete(author);
+    return false;
   }
-  removeAuthor(id: string) {
-    this.ballots.delete(id);
+  removeAuthor(id: string, cutoff = Infinity): boolean {
+    const ballot = this.ballots.get(id);
+    return !!ballot && ballot.at <= cutoff && this.ballots.delete(id);
   }
   counts(): [number, number] {
     const counts: [number, number] = [0, 0];

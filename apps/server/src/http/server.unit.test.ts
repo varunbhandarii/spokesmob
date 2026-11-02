@@ -123,6 +123,12 @@ test("both local pages enforce the strict bundled-only content security policy",
 test("preview crosses only the control boundary and reveal only the overlay boundary", async () => {
   const f = await server();
   f.hub.setChannel("synthetic_channel");
+  const vote = {
+    choices: ["Gary", "Milo"] as [string, string],
+    counts: [6, 4] as [number, number],
+    remainingMs: 12000,
+  };
+  f.hub.setVoteSnapshot(() => vote);
   const overlay = await f.connect(false);
   const control = new WebSocket(`${f.url}/ws?token=synthetic-token`, { origin: f.origin });
   const messages: unknown[] = [];
@@ -146,6 +152,8 @@ test("preview crosses only the control boundary and reveal only the overlay boun
   await until(() => messages.length === 2 && overlay.frames.length === 2);
   const visuals = overlay.frames.map((frame) => JSON.parse(frame.data.toString()));
   expect(visuals[0]).toMatchObject({ channel: "synthetic_channel" });
+  expect(visuals[0]).toMatchObject({ vote });
+  expect(messages[0]).toMatchObject({ vote });
   expect(visuals.map((value) => value.type)).toEqual(["hello", "reveal"]);
   for (const value of visuals)
     expect(serverOverlayMessageSchema.safeParse(value).success).toBe(true);
@@ -161,10 +169,45 @@ test("binary frames use network-order take/chunk headers and preserve PCM", () =
 });
 test("newest audio client wins, silent previews receive no PCM and hello resync never resurrects playback", async () => {
   const f = await server();
+  const vote = {
+    choices: ["Gary", "Milo"] as [string, string],
+    counts: [6, 4] as [number, number],
+    remainingMs: 12000,
+  };
+  f.hub.setVoteSnapshot(() => vote);
   const first = await f.connect(true);
   const preview = await f.connect(false);
   const second = await f.connect(true);
   await until(() => first.frames.some((frame) => frame.data.toString().includes('"audio":false')));
+  const handover = JSON.parse(first.frames.at(-1)?.data.toString() ?? "null");
+  expect(serverOverlayMessageSchema.parse(handover)).toMatchObject({
+    type: "hello",
+    audio: false,
+    vote,
+  });
+  expect(
+    serverOverlayMessageSchema.parse(JSON.parse(second.frames[0]?.data.toString() ?? "null")),
+  ).toMatchObject({ vote });
+  for (const voteChange of [
+    { remainingMs: -1 },
+    { remainingMs: 30001 },
+    { counts: [-1, 4] },
+    { choices: ["Gary"] },
+  ]) {
+    expect(
+      serverOverlayMessageSchema.safeParse({ ...handover, vote: { ...vote, ...voteChange } })
+        .success,
+    ).toBe(false);
+    expect(
+      serverControlMessageSchema.safeParse({
+        type: "hello",
+        role: "control",
+        audio: false,
+        state: handover.state,
+        vote: { ...vote, ...voteChange },
+      }).success,
+    ).toBe(false);
+  }
   const reports: unknown[] = [];
   f.hub.onReport((event) => reports.push(event));
   f.hub.prepare(1, "main", "A synthetic line");

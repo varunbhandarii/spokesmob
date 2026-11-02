@@ -86,6 +86,9 @@ export class BeatRunner {
   private readonly clock: Clock;
   private readonly collector: ConsensusCollector;
   private readonly moderation: ModerationGate;
+  private questionGeneration = 0;
+  private readonly snapshotQuestions = new Map<number, number>();
+  private preparingBeatId: number | null = null;
   private readonly snapshots = new Map<number, CollectorSnapshot>();
   private readonly controllers = new Map<number, AbortController>();
   private readonly takes = new Map<number, { main?: VoiceTake; dissent?: VoiceTake }>();
@@ -149,7 +152,7 @@ export class BeatRunner {
       safeTemplate: (text, signal) => this.verifyTemplate(text, signal),
       overlay: options.overlay,
       control: (message) => options.control?.(message),
-      announce: (text) => options.output.announceVote(text),
+      announce: (text, admission) => options.output.announceVote(text, admission),
       finish: (result) => this.finishVote(result),
       clock: this.clock,
     });
@@ -232,8 +235,9 @@ export class BeatRunner {
     )
       this.laughs.cancel();
     if (event.type === "question") {
+      this.questionGeneration++;
       this.votes.questionChanged();
-      if (this.state.current?.purpose === "split")
+      if (this.state.current?.purpose === "split" || this.state.current?.purpose === "vote_result")
         this.dispatch({ type: "invalidate", reason: "question_changed" });
     } else if (
       ["mute", "kill", "off"].includes(event.type) ||
@@ -261,7 +265,7 @@ export class BeatRunner {
     this.dispatch({ type: "gate", changes: this.options.clients() });
   }
   invalidateGag(userId: string) {
-    this.votes.removeAuthor(userId);
+    this.votes.removeAuthor(userId, this.clock.now(), true);
     this.activity.removeAuthor(userId);
     this.particleNames = [];
     this.options.overlay({ type: "particles_clear" });
@@ -409,7 +413,7 @@ export class BeatRunner {
         this.votes.cancel("chat cleared");
         this.activity.clear();
       } else if (event.kind === "chatClearUser") {
-        this.votes.removeAuthor(event.userId);
+        this.votes.removeAuthor(event.userId, Date.parse(event.at));
         this.activity.removeAuthor(event.userId);
       } else {
         this.votes.removeMessage(event.messageId);
@@ -471,8 +475,10 @@ export class BeatRunner {
         this.collector.open(effect.window.startAt);
         break;
       case "closeWindow": {
-        if (effect.nextWindow) this.snapshots.set(effect.windowId, this.collector.roll(effect.at));
-        else this.collector.close();
+        if (effect.nextWindow) {
+          this.snapshots.set(effect.windowId, this.collector.roll(effect.at));
+          this.snapshotQuestions.set(effect.windowId, this.questionGeneration);
+        } else this.collector.close();
         break;
       }
       case "slideWindow":
@@ -646,7 +652,11 @@ export class BeatRunner {
         this.task(async () => {
           if (!this.current(effect.beatId)) return;
           try {
-            const result = await this.options.output.post(effect.line);
+            const result = await this.options.output.post(
+              effect.line,
+              this.resultAdmission(effect.beatId),
+            );
+            if (!this.current(effect.beatId)) return;
             const book = this.records.books.get(effect.beatId);
             if (book && (!result.sent || result.dropReason)) {
               book.gate = "chat";
@@ -661,6 +671,7 @@ export class BeatRunner {
               dropReason: result.dropReason,
             });
           } catch {
+            if (!this.current(effect.beatId)) return;
             const book = this.records.books.get(effect.beatId);
             if (book) {
               book.gate = "chat";
@@ -680,8 +691,13 @@ export class BeatRunner {
         this.task(async () => {
           if (!this.current(effect.beatId)) return;
           try {
-            await this.options.output.pin(effect.messageId, effect.durationS);
+            await this.options.output.pin(
+              effect.messageId,
+              effect.durationS,
+              this.resultAdmission(effect.beatId),
+            );
           } catch {
+            if (!this.current(effect.beatId)) return;
             this.options.log.warn({ endpoint: "/chat/pins" }, "Beat pin unavailable");
             const book = this.records.books.get(effect.beatId);
             if (book) {
@@ -711,6 +727,7 @@ export class BeatRunner {
         });
         break;
       case "log":
+        if (effect.beat.purpose === "vote_result") this.votes.finishComplete();
         this.voteProposals.delete(effect.beat.id);
         this.shownEnds.delete(effect.beat.id);
         this.closedBeats++;
@@ -790,6 +807,8 @@ export class BeatRunner {
   }
   private finishVote(result: ReturnType<ChatVote["result"]> | null) {
     if (!result) {
+      if (this.state.current?.purpose === "vote_result")
+        this.dispatch({ type: "invalidate", reason: "vote_cancelled" });
       this.dispatch({ type: "voteFinished", line: null });
       return;
     }
@@ -797,7 +816,6 @@ export class BeatRunner {
     this.task(async () => {
       const safe = await this.verifyTemplate(result.text);
       if (version !== this.votes.version()) return;
-      this.votes.finishComplete();
       if (!this.state.voteOpen) return;
       const line: BeatLine | null =
         safe && this.allowed()
@@ -816,6 +834,7 @@ export class BeatRunner {
               raidName: null,
             }
           : null;
+      if (!line) this.votes.finishComplete();
       this.dispatch({ type: "voteFinished", line });
     }, "voteResult");
   }
@@ -847,6 +866,8 @@ export class BeatRunner {
   }
   private async resolveConsensus(effect: Extract<BeatEffect, { type: "synthesize" }>) {
     const snapshot = this.snapshots.get(effect.windowId);
+    const questionGeneration = this.snapshotQuestions.get(effect.windowId);
+    this.snapshotQuestions.delete(effect.windowId);
     this.snapshots.delete(effect.windowId);
     const beat = this.state.current;
     if (!snapshot || !beat || !this.current(effect.beatId)) return;
@@ -902,6 +923,7 @@ export class BeatRunner {
         moodContext: { raidActive: mood.raid_active, hypeLevel: mood.hype_level },
         onProcessing: (ms) => this.trackProcessing(ms),
         chooseTemplate: async (window, clusters) => {
+          if (questionGeneration !== this.questionGeneration) return null;
           const proposal = await this.votes.propose(
             window,
             clusters,
@@ -932,8 +954,15 @@ export class BeatRunner {
   }
   private prepare(beatId: number, line: BeatLine) {
     if (!this.current(beatId)) return;
-    const main = this.options.voice.prepare(line.text, "main");
-    const dissent = line.dissent ? this.options.voice.prepare(line.dissent, "dissent") : undefined;
+    this.preparingBeatId = beatId;
+    let main: VoiceTake;
+    let dissent: VoiceTake | undefined;
+    try {
+      main = this.options.voice.prepare(line.text, "main");
+      dissent = line.dissent ? this.options.voice.prepare(line.dissent, "dissent") : undefined;
+    } finally {
+      this.preparingBeatId = null;
+    }
     this.takes.set(beatId, { main, ...(dissent ? { dissent } : {}) });
     this.visualTakes.set(beatId, main.id);
     this.options.control?.({
@@ -1011,8 +1040,30 @@ export class BeatRunner {
       this.dispatch({ type: "voiceStarted", beatId, channel: "main", take: event.take });
     }
   }
+  voteSnapshot() {
+    return this.votes.snapshot();
+  }
+  canCheckVoice(): boolean {
+    return (
+      !this.state.muted &&
+      !this.state.gates.killed &&
+      !this.state.voteOpen &&
+      !this.votes.busy() &&
+      !["preview", "speaking", "synthesizing"].includes(this.state.step)
+    );
+  }
+  private resultAdmission(beatId: number) {
+    if (this.state.current?.purpose !== "vote_result") return undefined;
+    const admission = this.votes.resultAdmission();
+    if (!admission) throw new Error("Vote result cancelled");
+    return { signal: admission.signal, allowed: () => admission.allowed() && this.current(beatId) };
+  }
   allowVoiceAttempt(take: number, attempt: number): boolean {
-    if (!this.allowed()) return false;
+    const beat = this.state.current;
+    const resultTake =
+      beat?.purpose === "vote_result" &&
+      (this.takeBeats.get(take) === beat.id || this.preparingBeatId === beat.id);
+    if (!this.allowed() || this.state.voteOpen || (this.votes.busy() && !resultTake)) return false;
     const beatId = this.takeBeats.get(take) ?? this.state.current?.id;
     const ticket = this.options.ledger.reserve(
       "voice",

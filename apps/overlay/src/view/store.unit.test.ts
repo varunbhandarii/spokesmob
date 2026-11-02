@@ -2,6 +2,45 @@ import { expect, test } from "vitest";
 import { sceneLine, sceneState } from "./scenes.js";
 import { createViewStore } from "./store.js";
 
+test("hello and audio-owner handover restore the active ballot and remaining countdown", () => {
+  let now = 5000;
+  const store = createViewStore(null, () => now);
+  const vote = {
+    choices: ["Gary", "Milo"] as [string, string],
+    counts: [6, 4] as [number, number],
+    remainingMs: 12000,
+  };
+  store.receive({
+    type: "hello",
+    role: "overlay",
+    audio: true,
+    channel: "synthetic_channel",
+    state: sceneState,
+    vote,
+  });
+  now += 1000;
+  expect(store.view().vote).toEqual({ ...vote, remainingMs: 11000 });
+  store.receive({
+    type: "hello",
+    role: "overlay",
+    audio: false,
+    channel: "synthetic_channel",
+    state: sceneState,
+    vote: { ...vote, remainingMs: 11000 },
+  });
+  store.receive({ type: "event", kind: "vote_update", counts: [7, 4] });
+  expect(store.view().vote).toEqual({ ...vote, counts: [7, 4], remainingMs: 11000 });
+  store.receive({
+    type: "hello",
+    role: "overlay",
+    audio: false,
+    channel: "synthetic_channel",
+    state: sceneState,
+    vote: null,
+  });
+  expect(store.view().vote).toBeNull();
+});
+
 test("confirmed clip badge expires after three seconds", () => {
   let now = 0;
   const store = createViewStore(null, () => now);

@@ -625,7 +625,12 @@ export function reduce(input: BeatState, event: BeatEvent, now: number): BeatRed
       break;
     }
     case "invalidate": {
-      if (!state.current || !isActive(state) || state.current.output !== "idle") break;
+      if (
+        !state.current ||
+        !isActive(state) ||
+        (state.current.output !== "idle" && state.current.purpose !== "vote_result")
+      )
+        break;
       mark();
       cancel(event.reason, "blocked");
       cooldown();

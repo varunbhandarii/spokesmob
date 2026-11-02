@@ -14,6 +14,29 @@ import {
 } from "./model.js";
 import { row, view } from "./test-data.js";
 
+test("a reconnect hello restores ballot choices, counts and remaining time before subsequent updates", () => {
+  const vote = {
+    choices: ["Gary", "Milo"] as [string, string],
+    counts: [6, 4] as [number, number],
+    remainingMs: 12000,
+  };
+  const model = receiveControl(createControlModel(), {
+    type: "hello",
+    role: "control",
+    audio: false,
+    state: view,
+    vote,
+  });
+  expect(model.vote).toEqual(vote);
+  expect(
+    receiveControl(model, { type: "event", kind: "vote_update", counts: [7, 4] }).vote,
+  ).toEqual({ ...vote, counts: [7, 4] });
+  expect(
+    receiveControl(model, { type: "hello", role: "control", audio: false, state: view, vote: null })
+      .vote,
+  ).toBeNull();
+});
+
 test("hello restores step, effective mood and active train without requesting audio", () => {
   const model = createControlModel();
   const state = {

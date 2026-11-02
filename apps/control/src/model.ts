@@ -16,7 +16,7 @@ export interface ControlModel {
   cost: Cost | null;
   health: Health | null;
   settings: BeatSettings;
-  vote: { choices: [string, string]; counts: [number, number] } | null;
+  vote: { choices: [string, string]; counts: [number, number]; remainingMs?: number } | null;
   activities: Extract<ControlMessage, { type: "activity" }>[];
   logs: BeatLogRecord[];
 }
@@ -50,7 +50,7 @@ export function receiveControl(
     case "hello":
       return {
         ...next,
-        vote: null,
+        vote: message.vote ?? null,
         state: message.state,
         simulatedVoice: !!message.simulatedVoice,
       };

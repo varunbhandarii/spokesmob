@@ -349,6 +349,7 @@ async function resync(includeLog: boolean) {
       ...model,
       settings: snapshot.value.settings,
       state: version === stateVersion ? snapshot.value.state : model.state,
+      vote: version === stateVersion ? (snapshot.value.vote ?? null) : model.vote,
     };
   const log = results[1];
   if (log?.status === "fulfilled" && log.value)
@@ -425,7 +426,8 @@ try {
     },
     message: (message) => {
       model = receiveControl(model, message, performance.now());
-      if (message.type === "hello" || message.type === "state") stateVersion++;
+      if (message.type === "hello" || message.type === "state" || message.type === "event")
+        stateVersion++;
       if (message.type === "hello") void resync(true);
       if (message.type === "result") {
         if (message.ok) {

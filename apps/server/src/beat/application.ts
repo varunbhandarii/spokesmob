@@ -94,13 +94,7 @@ export async function createBeatApplication(options: {
       ...(options.clock ? { clock: options.clock } : {}),
       allowAttempt: (take, attempt) => runner?.allowVoiceAttempt(take, attempt) ?? false,
       onUsage: (take, attempt, usage, cost) => runner?.voiceUsage(take, attempt, usage, cost),
-      checkAllowed: () =>
-        !!runner &&
-        !runner.state.muted &&
-        !runner.state.gates.killed &&
-        runner.state.step !== "preview" &&
-        runner.state.step !== "speaking" &&
-        runner.state.step !== "synthesizing",
+      checkAllowed: () => !!runner && runner.canCheckVoice(),
     });
     const hub = voice.http.hub;
     const voiceManager = voice.manager;
@@ -178,11 +172,16 @@ export async function createBeatApplication(options: {
     });
     const router = commands;
     voice.http.setControl({
-      state: () => ({ state: beat.view(), settings: beat.state.settings }),
+      state: () => ({
+        state: beat.view(),
+        settings: beat.state.settings,
+        vote: beat.voteSnapshot(),
+      }),
       logs: (limit, before) => store?.beatLog.recent(limit, before) ?? [],
       execute: (command) => router.execute(command),
     });
     hub.setSnapshot(() => beat.view());
+    hub.setVoteSnapshot(() => beat.voteSnapshot());
     hub.onAction((command) => router.execute(command));
     const unobserve = hub.observe((event) => {
       fakeVoice?.report(event);

@@ -7,6 +7,7 @@ import {
   clientMessageSchema,
   type OverlayMessage,
   type VoiceCheckCommand,
+  type VoteSnapshot,
 } from "../../../../packages/core/src/overlay-protocol.js";
 import type { PlaybackReport, VoiceTransport } from "../voice/manager.js";
 import type { VoiceChannel } from "../voice/types.js";
@@ -41,6 +42,10 @@ export class OverlayHub implements VoiceTransport {
   private readonly playbackListeners = new Set<(event: PlaybackReport) => void>();
   private readonly clientListeners = new Set<() => void>();
   private snapshot = (): BeatView => beatViewSchema.strip().parse(createBeatState());
+  private voteSnapshot: () => VoteSnapshot | null = () => null;
+  setVoteSnapshot(snapshot: () => VoteSnapshot | null) {
+    this.voteSnapshot = snapshot;
+  }
   private simulatedVoice = false;
   setSimulatedVoice(value: boolean) {
     this.simulatedVoice = value;
@@ -129,6 +134,7 @@ export class OverlayHub implements VoiceTransport {
               channel: this.channel,
               state: this.snapshot(),
               simulatedVoice: this.simulatedVoice,
+              vote: this.voteSnapshot(),
             });
           }
           this.owner = client;
@@ -142,6 +148,7 @@ export class OverlayHub implements VoiceTransport {
           ...(client.role === "overlay" ? { channel: this.channel } : {}),
           state: this.snapshot(),
           simulatedVoice: this.simulatedVoice,
+          vote: this.voteSnapshot(),
         });
         this.clientsChanged();
       } else if (event.type === "voice_command") {

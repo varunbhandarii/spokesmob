@@ -159,7 +159,13 @@ export function createViewStore(
         highestSeen = Math.max(highestSeen, event.take);
       switch (event.type) {
         case "hello":
-          vote = null;
+          vote = event.vote
+            ? {
+                choices: event.vote.choices,
+                counts: event.vote.counts,
+                until: now() + event.vote.remainingMs,
+              }
+            : null;
           simulatedVoice = !!event.simulatedVoice;
           cancelled.clear();
           revealed.clear();

@@ -3,6 +3,7 @@ import { createBlocklist } from "../../../../packages/core/src/blocklist.js";
 import { clusterWindow } from "../../../../packages/core/src/cluster.js";
 import { assembleWindow } from "../../../../packages/core/src/window.js";
 import { clearModeration } from "../consensus/fakes.js";
+import type { RequestAdmission } from "../twitch/admission.js";
 import type { TwitchEvent } from "../twitch/events.js";
 import { SplitVotes } from "./votes.js";
 
@@ -13,7 +14,7 @@ function fixture() {
   const overlay = vi.fn(),
     control = vi.fn(),
     finish = vi.fn(),
-    announce = vi.fn(async () => undefined),
+    announce = vi.fn(async (_text: string, _admission?: RequestAdmission) => undefined),
     gagged = vi.fn(() => false);
   const resolve = vi.fn(
     async (texts: readonly string[]) => new Map(texts.map((text) => [text, clearModeration()])),
@@ -56,6 +57,7 @@ test("ballots bypass consensus, include the broadcaster and publish at most four
   f.votes.open(["Gary", "Milo"]);
   expect(f.announce).toHaveBeenCalledExactlyOnceWith(
     "Vote now: type 1 for Gary or 2 for Milo, 30 seconds.",
+    expect.objectContaining({ signal: expect.any(AbortSignal), allowed: expect.any(Function) }),
   );
   expect(f.votes.acceptsChat(f.chat("a", "other chat"))).toBe(true);
   for (let i = 0; i < 20; i++) {
@@ -66,6 +68,90 @@ test("ballots bypass consensus, include the broadcaster and publish at most four
   await vi.advanceTimersByTimeAsync(29500);
   expect(f.finish).toHaveBeenCalledWith(expect.objectContaining({ n: 20, pct: 100 }));
   expect(f.overlay).toHaveBeenLastCalledWith({ type: "event", kind: "vote_end" });
+});
+
+test.each(["deleted", "cleared", "gagged"] as const)(
+  "a %s ballot invalidates the result until settlement and releases its admission",
+  async (action) => {
+    const f = fixture();
+    f.votes.open(["Gary", "Milo"]);
+    const invitation = f.announce.mock.calls[0]?.[1];
+    expect(invitation?.allowed()).toBe(true);
+    f.votes.acceptsChat(f.chat("a", "1"));
+    f.votes.acceptsChat(f.chat("b", "1"));
+    f.votes.acceptsChat(f.chat("c", "2"));
+    await vi.advanceTimersByTimeAsync(30000);
+    expect(f.finish).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ n: 3 }));
+    expect(invitation?.signal.aborted).toBe(true);
+    expect(invitation?.allowed()).toBe(false);
+    expect(f.votes.busy()).toBe(true);
+    const admission = f.votes.resultAdmission();
+    expect(admission?.allowed()).toBe(true);
+    if (action === "deleted") f.votes.removeMessage("a");
+    else f.votes.removeAuthor("a", Date.now(), action === "gagged");
+    expect(f.finish).toHaveBeenLastCalledWith(null);
+    expect(admission?.signal.aborted).toBe(true);
+    expect(admission?.allowed()).toBe(false);
+    expect(f.votes.busy()).toBe(false);
+  },
+);
+
+test("settled results release provenance and cancelled invitations never retain admission", async () => {
+  const f = fixture();
+  f.votes.open(["Gary", "Milo"]);
+  const invitation = f.announce.mock.calls[0]?.[1];
+  f.votes.cancel("muted");
+  expect(invitation?.signal.aborted).toBe(true);
+  expect(invitation?.allowed()).toBe(false);
+  f.votes.open(["Gary", "Milo"], true);
+  f.votes.acceptsChat(f.chat("a", "1"));
+  await vi.advanceTimersByTimeAsync(30000);
+  f.votes.finishComplete();
+  const completed = f.finish.mock.calls.length;
+  f.votes.removeMessage("a");
+  f.votes.removeAuthor("a");
+  expect(f.finish).toHaveBeenCalledTimes(completed);
+  expect(f.votes.busy()).toBe(false);
+});
+
+test("event times exclude pre-vote and pre-clear ballots even when moderation completes later", async () => {
+  const f = fixture();
+  vi.setSystemTime(10000);
+  f.votes.open(["Gary", "Milo"]);
+  expect(f.votes.acceptsChat({ ...f.chat("old", "1"), at: new Date(9999).toISOString() })).toBe(
+    false,
+  );
+  vi.setSystemTime(11000);
+  f.votes.acceptsChat(f.chat("a", "1"));
+  await vi.advanceTimersByTimeAsync(0);
+  expect(f.votes.snapshot()?.counts).toEqual([1, 0]);
+  vi.setSystemTime(12000);
+  f.votes.removeAuthor("a", 12000);
+  f.votes.acceptsChat({ ...f.chat("a", "2"), at: new Date(11999).toISOString() });
+  let release = () => {};
+  f.resolve.mockImplementationOnce(async (texts) => {
+    await new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    return new Map(texts.map((text) => [text, clearModeration()]));
+  });
+  f.votes.acceptsChat(f.chat("pending", "1"));
+  f.votes.removeAuthor("pending", 12001);
+  release();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(f.votes.snapshot()?.counts).toEqual([0, 0]);
+  vi.setSystemTime(13000);
+  f.votes.acceptsChat(f.chat("a", "2"));
+  await vi.advanceTimersByTimeAsync(0);
+  // A delayed clear must not remove a genuinely newer ballot.
+  f.votes.removeAuthor("a", 12000);
+  expect(f.votes.snapshot()).toEqual({
+    choices: ["Gary", "Milo"],
+    counts: [0, 1],
+    remainingMs: 27000,
+  });
+  f.votes.cancel("finished");
+  expect(f.votes.snapshot()).toBeNull();
 });
 test("gags, moderation flags, deletion and user clears invalidate ballots, including pending checks", async () => {
   const f = fixture();

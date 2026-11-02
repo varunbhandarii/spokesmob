@@ -3,6 +3,30 @@ import { DEFAULT_BEAT_SETTINGS } from "../../../packages/core/src/beat-settings.
 import { collectLog, createControlApi } from "./api.js";
 import { row, view } from "./test-data.js";
 
+test("HTTP resync validates the active ballot snapshot and rejects invalid remaining time", async () => {
+  const vote = { choices: ["Gary", "Milo"], counts: [6, 4], remainingMs: 12000 };
+  const request = vi
+    .fn<typeof fetch>()
+    .mockResolvedValueOnce(
+      new Response(JSON.stringify({ state: view, settings: DEFAULT_BEAT_SETTINGS, vote })),
+    )
+    .mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          state: view,
+          settings: DEFAULT_BEAT_SETTINGS,
+          vote: { ...vote, remainingMs: 30001 },
+        }),
+      ),
+    );
+  const api = createControlApi({
+    location: { protocol: "http:", host: "127.0.0.1:4040", search: "?token=synthetic" },
+    fetch: request,
+  });
+  expect((await api.state()).vote).toEqual(vote);
+  await expect(api.state()).rejects.toThrow();
+});
+
 test("API uses the bearer header and exposes only validated snapshots and log pages", async () => {
   const request = vi
     .fn<typeof fetch>()

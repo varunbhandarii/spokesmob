@@ -2,6 +2,7 @@ import type { Logger } from "pino";
 import { z } from "zod";
 import { type Clock, sleep, systemClock } from "../clock.js";
 import type { Config } from "../config.js";
+import { AdmissionCancelled, checkAdmission, type RequestAdmission } from "./admission.js";
 import type { AccessTokenProvider } from "./auth.js";
 import { ChatGuard } from "./chat-guard.js";
 import type { Fetch } from "./device-flow.js";
@@ -125,6 +126,7 @@ export class HelixClient {
       body?: unknown;
       idempotent?: boolean;
       kind?: RateClass;
+      admission?: RequestAdmission;
     } = {},
   ): Promise<T> {
     const url = new URL(`${this.options.config.helixUrl}${path}`);
@@ -133,8 +135,12 @@ export class HelixClient {
     let rateRetried = false;
     let failures = 0;
     for (;;) {
-      await this.limiter.acquire(options.kind);
+      checkAdmission(options.admission);
+      await (options.admission
+        ? this.limiter.acquire(options.kind, options.admission.signal)
+        : this.limiter.acquire(options.kind));
       const token = await this.options.auth.getAccessToken();
+      checkAdmission(options.admission);
       let response: Response;
       try {
         response = await this.fetcher(url, {
@@ -145,9 +151,12 @@ export class HelixClient {
             ...(options.body === undefined ? {} : { "Content-Type": "application/json" }),
           },
           ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
-          signal: AbortSignal.timeout(15_000),
+          signal: options.admission
+            ? AbortSignal.any([options.admission.signal, AbortSignal.timeout(15_000)])
+            : AbortSignal.timeout(15_000),
         });
       } catch {
+        if (options.admission?.signal.aborted) throw new AdmissionCancelled();
         throw new HelixError(0, path);
       }
       this.limiter.observe(response.headers);
@@ -293,13 +302,17 @@ export class HelixClient {
     return streams;
   }
 
-  async sendChatMessage({
-    text,
-    replyTo,
-  }: {
-    text: string;
-    replyTo?: string;
-  }): Promise<ChatResult> {
+  async sendChatMessage(
+    {
+      text,
+      replyTo,
+    }: {
+      text: string;
+      replyTo?: string;
+    },
+    admission?: RequestAdmission,
+  ): Promise<ChatResult> {
+    checkAdmission(admission);
     if (text.length > 500) throw new Error("Chat messages must be at most 500 characters");
     if (!text.trim()) throw new Error("Chat messages must not be empty");
     const channel = this.channel();
@@ -309,6 +322,7 @@ export class HelixClient {
     try {
       result = await this.request<unknown>("POST", "/chat/messages", {
         kind: "chat",
+        ...(admission ? { admission } : {}),
         body: {
           broadcaster_id: channel,
           sender_id: this.options.auth.identity.userId,
@@ -366,9 +380,10 @@ export class HelixClient {
       ...(seconds === undefined ? {} : { duration_seconds: String(seconds) }),
     };
   }
-  async pinMessage(id: string, seconds = 60): Promise<void> {
+  async pinMessage(id: string, seconds = 60, admission?: RequestAdmission): Promise<void> {
     await this.request("PUT", "/chat/pins", {
       query: this.pinQuery(id, seconds),
+      ...(admission ? { admission } : {}),
       idempotent: true,
     });
   }
@@ -394,12 +409,14 @@ export class HelixClient {
   async sendAnnouncement(
     text: string,
     color: "blue" | "green" | "orange" | "purple" | "primary" = "purple",
+    admission?: RequestAdmission,
   ): Promise<void> {
     if ([...text].length > 500 || !text.trim())
       throw new Error("Announcements must contain 1 to 500 characters");
     await this.request("POST", "/chat/announcements", {
       query: this.moderatorQuery(),
       kind: "announce",
+      ...(admission ? { admission } : {}),
       body: { message: text, color },
     });
   }

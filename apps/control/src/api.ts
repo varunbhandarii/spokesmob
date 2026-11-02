@@ -5,9 +5,14 @@ import {
   beatLogRecordSchema,
   beatViewSchema,
 } from "../../../packages/core/src/beat-types.js";
+import { voteSnapshotSchema } from "../../../packages/core/src/overlay-protocol.js";
 import { LOG_LIMIT } from "./model.js";
 
-const snapshotSchema = z.strictObject({ state: beatViewSchema, settings: beatSettingsSchema });
+const snapshotSchema = z.strictObject({
+  state: beatViewSchema,
+  settings: beatSettingsSchema,
+  vote: voteSnapshotSchema.nullable().optional(),
+});
 const logPageSchema = z.array(beatLogRecordSchema).max(LOG_LIMIT);
 export function createControlApi(options: {
   location: Pick<Location, "protocol" | "host" | "search">;

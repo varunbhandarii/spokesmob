@@ -5,12 +5,13 @@ import type { BeatLogRecord, BeatView } from "../../../../packages/core/src/beat
 import {
   type ControlAction,
   controlActionSchema,
+  type VoteSnapshot,
 } from "../../../../packages/core/src/overlay-protocol.js";
 import type { ActionResult } from "../beat/commands.js";
 import type { localAccess } from "./access.js";
 
 export interface ControlApi {
-  state(): { state: BeatView; settings: BeatSettings };
+  state(): { state: BeatView; settings: BeatSettings; vote?: VoteSnapshot | null };
   logs(limit: number, before?: string): BeatLogRecord[];
   execute(command: ControlAction): Promise<ActionResult>;
 }

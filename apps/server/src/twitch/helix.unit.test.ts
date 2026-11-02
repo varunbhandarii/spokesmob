@@ -3,6 +3,7 @@ import { createMockServices } from "../../../../tools/mock-eventsub/src/services
 import { systemClock } from "../clock.js";
 import { loadConfig } from "../config.js";
 import { createLogger } from "../log.js";
+import { AdmissionCancelled } from "./admission.js";
 import { TokenProvider } from "./auth.js";
 import { HelixClient } from "./helix.js";
 import { RateLimiter } from "./rate-limit.js";
@@ -56,6 +57,80 @@ async function fixture() {
   });
   return { mock, client, auth, limiter };
 }
+
+test.each(["announcement", "post", "pin"] as const)(
+  "cancelled queued vote %s is never sent after limiter admission resumes",
+  async (kind) => {
+    const f = await fixture();
+    const controller = new AbortController();
+    const admission = { signal: controller.signal, allowed: () => !controller.signal.aborted };
+    f.limiter.pauseUntil(Date.now() + 5000);
+    // An earlier request also holds the shared queue.
+    const earlier = f.client.getUsers();
+    const pending =
+      kind === "announcement"
+        ? f.client.sendAnnouncement("Vote now", "purple", admission)
+        : kind === "post"
+          ? f.client.sendChatMessage({ text: "Gary wins." }, admission)
+          : f.client.pinMessage("vote-result", 60, admission);
+    const rejected = expect(pending).rejects.toBeInstanceOf(AdmissionCancelled);
+    await vi.advanceTimersByTimeAsync(1);
+    controller.abort();
+    await rejected;
+    await vi.advanceTimersByTimeAsync(5000);
+    await earlier;
+    expect(
+      f.mock.calls.filter((call) =>
+        ["/helix/chat/announcements", "/helix/chat/messages", "/helix/chat/pins"].includes(
+          call.path,
+        ),
+      ),
+    ).toHaveLength(0);
+    // Cancellation also releases the queue for unrelated calls.
+    expect(await f.client.getUsers()).toHaveLength(1);
+  },
+);
+
+test("vote announcement admission is rechecked after asynchronous token access immediately before send", async () => {
+  const f = await fixture();
+  let release = () => {};
+  const getToken = f.auth.getAccessToken.bind(f.auth);
+  vi.spyOn(f.auth, "getAccessToken").mockImplementationOnce(async () => {
+    await new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    return getToken();
+  });
+  let active = true;
+  const pending = f.client.sendAnnouncement("Vote now", "purple", {
+    signal: new AbortController().signal,
+    allowed: () => active,
+  });
+  const rejected = expect(pending).rejects.toBeInstanceOf(AdmissionCancelled);
+  await vi.advanceTimersByTimeAsync(0);
+  active = false;
+  release();
+  await rejected;
+  expect(f.mock.calls.filter((call) => call.path === "/helix/chat/announcements")).toHaveLength(0);
+});
+
+test("cancelling a vote announcement asleep at the limiter head releases that wait without sending", async () => {
+  const f = await fixture();
+  const controller = new AbortController();
+  f.limiter.pauseUntil(Date.now() + 5000);
+  const rejected = expect(
+    f.client.sendAnnouncement("Vote now", "purple", {
+      signal: controller.signal,
+      allowed: () => true,
+    }),
+  ).rejects.toBeInstanceOf(AdmissionCancelled);
+  await vi.advanceTimersByTimeAsync(1);
+  controller.abort();
+  await rejected;
+  await vi.advanceTimersByTimeAsync(5000);
+  expect(f.mock.calls.filter((call) => call.path === "/helix/chat/announcements")).toHaveLength(0);
+  expect(await f.client.getUsers()).toHaveLength(1);
+});
 
 test("an idempotent request refreshes on unauthorized once and retries once", async () => {
   const f = await fixture();

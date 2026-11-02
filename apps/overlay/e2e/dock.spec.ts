@@ -1,6 +1,7 @@
 import { resolve } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
 import { DEFAULT_BEAT_SETTINGS } from "../../../packages/core/src/beat-settings.js";
+import type { VoteSnapshot } from "../../../packages/core/src/overlay-protocol.js";
 import { row } from "../../control/src/test-data.js";
 import { sceneState } from "../src/view/scenes.js";
 
@@ -21,18 +22,18 @@ const notice = {
   quiet: false,
 };
 
-async function openDock(page: Page) {
+async function openDock(page: Page, vote: VoteSnapshot | null = null) {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   page.on("console", (message) => {
     if (message.type() === "error") errors.push(message.text());
   });
   await page.route("**/api/state", (route) =>
-    route.fulfill({ json: { state: sceneState, settings: DEFAULT_BEAT_SETTINGS } }),
+    route.fulfill({ json: { state: sceneState, settings: DEFAULT_BEAT_SETTINGS, vote } }),
   );
   await page.route("**/api/log?**", (route) => route.fulfill({ json: [] }));
   await page.addInitScript(
-    ({ state, vetoed }) => {
+    ({ state, vetoed, vote }) => {
       let socket: HarnessSocket | null = null;
       const commands: unknown[] = [];
       class HarnessSocket {
@@ -54,7 +55,10 @@ async function openDock(page: Page) {
         send(text: string) {
           const value = JSON.parse(text) as { type: string; command?: { action: string } };
           if (value.type === "hello")
-            setTimeout(() => this.emit({ type: "hello", role: "control", audio: false, state }), 0);
+            setTimeout(
+              () => this.emit({ type: "hello", role: "control", audio: false, state, vote }),
+              0,
+            );
           else commands.push(value);
           if (value.command?.action === "veto") {
             this.emit({ type: "state", ...state, step: "cooldown" });
@@ -73,12 +77,32 @@ async function openDock(page: Page) {
         commands,
       };
     },
-    { state: sceneState, vetoed: { ...row(1), status: "vetoed", gate: "control", reason: "veto" } },
+    {
+      state: sceneState,
+      vote,
+      vetoed: { ...row(1), status: "vetoed", gate: "control", reason: "veto" },
+    },
   );
   await page.goto("/control/?token=synthetic-visual-harness");
   await expect(page.locator("#connection")).toHaveText("connected");
   return errors;
 }
+
+test("the dock restores an active vote after reconnect and HTTP resync", async ({ page }) => {
+  const errors = await openDock(page, {
+    choices: ["Gary", "Milo"],
+    counts: [6, 4],
+    remainingMs: 12000,
+  });
+  await expect(page.locator("#vote-live")).toContainText("1 Gary (6)");
+  await page.evaluate(() =>
+    (window as unknown as { dockHarness: DockHarness }).dockHarness.close(),
+  );
+  await expect(page.locator("#connection")).toHaveText("disconnected");
+  await expect(page.locator("#connection")).toHaveText("connected");
+  await expect(page.locator("#vote-live")).toContainText("2 Milo (4)");
+  expect(errors).toEqual([]);
+});
 
 test("the dock submits two vote labels and explains a rejected label", async ({ page }) => {
   const errors = await openDock(page);

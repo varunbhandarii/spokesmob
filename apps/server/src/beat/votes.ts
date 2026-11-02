@@ -15,10 +15,15 @@ import type { Cluster, Window } from "../../../../packages/core/src/types.js";
 import { atDeadline, type Clock, systemClock } from "../clock.js";
 import type { ModerationGate } from "../consensus/moderation.js";
 import { moderationDecision } from "../consensus/moderation.js";
+import { AdmissionCancelled, type RequestAdmission } from "../twitch/admission.js";
 import type { TwitchEvent } from "../twitch/events.js";
 
 type Session = {
   book: ChatVote;
+  openedAt: number;
+  closesAt: number;
+  invitation: AbortController;
+  result: AbortController;
   deleted: Set<string>;
   cleared: Map<string, number>;
   counts: string;
@@ -32,6 +37,7 @@ export class SplitVotes {
   private interval: ReturnType<typeof setInterval> | null = null;
   private deadline: (() => void) | null = null;
   private finishing = false;
+  private pending: Session | null = null;
   private generation = 0;
   constructor(
     private readonly options: {
@@ -44,7 +50,7 @@ export class SplitVotes {
       safeTemplate(text: string, signal?: AbortSignal): Promise<boolean>;
       overlay(message: OverlayMessage): void;
       control(message: ControlMessage): void;
-      announce(text: string): Promise<void>;
+      announce(text: string, admission?: RequestAdmission): Promise<void>;
       finish(result: ReturnType<ChatVote["result"]> | null): void;
       clock?: Clock;
     },
@@ -146,6 +152,10 @@ export class SplitVotes {
     }
     const session: Session = {
       book: new ChatVote(choices),
+      openedAt: this.clock.now(),
+      closesAt: this.clock.now() + 30000,
+      invitation: new AbortController(),
+      result: new AbortController(),
       deleted: new Set(),
       cleared: new Map(),
       counts: "0,0",
@@ -155,8 +165,14 @@ export class SplitVotes {
     this.emit({ type: "event", kind: "vote_begin", choices: [...choices], durationS: 30 });
     this.log(`Vote opened: 1 ${choices[0]} or 2 ${choices[1]}.`);
     void this.options
-      .announce(`Vote now: type 1 for ${choices[0]} or 2 for ${choices[1]}, 30 seconds.`)
-      .catch(() => this.log("Vote announcement failed; it was not retried."));
+      .announce(`Vote now: type 1 for ${choices[0]} or 2 for ${choices[1]}, 30 seconds.`, {
+        signal: session.invitation.signal,
+        allowed: () => this.active === session,
+      })
+      .catch((error: unknown) => {
+        if (!(error instanceof AdmissionCancelled) && !session.invitation.signal.aborted)
+          this.log("Vote announcement failed; it was not retried.");
+      });
     this.interval = this.clock.setInterval(() => {
       if (this.active !== session) return;
       const counts = session.book.counts();
@@ -169,7 +185,9 @@ export class SplitVotes {
       if (this.active !== session) return;
       const result = session.book.result(this.options.resultMinimum?.() ?? 3);
       this.clearTimers();
+      session.invitation.abort();
       this.active = null;
+      this.pending = session;
       this.finishing = true;
       this.emit({ type: "event", kind: "vote_end" });
       this.log(`Vote outcome: ${result.text}`);
@@ -177,6 +195,8 @@ export class SplitVotes {
     });
   }
   finishComplete() {
+    this.pending?.result.abort();
+    this.pending = null;
     this.finishing = false;
   }
   version() {
@@ -192,36 +212,68 @@ export class SplitVotes {
     this.generation++;
     if (!this.active && !this.finishing) return;
     this.clearTimers();
+    this.active?.invitation.abort();
+    this.active?.result.abort();
+    this.pending?.result.abort();
+    this.pending = null;
     this.active = null;
     this.finishing = false;
     this.emit({ type: "event", kind: "vote_end" });
     this.log(`Vote cancelled: ${reason}.`);
     this.options.finish(null);
   }
-  removeAuthor(id: string) {
+  resultAdmission(): RequestAdmission | undefined {
+    const session = this.pending;
+    return session
+      ? { signal: session.result.signal, allowed: () => this.pending === session }
+      : undefined;
+  }
+  snapshot() {
     const session = this.active;
+    return session
+      ? {
+          choices: [...session.book.choices] as [string, string],
+          counts: session.book.counts(),
+          remainingMs: Math.max(0, Math.min(30000, session.closesAt - this.clock.now())),
+        }
+      : null;
+  }
+  removeAuthor(id: string, cutoff = this.clock.now(), force = false) {
+    const session = this.active ?? this.pending;
     if (session) {
-      session.book.removeAuthor(id);
-      session.cleared.set(id, (session.cleared.get(id) ?? 0) + 1);
+      const removed = session.book.removeAuthor(id, force ? Infinity : cutoff);
+      session.cleared.set(id, Math.max(session.cleared.get(id) ?? -Infinity, cutoff));
+      if (removed && this.pending === session) this.cancel("ballot author removed");
     }
   }
   removeMessage(id: string) {
-    this.active?.deleted.add(id);
-    this.active?.book.removeMessage(id);
+    const session = this.active ?? this.pending;
+    if (!session) return;
+    session.deleted.add(id);
+    if (session.book.removeMessage(id) && this.pending === session) this.cancel("ballot deleted");
   }
   isBallot(text: string) {
+    const session = this.active ?? this.pending;
     return (
       !text.trimStart().startsWith("!") &&
-      !!this.active &&
-      ballotChoice(text, this.active.book.choices) !== null
+      !!session &&
+      ballotChoice(text, session.book.choices) !== null
     );
   }
   acceptsChat(event: Extract<TwitchEvent, { kind: "chat" }>): boolean {
-    const session = this.active;
+    const session = this.active ?? this.pending;
     if (!session || event.text.trimStart().startsWith("!")) return true;
     const choice = ballotChoice(event.text, session.book.choices);
     if (choice === null) return true;
-    const clear = session.cleared.get(event.author.id) ?? 0;
+    const at = Date.parse(event.at);
+    if (
+      this.active !== session ||
+      !Number.isFinite(at) ||
+      at < session.openedAt ||
+      at >= session.closesAt ||
+      at <= (session.cleared.get(event.author.id) ?? -Infinity)
+    )
+      return false;
     if (this.options.gagged(event.author.id) || this.options.blocklist.check(event.text).blocked)
       return false;
     void this.options.moderation
@@ -231,13 +283,13 @@ export class SplitVotes {
         if (
           this.active !== session ||
           session.deleted.has(event.id) ||
-          (session.cleared.get(event.author.id) ?? 0) !== clear ||
+          at <= (session.cleared.get(event.author.id) ?? -Infinity) ||
           this.options.gagged(event.author.id) ||
           !item ||
           moderationDecision(item) !== "allow"
         )
           return;
-        session.book.cast(event.author.id, event.id, choice, Date.parse(event.at));
+        session.book.cast(event.author.id, event.id, choice, at);
         this.options.onBallot?.(event);
       })
       .catch(() => undefined);

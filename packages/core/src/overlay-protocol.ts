@@ -112,6 +112,12 @@ export const stateMessageSchema = z.strictObject({
   type: z.literal("state"),
   ...beatViewSchema.shape,
 });
+export const voteSnapshotSchema = z.strictObject({
+  choices: z.tuple([z.string().min(1).max(25), z.string().min(1).max(25)]),
+  counts: z.tuple([z.number().int().nonnegative(), z.number().int().nonnegative()]),
+  remainingMs: z.number().min(0).max(30000),
+});
+export type VoteSnapshot = z.infer<typeof voteSnapshotSchema>;
 export const overlayHelloReplySchema = z.strictObject({
   type: z.literal("hello"),
   role: z.literal("overlay"),
@@ -119,6 +125,7 @@ export const overlayHelloReplySchema = z.strictObject({
   channel: z.string().regex(/^[a-z0-9_]{1,25}$/),
   state: beatViewSchema,
   simulatedVoice: z.boolean().optional(),
+  vote: voteSnapshotSchema.nullable().optional(),
 });
 export const controlHelloReplySchema = z.strictObject({
   type: z.literal("hello"),
@@ -126,6 +133,7 @@ export const controlHelloReplySchema = z.strictObject({
   audio: z.literal(false),
   state: beatViewSchema,
   simulatedVoice: z.boolean().optional(),
+  vote: voteSnapshotSchema.nullable().optional(),
 });
 export const listeningMessageSchema = z.strictObject({
   type: z.literal("listening"),
