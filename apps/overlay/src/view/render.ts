@@ -356,11 +356,21 @@ export function createRenderer(options: {
       if (line) fitPlate(caption.plate, zones.caption);
       fitPlate(counter.plate, zones.counter);
       fitPlate(question.plate, zones.question, 2);
-      fitPlate(dissent.plate, zones.dissent, 2);
       fitted = true;
     } else {
       if (questionChanged) fitPlate(question.plate, zones.question, 2);
-      if (dissentChanged) fitPlate(dissent.plate, zones.dissent, 2);
+    }
+    if (fitChanged || dissentChanged) {
+      const dissentZone =
+        layout === "wide" && line
+          ? {
+              ...zones.dissent,
+              x: zones.caption.x + caption.plate.offsetLeft,
+              width: caption.plate.offsetWidth,
+            }
+          : zones.dissent;
+      place(dissent.host, dissentZone);
+      fitPlate(dissent.plate, dissentZone, 2);
     }
     if (meterChanged || changedLayout || fitChanged) {
       fitPlate(meter.plate, zones.meter, 2);

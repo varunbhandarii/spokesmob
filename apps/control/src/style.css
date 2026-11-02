@@ -462,6 +462,12 @@ footer {
 .secondary-actions .veto {
   color: var(--stamp);
 }
+.workspace:has(#preview-card[data-kind="preview"]:not([hidden])) .secondary-actions {
+  grid-template-columns: repeat(3, 1fr);
+}
+.workspace:has(#preview-card[data-kind="preview"]:not([hidden])) .secondary-actions .veto {
+  display: none;
+}
 .tone {
   display: flex;
   justify-content: space-between;

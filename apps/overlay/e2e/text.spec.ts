@@ -1,5 +1,45 @@
 import { expect, test } from "@playwright/test";
+import { LAYOUTS } from "../src/view/layout.js";
 import { sceneLine, sceneState } from "../src/view/scenes.js";
+
+test("the stage counter and join hint are paper stickers in their existing zones", async ({
+  page,
+}) => {
+  await page.goto("/overlay/scene.html?scene=listening&layout=stage");
+  await page.waitForFunction(() => !!window.scene);
+  await page.evaluate(async () => {
+    await document.fonts.ready;
+    window.scene.seek(200);
+  });
+  await page.waitForTimeout(300);
+  for (const selector of [".counter", ".join-hint"]) {
+    const sticker = page.locator(selector);
+    await expect(sticker).toBeVisible();
+    await expect(sticker).toHaveCSS("background-color", "rgb(251, 243, 224)");
+    await expect(sticker).toHaveCSS("border-top-width", "5px");
+    await expect(sticker).toHaveCSS("border-top-color", "rgb(19, 33, 31)");
+    await expect(sticker).toHaveCSS("box-shadow", "rgb(19, 33, 31) 0px 7px 0px 0px");
+  }
+  await expect(page.locator(".counter-number")).toHaveCSS("font-family", /Atkinson/);
+  await expect(page.locator(".join-hint")).toHaveCSS("font-family", /Shantell/);
+  const zones = await page.evaluate(() =>
+    [".counter", ".join-hint"].map((selector) => {
+      const host = document.querySelector(selector)?.parentElement;
+      if (!host) throw new Error("Missing sticker zone");
+      return {
+        x: host.offsetLeft,
+        y: host.offsetTop,
+        width: host.offsetWidth,
+        height: host.offsetHeight,
+      };
+    }),
+  );
+  const { counter } = LAYOUTS.stage;
+  expect(zones).toEqual([
+    { x: counter.x, y: counter.y, width: counter.width, height: counter.height },
+    { x: counter.x, y: counter.y + counter.height + 12, width: counter.width, height: 60 },
+  ]);
+});
 
 test("the overlay restores a vote from hello during reload or audio-owner handover", async ({
   page,
@@ -179,6 +219,15 @@ for (const layout of ["wide", "stage", "compact"]) {
         );
       });
       expect(aligned).toBe(true);
+    }
+    if (layout === "wide") {
+      const bubble = await page.locator(".caption").boundingBox();
+      const whisper = await page.locator(".dissent").boundingBox();
+      if (!bubble || !whisper) throw new Error("Missing speech stickers");
+      expect(
+        Math.abs(whisper.x + whisper.width / 2 - (bubble.x + bubble.width / 2)),
+      ).toBeLessThanOrEqual(1);
+      expect(whisper.x + whisper.width).toBeLessThanOrEqual(bubble.x + bubble.width + 1);
     }
     const badge = await page.locator(".ai-badge").boundingBox();
     const face = await page.locator(".face-host").boundingBox();

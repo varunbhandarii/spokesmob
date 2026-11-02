@@ -161,6 +161,9 @@ test("the narrow dock previews the exact line, shows readiness and keeps prompt 
   await expect(page.locator("#session-summary")).toContainText("6/6 ready");
   await expect(page.locator("#health")).toBeHidden();
   await expect(page.locator("#last-card")).toBeHidden();
+  await expect(page.locator('.secondary-actions [data-action="veto"]')).toBeHidden();
+  await expect(page.getByRole("button", { name: /veto/i })).toHaveCount(1);
+  await expect(page.locator("#current-question")).toHaveText("Asking now: Name the cat?");
   await expect(page.locator(".preview-line")).toHaveText(notice.text);
   await expect(page.locator(".preview-summary")).toHaveText("71% of 312 voices");
   await expect(page.locator(".preview-dissent")).toHaveText("18% \u00b7 Some prefer Milo.");
@@ -185,6 +188,30 @@ test("the narrow dock previews the exact line, shows readiness and keeps prompt 
   await expect(page.locator("#preview-card")).toBeHidden();
   await expect(page.locator("#last-card")).toBeVisible();
   await expect(page.locator("#last-line")).toHaveText("Some of chat says blue.");
+  const smallVeto = page.locator('.secondary-actions [data-action="veto"]');
+  await expect(smallVeto).toBeVisible();
+  await page.evaluate(
+    (state) =>
+      (window as unknown as { dockHarness: DockHarness }).dockHarness.send({
+        type: "state",
+        ...state,
+        question: null,
+      }),
+    sceneState,
+  );
+  await expect(page.locator("#current-question")).toHaveText("No active question");
+  await page.evaluate(
+    ({ preview, state }) => {
+      const harness = (window as unknown as { dockHarness: DockHarness }).dockHarness;
+      harness.send({ ...preview, take: 8 });
+      harness.send({ type: "state", ...state, step: "preview" });
+    },
+    { preview: notice, state: sceneState },
+  );
+  await expect(smallVeto).toBeHidden();
+  await page.keyboard.press("v");
+  await expect(page.locator("#preview-card")).toHaveAttribute("data-kind", "vetoed");
+  await expect(smallVeto).toBeVisible();
   expect(errors).toEqual([]);
 });
 

@@ -309,7 +309,9 @@ function render() {
   const e2e = model.health?.e2eMs ?? model.logs[0]?.e2eMs;
   element("latest-e2e").textContent =
     e2e === null || e2e === undefined ? "—" : `${(e2e / 1000).toFixed(2)} s`;
-  element("current-question").textContent = state?.question ?? "No active question";
+  element("current-question").textContent = state?.question
+    ? `Asking now: ${state.question}`
+    : "No active question";
   element("offline-warning").hidden = !state?.testOffline;
   offline.checked = state?.testOffline ?? false;
   offline.disabled = !connected || !state;

@@ -332,6 +332,20 @@ body {
 .join-hint {
   font-size: 28px;
 }
+[data-layout="stage"] .counter,
+[data-layout="stage"] .join-hint {
+  color: var(--ink);
+  background: var(--paper);
+  border: 5px solid var(--ink);
+  border-radius: 34px 28px 36px 26px / 30px 36px 26px 34px;
+  box-shadow: 0 7px 0 var(--ink);
+}
+[data-layout="stage"] .join-hint {
+  padding: 8px 18px;
+  font-family: var(--voice-font);
+  font-weight: 600;
+}
+
 .raid-banner {
   border-color: var(--highlighter);
   font-family: var(--voice-font);
