@@ -106,6 +106,7 @@ test("the dock restores an active vote after reconnect and HTTP resync", async (
 
 test("the dock submits two vote labels and explains a rejected label", async ({ page }) => {
   const errors = await openDock(page);
+  await page.getByRole("tab", { name: "Vote", exact: true }).click();
   await page.getByLabel("Choice 1").fill("Gary");
   await page.getByLabel("Choice 2").fill("Milo");
   await page.getByRole("button", { name: "Start vote", exact: true }).click();
@@ -125,6 +126,84 @@ test("the dock submits two vote labels and explains a rejected label", async ({ 
     });
   }, submitted.request);
   await expect(page.locator("#notice")).toHaveText("Each label must be at most four words.");
+  expect(errors).toEqual([]);
+});
+
+test("the narrow dock previews the exact line, shows readiness and keeps prompt tabs accessible", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 440, height: 1080 });
+  const errors = await openDock(page);
+  await page.evaluate(
+    ({ preview, state, sample }) => {
+      const harness = (window as unknown as { dockHarness: DockHarness }).dockHarness;
+      const voice = { ok: true, sessionAgeS: 10, lastTtfaMs: 400, lastCompleteMs: 800 };
+      harness.send({
+        type: "health",
+        twitchAuth: { ok: true },
+        eventSub: { connected: true, state: "ready" },
+        subscriptions: { enabled: 14, total: 14 },
+        realtime: { main: voice, dissent: voice },
+        audioClient: { connected: true, active: true },
+        e2eMs: 2600,
+      });
+      harness.send({ type: "cost", usdSession: 0.04, usdHour: 0.04, cap: 2 });
+      harness.send({ type: "log", row: sample });
+      harness.send(preview);
+      harness.send({ type: "state", ...state, step: "preview" });
+    },
+    { preview: notice, state: sceneState, sample: row(1) },
+  );
+  await page.evaluate(async () => {
+    await document.fonts.ready;
+  });
+  await expect(page.locator("#mob-status")).toHaveText("Line ready");
+  await expect(page.locator("#session-summary")).toContainText("6/6 ready");
+  await expect(page.locator("#health")).toBeHidden();
+  await expect(page.locator("#last-card")).toBeHidden();
+  await expect(page.locator(".preview-line")).toHaveText(notice.text);
+  await expect(page.locator(".preview-summary")).toHaveText("71% of 312 voices");
+  await expect(page.locator(".preview-dissent")).toHaveText("18% \u00b7 Some prefer Milo.");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(440);
+  await page.screenshot({
+    path: resolve("test-results/overhaul/dock-440-preview.png"),
+    fullPage: true,
+  });
+  await page.getByRole("tab", { name: "Vote", exact: true }).click();
+  await expect(page.getByLabel("Choice 1")).toBeVisible();
+  await page.getByRole("tab", { name: "Vote", exact: true }).press("ArrowLeft");
+  await expect(page.getByRole("textbox", { name: "Question", exact: true })).toBeVisible();
+  await page.evaluate(
+    (state) =>
+      (window as unknown as { dockHarness: DockHarness }).dockHarness.send({
+        type: "state",
+        ...state,
+        step: "listening",
+      }),
+    sceneState,
+  );
+  await expect(page.locator("#preview-card")).toBeHidden();
+  await expect(page.locator("#last-card")).toBeVisible();
+  await expect(page.locator("#last-line")).toHaveText("Some of chat says blue.");
+  expect(errors).toEqual([]);
+});
+
+test("the wide dock log hugs its rows instead of reserving an empty tall panel", async ({
+  page,
+}) => {
+  const errors = await openDock(page);
+  await page.evaluate(
+    (sample) =>
+      (window as unknown as { dockHarness: DockHarness }).dockHarness.send({
+        type: "log",
+        row: sample,
+      }),
+    row(1),
+  );
+  await expect(page.locator(".log-row")).toHaveCount(1);
+  expect((await page.locator(".log-card").boundingBox())?.height).toBeLessThan(300);
+  await expect(page.locator(".log-line")).toHaveText("\u201cSome of chat says blue.\u201d");
+  await expect(page.locator(".log-facts")).toHaveText("40% of 10 voices \u00b7 pin unreported");
   expect(errors).toEqual([]);
 });
 

@@ -8,47 +8,47 @@
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
-    <p id="demo-tag" hidden>Demo · simulated voice</p>
     <header class="app-header">
-      <div class="brand"><span class="brand-mark" aria-hidden="true">s</span><div><h1>spokesmob</h1><p>YOUR CHAT, ONE VOICE</p></div></div>
-      <span id="connection" class="connection" role="status">connecting</span>
+      <div class="header-top">
+        <div class="brand"><span class="brand-mark" aria-hidden="true">s</span><div><h1>spokesmob</h1><p>YOUR CHAT, ONE VOICE</p></div></div>
+        <span id="mob-status" class="status-pill">Connecting</span>
+        <span id="connection" class="sr-only" role="status">connecting</span>
+      </div>
+      <p id="session-summary" class="session-summary">Waiting for a chat window</p>
+      <p id="demo-tag" hidden>Demo · simulated voice</p>
+      <ul id="health" class="health" aria-label="Connection health" hidden></ul>
     </header>
     <div id="notice" class="notice" role="status" hidden></div>
     <div id="offline-warning" class="warning" role="status" hidden>Offline test is on. The mob can speak while your stream is offline. This resets when the server restarts.</div>
     <main class="workspace">
-      <section class="card state-card" aria-labelledby="state-title">
-        <div class="card-heading"><h2 id="state-title">The mob</h2><span id="online" class="badge">waiting</span></div>
-        <div class="step-row"><strong id="beat-step">waiting</strong><span id="mood" class="muted-text"></span></div>
-        <ul id="held-by" class="held-by"><li>Waiting for server state</li></ul>
-        <dl class="stats"><div><dt>Session</dt><dd id="cost-session">—</dd></div><div><dt>Cap</dt><dd id="cost-cap">—</dd></div><div><dt>Latest e2e</dt><dd id="latest-e2e">—</dd></div></dl>
-        <progress id="cost-progress" max="100" value="0" aria-label="Session spend toward cap"></progress>
-        <p class="small muted-text">Last hour <span id="cost-hour">—</span></p>
-        <div class="button-row loop-buttons"><button type="button" data-action="on">Turn on</button><button type="button" data-action="off">Turn off</button></div>
-        <ul id="health" class="health" aria-label="Connection health"></ul>
+      <section class="card next-card" aria-label="Line preview">
+        <div id="preview-card" class="preview-card" hidden></div>
+        <div id="last-card" class="last-card"><h2 id="last-title">The mob is listening</h2><p id="last-line" class="last-line">One voice, made together.</p><p id="last-result" class="small muted-text">Your next verified line will appear here.</p></div>
       </section>
       <section class="card actions-card" aria-labelledby="actions-title">
-        <div id="preview-card" class="preview-card" hidden></div>
         <div class="card-heading"><h2 id="actions-title">Live controls</h2><span class="small muted-text">Shortcuts while focused</span></div>
         <fieldset class="mode-buttons"><legend class="sr-only">Beat mode</legend><button type="button" data-mode="auto">Auto</button><button type="button" data-mode="demand">On-demand</button><button type="button" data-mode="quiet">Captions only</button></fieldset>
         <div class="primary-actions">
-          <button type="button" data-action="veto" class="veto"><strong>Veto</strong><kbd>V</kbd></button>
-          <button type="button" data-action="speak" class="speak"><strong>Speak now</strong><kbd>S</kbd></button>
           <button type="button" data-action="mute"><strong>Mute 5 min</strong><kbd>M</kbd></button>
           <button type="button" data-action="unmute"><strong>Unmute</strong><kbd>U</kbd></button>
           <button type="button" data-action="kill" class="kill"><span><strong>Kill audio</strong><small>Stops and stays muted</small></span><kbd>K</kbd></button>
         </div>
+        <div class="secondary-actions"><button type="button" data-action="veto" class="veto"><strong>Veto</strong><kbd>V</kbd></button><button type="button" data-action="speak" class="speak"><strong>Speak now</strong><kbd>S</kbd></button><button type="button" data-action="on">Turn on</button><button type="button" data-action="off">Turn off</button></div>
         <button type="button" id="test-tone" class="tone">Test tone <span class="small">free · 1 second</span></button>
         <label class="switch-label"><input id="test-offline" type="checkbox" /> <span>Test while offline<small>Session only · resets at restart</small></span></label>
       </section>
       <section class="card question-card" aria-labelledby="question-title">
-        <div class="card-heading"><h2 id="question-title">Ask the mob</h2></div>
+        <div class="card-heading"><h2 id="question-title">Prompt chat</h2></div>
+        <div class="prompt-tabs" role="tablist" aria-label="Prompt chat"><button type="button" role="tab" id="question-tab" aria-controls="question-panel" aria-selected="true">Question</button><button type="button" role="tab" id="vote-tab" aria-controls="vote-panel" aria-selected="false" tabindex="-1">Vote</button></div>
+        <div id="question-panel" role="tabpanel" aria-labelledby="question-tab">
         <p id="current-question" class="current-question">No active question</p>
         <form id="question-form"><label for="question-input" class="sr-only">Question</label><textarea id="question-input" rows="2" maxlength="100" placeholder="Name my cat?"></textarea><div class="button-row"><button type="submit" class="accent">Ask &amp; announce</button><button type="button" data-action="clear">Clear</button></div></form>
-      </section>
-      <section class="card" aria-labelledby="start-vote-title">
-        <h2 id="start-vote-title">Start vote</h2>
-        <p class="small muted-text">Two labels, each at most four words and 25 characters. Wait for the current unit or vote to finish.</p>
+        </div>
+        <div id="vote-panel" role="tabpanel" aria-labelledby="vote-tab" hidden>
+          <h3 id="start-vote-title" class="sr-only">Start vote</h3>
+          <p class="small muted-text">Two labels, each at most four words and 25 characters. Wait for the current unit or vote to finish.</p>
         <form id="vote-form"><label class="setting-row">Choice 1<input name="a" maxlength="25" required placeholder="Gary"></label><label class="setting-row">Choice 2<input name="b" maxlength="25" required placeholder="Milo"></label><button id="start-vote" type="submit" class="accent">Start vote</button></form>
+        </div>
       </section>
       <section class="card log-card" aria-labelledby="log-title">
         <div class="card-heading"><h2 id="log-title">Beat log</h2><button type="button" id="export-log" class="text-button">Export log</button></div>
@@ -63,6 +63,14 @@
           <form id="settings-form"><div id="settings-fields" class="settings-fields"></div><label class="setting-row">Post lines<select name="postLines"><option value="every">Every completed line</option><option value="off">Off</option></select></label><label class="setting-row">Split votes<input type="checkbox" name="splitVotes"></label><label class="setting-row">Auto-clip<input type="checkbox" name="autoClip"></label><button type="submit" class="accent">Save settings</button><p id="settings-draft" class="small muted-text" hidden>Unsaved changes</p></form>
         </details>
       </section>
+      <section class="card state-card"><details><summary id="state-title">System details</summary>
+        <span id="online" class="badge">waiting</span>
+        <div class="step-row"><strong id="beat-step">waiting</strong><span id="mood" class="muted-text"></span></div>
+        <ul id="held-by" class="held-by"><li>Waiting for server state</li></ul>
+        <dl class="stats"><div><dt>Session</dt><dd id="cost-session">—</dd></div><div><dt>Cap</dt><dd id="cost-cap">—</dd></div><div><dt>Latest e2e</dt><dd id="latest-e2e">—</dd></div></dl>
+        <progress id="cost-progress" max="100" value="0" aria-label="Session spend toward cap"></progress>
+        <p class="small muted-text">Last hour <span id="cost-hour">—</span></p>
+      </details></section>
     </main>
     <footer>AI-generated voice · Control dock only, no audio output</footer>
     <script type="module" src="/src/index.ts"></script>

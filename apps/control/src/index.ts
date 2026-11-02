@@ -21,6 +21,7 @@ import {
   spendView,
   updateSettingsDraft,
 } from "./model.js";
+import { chatterSnapshot, dockStatus, healthItems, logFacts } from "./presentation.js";
 import { createPreviewCard } from "./preview-card.js";
 
 function element<T extends HTMLElement>(id: string): T {
@@ -129,6 +130,29 @@ element<HTMLFormElement>("vote-form").addEventListener("submit", (event) => {
   const b = (form.elements.namedItem("b") as HTMLInputElement).value;
   dispatch({ action: "vote", a, b });
 });
+for (const [index, tab] of [
+  ...document.querySelectorAll<HTMLButtonElement>('[role="tab"]'),
+].entries()) {
+  const activate = () => {
+    for (const other of document.querySelectorAll<HTMLButtonElement>('[role="tab"]')) {
+      const active = other === tab;
+      other.setAttribute("aria-selected", String(active));
+      other.tabIndex = active ? 0 : -1;
+      const panel = document.getElementById(other.getAttribute("aria-controls") ?? "");
+      if (panel) panel.hidden = !active;
+    }
+  };
+  tab.addEventListener("click", activate);
+  tab.addEventListener("keydown", (event) => {
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+    event.preventDefault();
+    const tabs = [...document.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
+    const next =
+      event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : (index + 1) % tabs.length;
+    tabs[next]?.click();
+    tabs[next]?.focus();
+  });
+}
 settingsForm.addEventListener("input", () => {
   draft = updateSettingsDraft(draft, { type: "edit" });
   element("settings-draft").hidden = false;
@@ -183,30 +207,32 @@ function renderLog() {
     const item = document.createElement("details");
     item.className = "log-row";
     item.dataset.id = row.id;
+    item.dataset.outcome = row.status;
     item.dataset.problem = String(["suppressed", "blocked", "vetoed"].includes(row.status));
     item.open = expanded.has(row.id);
     const summary = document.createElement("summary");
-    const meta = document.createElement("div");
-    meta.className = "log-meta";
     const time = document.createElement("time");
     time.dateTime = new Date(row.at).toISOString();
     time.textContent = new Date(row.at).toLocaleTimeString([], {
       hour: "2-digit",
       minute: "2-digit",
-      second: "2-digit",
+      hour12: false,
     });
     const outcome = document.createElement("span");
     outcome.className = "outcome";
     outcome.textContent = `${row.simulated ? "Simulated · " : ""}${codeLabel(row.status)}`;
     const duration = document.createElement("span");
     duration.textContent = row.e2eMs === null ? "e2e —" : `${row.e2eMs.toFixed(0)} ms`;
-    meta.append(time, outcome, duration);
     const text = document.createElement("div");
     text.className = "log-line";
-    text.textContent = row.line ?? codeLabel(row.reason);
-    summary.append(meta, text);
+    text.textContent = row.line ? `\u201c${row.line}\u201d` : codeLabel(row.reason);
+    const facts = document.createElement("p");
+    facts.className = "log-facts";
+    facts.textContent = logFacts(row);
+    summary.append(time, text, outcome, facts);
     const detail = document.createElement("div");
     detail.className = "log-detail";
+    detail.append(duration);
     for (const value of [
       `${row.pct}% of ${formatVoiceCount(row.voices)} · ${row.mode} · ${row.kind}`,
       `Gate: ${codeLabel(row.gate)} · Reason: ${codeLabel(row.reason)}`,
@@ -239,6 +265,26 @@ function render() {
     !!model.vote;
   element("demo-tag").hidden = !model.simulatedVoice;
   const state = model.state;
+  const status = element("mob-status");
+  status.textContent = connected
+    ? dockStatus(model, connected)
+    : (element("connection").textContent ?? "Connecting");
+  status.dataset.blocked = String(!connected || !!state?.heldBy.length);
+  const systems = healthItems(model);
+  element("session-summary").textContent =
+    `${chatterSnapshot(model)} \u00b7 ${systems.length ? `${systems.filter(([, ok]) => ok).length}/${systems.length} ready` : "checking systems"} \u00b7 ${model.cost ? `$${model.cost.usdSession.toFixed(2)} of $${model.cost.cap.toFixed(2)}` : "spend pending"}`;
+  const last = model.logs.find(
+    (row) => row.line && ["spoken", "caption_only"].includes(row.status),
+  );
+  element("last-title").textContent = last
+    ? last.status === "spoken"
+      ? "Last spoken line"
+      : "Last shown line"
+    : "The mob is listening";
+  element("last-line").textContent = last?.line ?? "One voice, made together.";
+  element("last-result").textContent = last
+    ? `${last.pct}% of ${formatVoiceCount(last.voices)} \u00b7 ${codeLabel(last.status)}`
+    : "Your next verified line will appear here.";
   element("beat-step").textContent = state?.step ?? "waiting";
   const online = element("online");
   online.textContent = state?.online ? "live" : "offline";
@@ -288,24 +334,12 @@ function render() {
   element("settings-draft").hidden = !draft.dirty;
   const health = element("health");
   health.replaceChildren();
-  if (model.health) {
-    const value = model.health;
-    for (const [text, ok] of [
-      ["Twitch auth", value.twitchAuth.ok],
-      [`Events ${codeLabel(value.eventSub.state)}`, value.eventSub.connected],
-      [
-        `Subs ${value.subscriptions.enabled}/${value.subscriptions.total}`,
-        value.subscriptions.enabled === value.subscriptions.total,
-      ],
-      ["Main voice", value.realtime.main.ok],
-      ["Dissent voice", value.realtime.dissent.ok],
-      ["OBS audio", value.audioClient.connected && value.audioClient.active],
-    ] as const) {
-      const li = document.createElement("li");
-      li.textContent = text;
-      li.dataset.ok = String(ok);
-      health.append(li);
-    }
+  health.hidden = !systems.length || systems.every(([, ok]) => ok);
+  for (const [text, ok] of systems) {
+    const li = document.createElement("li");
+    li.textContent = text;
+    li.dataset.ok = String(ok);
+    health.append(li);
   }
   const vote = element("vote-live");
   vote.hidden = !model.vote;
