@@ -12,6 +12,9 @@ export function createParticleCanvas(root: HTMLElement, seed: number) {
   if (!context) throw new Error("Particle canvas unavailable");
   const pool = new ParticlePool(seed);
   const cache = new Map<string, HTMLCanvasElement>();
+  const tokens = getComputedStyle(root);
+  const paper = tokens.getPropertyValue("--paper").trim();
+  const outline = tokens.getPropertyValue("--ink").trim();
   let lastCue = 0;
   const bitmap = (label: string, size: number) => {
     const key = `${String(size)}:${label}`;
@@ -31,8 +34,9 @@ export function createParticleCanvas(root: HTMLElement, seed: number) {
     ink.font = font;
     ink.textBaseline = "middle";
     ink.lineWidth = 3;
-    ink.strokeStyle = "#0f1416";
-    ink.fillStyle = "#ffffff";
+    ink.lineJoin = "round";
+    ink.strokeStyle = outline;
+    ink.fillStyle = paper;
     ink.strokeText(label, 4, image.height / 2);
     ink.fillText(label, 4, image.height / 2);
     cache.set(key, image);

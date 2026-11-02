@@ -25,7 +25,7 @@ test("the overlay restores a vote from hello during reload or audio-owner handov
   await expect(page.locator(".vote-plate")).toBeVisible();
   await expect(page.locator(".vote-label")).toHaveText(["1 Gary", "2 Milo"]);
   await expect(page.locator(".vote-count")).toHaveText(["6", "4"]);
-  await expect(page.locator(".vote-counts")).toHaveText("12s remaining");
+  await expect(page.locator(".vote-counts")).toHaveText("12");
   expect(errors).toEqual([]);
 });
 
@@ -138,26 +138,31 @@ for (const layout of ["wide", "stage", "compact"]) {
     });
     await page.waitForTimeout(300);
     await expect(page.locator(".agreement")).toHaveText("71% of 312 voices");
+    await expect(page.locator('.agreement-dots [data-filled="true"]')).toHaveCount(7);
     await expect(page.locator(".counter")).toBeHidden();
     await expect(page.locator(layout === "compact" ? ".compact-dissent" : ".dissent")).toHaveText(
       layout === "compact" ? "\u00b7 18% \u00b7 Some prefer Milo." : "18% \u00b7 Some prefer Milo.",
     );
     const geometry = await page.evaluate(() => {
-      const selectors = [".question", ".agreement", ".caption", ".ai-badge"];
+      const selectors = [".question-copy", ".agreement", ".caption", ".ai-badge"];
       if (document.querySelector("#overlay")?.getAttribute("data-layout") !== "compact")
         selectors.push(".dissent");
       return selectors.map((selector) => {
         const node = document.querySelector<HTMLElement>(selector);
         if (!node?.firstChild) throw new Error("Missing text plate");
-        const box = node.getBoundingClientRect();
+        const plate = node.closest<HTMLElement>(".plate") ?? node;
+        const box = plate.getBoundingClientRect();
         const range = document.createRange();
-        range.selectNodeContents(node);
+        range.selectNodeContents(node.querySelector(".caption-words") ?? node);
         const ink = range.getBoundingClientRect();
-        const slot = node.parentElement?.getBoundingClientRect();
+        const slot = plate.parentElement;
         return {
           selector,
           fits: ink.top >= box.top - 1 && ink.bottom <= box.bottom + 1,
-          slotFits: !!slot && box.width <= slot.width + 1 && box.height <= slot.height + 1,
+          slotFits:
+            !!slot &&
+            plate.offsetWidth <= slot.clientWidth + 1 &&
+            plate.offsetHeight <= slot.clientHeight + 1,
         };
       });
     });
@@ -166,12 +171,14 @@ for (const layout of ["wide", "stage", "compact"]) {
       JSON.stringify(geometry),
     ).toBe(true);
     if (layout === "compact") {
-      const lines = await page.locator(".agreement").evaluate((node) => {
-        const range = document.createRange();
-        range.selectNodeContents(node);
-        return range.getClientRects().length;
+      const aligned = await page.locator(".agreement").evaluate((node) => {
+        const pct = node.querySelector(".agreement-pct")?.getBoundingClientRect();
+        const facts = node.querySelector(".agreement-facts")?.getBoundingClientRect();
+        return (
+          !!pct && !!facts && Math.abs(pct.y + pct.height / 2 - (facts.y + facts.height / 2)) < 4
+        );
       });
-      expect(lines).toBe(1);
+      expect(aligned).toBe(true);
     }
     const badge = await page.locator(".ai-badge").boundingBox();
     const face = await page.locator(".face-host").boundingBox();
@@ -211,7 +218,7 @@ test("raid and train captions retain the question without an off-topic preface",
     );
     await expect(page.locator(".caption-words")).toHaveText(text);
     await expect(page.locator(".caption-lead")).toBeHidden();
-    await expect(page.locator(".question")).toHaveText("Name the cat?");
+    await expect(page.locator(".question-copy")).toHaveText("Name the cat?");
   }
 });
 
@@ -221,7 +228,13 @@ test("preview shows only a bubble and production never renders harness labels", 
   await page.goto("/overlay/scene.html?scene=preview&layout=wide");
   await page.waitForFunction(() => !!window.scene);
   await page.evaluate(() => window.scene.seek(700));
-  await expect(page.locator(".preview-bubble")).toHaveText("\u2026");
+  await expect(page.locator(".preview-bubble .dot")).toHaveCount(3);
+  for (const dot of await page.locator(".preview-bubble .dot").all()) {
+    await expect(dot).toHaveCSS("background-color", "rgb(19, 33, 31)");
+    expect((await dot.boundingBox())?.width).toBe(12);
+    expect((await dot.boundingBox())?.height).toBe(12);
+  }
+  await expect(page.locator(".preview-bubble")).toHaveText("");
   await expect(page.locator(".caption")).toBeHidden();
   await page.goto("/overlay/index.html");
   await expect(page.locator("#overlay")).toHaveAttribute("data-pose", "asleep");
@@ -245,13 +258,15 @@ test("long captions shrink to three lines and unrelated lines retain a question 
     { line: sceneLine, text },
   );
   await expect(page.locator(".caption-lead")).toHaveText("Meanwhile, chat says");
-  await expect(page.locator(".question")).toHaveText("Name the cat?");
+  await expect(page.locator(".question-copy")).toHaveText("Name the cat?");
   const result = await page.locator(".caption").evaluate((node) => {
     const style = getComputedStyle(node);
+    const range = document.createRange();
+    range.selectNodeContents(node.querySelector(".caption-words") ?? node);
     return {
       size: parseFloat(style.fontSize),
-      height: node.scrollHeight,
-      limit: parseFloat(style.lineHeight) * 3 + 24,
+      height: range.getBoundingClientRect().height,
+      limit: parseFloat(style.lineHeight) * 3,
     };
   });
   expect(result.size).toBeLessThan(48);

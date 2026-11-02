@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@fontsource-variable/atkinson-hyperlegible-next": "5.2.6",
+    "@fontsource-variable/shantell-sans": "5.3.0",
     "uqr": "0.1.2",
     "vite": "8.3.5"
   }

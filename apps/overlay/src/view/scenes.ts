@@ -17,6 +17,7 @@ export const SCENES = [
   "muted",
   "asleep",
   "hype",
+  "vote",
 ] as const;
 export type Scene = (typeof SCENES)[number];
 export interface SceneFrame {
@@ -70,6 +71,16 @@ export function sceneFrames(scene: Scene): SceneFrame[] {
     { at: 0, message: { type: "particles", names: ["LanternFox", "MossPilot", "SilverFinch"] } },
   ];
   if (scene === "listening") return frames;
+  if (scene === "vote")
+    return [
+      ...frames,
+      {
+        at: 100,
+        message: { type: "event", kind: "vote_begin", choices: ["Gary", "Milo"], durationS: 30 },
+      },
+      { at: 200, message: { type: "event", kind: "vote_update", counts: [7, 5] } },
+      { at: 200, message: { type: "event", kind: "clip" } },
+    ];
   if (scene === "thinking")
     return [
       ...frames,
@@ -162,4 +173,5 @@ export const CAPTURE_AT: Record<Scene, number> = {
   muted: 300,
   asleep: 300,
   hype: 300,
+  vote: 1200,
 };

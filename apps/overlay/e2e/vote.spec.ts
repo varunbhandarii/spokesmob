@@ -22,11 +22,11 @@ for (const layout of ["wide", "stage", "compact"]) {
       window.scene.message({ type: "event", kind: "vote_update", counts: [6, 4] });
     });
     await expect(page.locator(".vote-plate")).toBeVisible();
-    await expect(page.locator(".vote-title")).toHaveText("Vote");
+    await expect(page.locator(".vote-title")).toHaveText("CHAT VOTE");
     await expect(page.locator(".vote-label")).toHaveText(["1 <b>Gary</b>", "2 Milo"]);
     await expect(page.locator(".vote-label b")).toHaveCount(0);
     await expect(page.locator(".vote-count")).toHaveText(["6", "4"]);
-    await expect(page.locator(".vote-counts")).toHaveText("30s remaining");
+    await expect(page.locator(".vote-counts")).toHaveText("30");
     await expect(page.locator(".vote-bar").first()).toHaveAttribute(
       "style",
       "transform: scaleX(0.6);",
@@ -39,6 +39,9 @@ for (const layout of ["wide", "stage", "compact"]) {
       );
     });
     expect(fits).toBe(true);
+    const question = await page.locator(".question").boundingBox();
+    const card = await page.locator(".vote-plate").boundingBox();
+    expect(question && card && question.y + question.height < card.y).toBeTruthy();
     await page.evaluate(() => window.scene.message({ type: "event", kind: "vote_end" }));
     await expect(page.locator(".vote-plate")).toBeHidden();
     expect(errors).toEqual([]);

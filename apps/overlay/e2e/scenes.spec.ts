@@ -30,6 +30,7 @@ for (const layout of ["wide", "stage", "compact"])
         "muted",
         "asleep",
         "hype",
+        "vote",
       ].includes(scene);
       if (hidden) await expect(page.locator(".caption")).toBeHidden();
       else
@@ -41,6 +42,8 @@ for (const layout of ["wide", "stage", "compact"])
       if (scene === "veto")
         await expect(page.locator("#overlay")).toHaveAttribute("data-pose", "idle");
       await page.screenshot({ path: info.outputPath(`${layout}-${scene}.png`) });
+      if (["speaking", "dissent", "vote", "muted", "thinking"].includes(scene))
+        await page.screenshot({ path: resolve(`test-results/overhaul/${layout}-${scene}.png`) });
       if (scene === "speaking")
         await page.screenshot({ path: resolve(`test-results/layout-${layout}.png`) });
       expect(errors).toEqual([]);

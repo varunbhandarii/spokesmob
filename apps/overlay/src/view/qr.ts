@@ -4,8 +4,8 @@ export const QR_OPTIONS = {
   ecc: "M",
   boostEcc: false,
   border: 4,
-  blackColor: "black",
-  whiteColor: "white",
+  blackColor: "#13211f",
+  whiteColor: "#fbf3e0",
 } as const;
 
 export function channelUrl(login: string): string {
